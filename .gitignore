@@ -9,3 +9,73 @@ tmp/
 verification/**/preapply-backup/
 infrastructure/business-live/backups/
 /*.zip
+
+# HMZ safe GitHub upload rules
+# Secrets / environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+token.json
+secrets.json
+cookies.txt
+*.cookie
+*.cookies
+id_rsa
+id_rsa.pub
+
+# Local/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Dependencies/build/cache
+node_modules/
+dist/
+build/
+coverage/
+.next/
+.cache/
+venv/
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Logs/temp/output
+*.log
+logs/
+tmp/
+temp/
+outputs/
+scratch/
+
+# Backups/generated repair artifacts
+backups/
+backup*/
+backup_*/
+*-backup/
+*_backup/
+*.bak
+*.backup
+verification/patch-*-backup/
+patch-*-backup/
+
+# Archives
+*.zip
+*.7z
+*.rar
+*.tar
+*.tar.gz
+
+# Claude/Codex local clutter
+.claude/settings.local.json
+.claude/logs/
+.codex/sessions/
+.codex/cache/
