@@ -1,0 +1,84 @@
+{
+  "fixture_id": "phase3_08_legal_privacy_complaint",
+  "description": "Legal/privacy complaint invoking GDPR and right-to-be-forgotten (T12 / LEGAL_PRIVACY_OR_COMPLAINT). Matched deterministically by det-legal-001. Always enters REVIEW_HOLD with legal_review_required and privacy_review_required true and a durable ORGANISATION_DNC suppression intent; no automated reply.",
+  "input": {
+    "intake_id": "phase3-fixture-08-legal-privacy-complaint",
+    "event_id": "evt-phase3-008",
+    "email_id": "email-phase3-008",
+    "event_type": "reply_received",
+    "lead_email": "jamie.park@prospectco.test",
+    "from_address_email": "jamie.park@prospectco.test",
+    "email_account": "outbound1@hmzvalidation.test",
+    "reply_subject": "Re: Quick question about your sales pipeline",
+    "reply_text": "Under GDPR, I am exercising my right to be forgotten. Where did you get my email address? Please confirm you have deleted all my personal data.",
+    "reply_text_snippet": "Under GDPR, I am exercising my right to be forgotten. Where did you get my email address?",
+    "timestamp": "2026-06-09T09:15:00Z",
+    "campaign_id": "campaign-validation-001",
+    "validation_cell": "CELL_1_SAAS_SALES_HIRING",
+    "workspace": "hmz-workspace-dev",
+    "campaign_name": "US B2B Validation Sprint - Cell 1",
+    "step": 2,
+    "variant": 1,
+    "is_first": false,
+    "thread_id": "thread-phase3-008",
+    "message_id": "<msg-phase3-008@instantly.test>",
+    "unibox_url": "https://app.instantly.test/unibox/thread-phase3-008"
+  },
+  "expected": {
+    "payload_status": "COMPLETE",
+    "deterministic": {
+      "deterministic_match": true,
+      "noop_match": false,
+      "category": "LEGAL_PRIVACY_OR_COMPLAINT",
+      "rule_id": "det-legal-001",
+      "media_flag": false,
+      "flags": {
+        "det-legal-001": true,
+        "det-legal-002": false,
+        "det-regulator-001": false,
+        "det-complaint-001": false
+      }
+    },
+    "classifier": {
+      "category": "LEGAL_PRIVACY_OR_COMPLAINT",
+      "confidence": 1,
+      "interest_stage": "UNKNOWN",
+      "permitted_automation_action": "NONE",
+      "requested_action": "ESCALATE",
+      "risk_flags": ["privacy", "legal"]
+    },
+    "decision": {
+      "category": "LEGAL_PRIVACY_OR_COMPLAINT",
+      "confidence": 1,
+      "confidence_overridden": false,
+      "stop_active_sequence": true,
+      "durable_dnc_intent": true,
+      "address_suppression_intent": "ORGANISATION_DNC",
+      "review_hold": true,
+      "legal_review_required": true,
+      "privacy_review_required": true,
+      "reputational_review_required": false,
+      "human_review_required": true,
+      "reply_permitted": false,
+      "reply_template_id": null,
+      "reply_draft_status": "NO_DRAFT_HUMAN_ONLY",
+      "external_action_status": "NOT_PERFORMED",
+      "follow_up_date": null,
+      "interest_stage": "UNKNOWN",
+      "terminal_status": "REVIEW_HOLD"
+    },
+    "draft": {
+      "template_id": null,
+      "draft_text_is_null": true,
+      "missing_variables": [],
+      "human_review_required": true
+    },
+    "validation_learning": {
+      "all_other_fields": "unknown_or_null_default"
+    },
+    "validation": {
+      "valid": true
+    },
+    "notes": "det-legal-001 matches 'gdpr', 'right to be forgotten', and 'where did you get my email'. Section C's LEGAL_PRIVACY_OR_COMPLAINT override sets legal_review_required=true and privacy_review_required=true (both driven by det-legal-001), reputational_review_required stays false (det-regulator-001 and det-complaint-001 are false), durable_dnc_intent=true and address_suppression_intent=ORGANISATION_DNC because det-legal-001 is true. review_hold=true and terminal_status=REVIEW_HOLD are set unconditionally for this category by BASE_PLANS. All suppression/DNC fields are intents only - external_action_status remains NOT_PERFORMED."
+  }
+}

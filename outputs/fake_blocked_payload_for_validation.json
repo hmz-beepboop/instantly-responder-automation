@@ -1,0 +1,19 @@
+{
+  "_note": "FAKE_TEST payload — blocked pricing request. Used to validate the helper script validation function.",
+  "case_id": "case_20260624_FAKE_BLOCKED_001",
+  "thread_id": "thread_FAKE_BLOCKED_001",
+  "campaign_id": "CAMP_FAKE_001",
+  "sender_email": "test@example.com",
+  "incoming_text": "Sounds good, but can you tell me what the pricing looks like first?",
+  "broad_category": "COMMERCIAL_INQUIRY",
+  "micro_intent": "PRICING",
+  "confidence": 0.89,
+  "additional_intents": [],
+  "risk_flags": ["PRICING_INQUIRY"],
+  "in_human_working_hours": true,
+  "review_metadata": {
+    "review_date": "2026-06-24",
+    "review_day_in_cycle": 1,
+    "owner_notes": "FAKE TEST — blocked pricing payload for validation only"
+  }
+}

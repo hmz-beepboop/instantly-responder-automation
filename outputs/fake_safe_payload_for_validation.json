@@ -1,0 +1,19 @@
+{
+  "_note": "FAKE_TEST payload — safe scheduling request. Used to validate the helper script validation function.",
+  "case_id": "case_20260624_FAKE_SAFE_001",
+  "thread_id": "thread_FAKE_SAFE_001",
+  "campaign_id": "CAMP_FAKE_001",
+  "sender_email": "test@example.com",
+  "incoming_text": "Hi, this looks really interesting. Are you available for a quick call next Tuesday or Wednesday afternoon?",
+  "broad_category": "SCHEDULING_POSITIVE",
+  "micro_intent": "SCHEDULING_REQUEST",
+  "confidence": 0.92,
+  "additional_intents": [],
+  "risk_flags": [],
+  "in_human_working_hours": true,
+  "review_metadata": {
+    "review_date": "2026-06-24",
+    "review_day_in_cycle": 1,
+    "owner_notes": "FAKE TEST — safe scheduling payload for validation only"
+  }
+}

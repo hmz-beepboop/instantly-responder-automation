@@ -1,0 +1,69 @@
+{
+  "_comment": "Sample daily digest — represents what a real digest would look like after one day of shadow mode operation.",
+  "digest_period_start": "2026-06-24T00:00:00Z",
+  "digest_period_end": "2026-06-24T23:59:59Z",
+  "digest_generated_at": "2026-06-24T18:05:00Z",
+  "autonomous_mode_state": "SHADOW_ONLY",
+  "kill_switch_active": false,
+
+  "activity_summary": {
+    "total_candidates_evaluated": 12,
+    "shadow_eligible_count": 4,
+    "blocked_count": 8,
+    "autonomous_sends_attempted": 0,
+    "autonomous_sends_completed": 0,
+    "autonomous_sends_failed": 0,
+    "human_review_cases": 12
+  },
+
+  "blocked_reason_breakdown": [
+    { "reason": "autonomous_enabled=false", "count": 12, "note": "System in SHADOW_ONLY mode" }
+  ],
+
+  "high_risk_escalations": [
+    {
+      "case_id": "case-sample-001",
+      "thread_id": "thread-abc123",
+      "micro_intent": "UNSUBSCRIBE",
+      "blocked_reason": "intent_permanently_blocked: UNSUBSCRIBE",
+      "priority": "HIGH",
+      "action_required": "Confirm prospect was added to DNC list"
+    }
+  ],
+
+  "autonomous_sends": [],
+
+  "shadow_eligible_drafts": [
+    {
+      "case_id": "case-sample-002",
+      "micro_intent": "INFORMATION_REQUEST",
+      "draft_excerpt": "Thanks for reaching out. Here's a bit more about how we work...",
+      "blocked_reason": "autonomous_enabled=false",
+      "note": "This case would be eligible for autonomous send if system were in CONTROLLED_PILOT mode. Review draft quality."
+    },
+    {
+      "case_id": "case-sample-003",
+      "micro_intent": "SCHEDULING_REQUEST",
+      "draft_excerpt": "Happy to set up a time. Here's my calendar link...",
+      "blocked_reason": "autonomous_enabled=false",
+      "note": "Scheduling request. Draft quality looks good."
+    }
+  ],
+
+  "follow_ups_needed": [],
+
+  "learning_events": {
+    "total_learning_events": 1,
+    "classification_corrections": 0,
+    "draft_revisions": 1,
+    "intent_edits": 0,
+    "proposed_shadow_created": 0,
+    "rules_pending_review": 0
+  },
+
+  "recommended_owner_actions": [
+    { "priority": "HIGH", "action": "Review 1 unsubscribe escalation — confirm DNC handling", "count": 1 },
+    { "priority": "MEDIUM", "action": "Review 2 shadow-eligible draft previews for quality assessment", "count": 2 },
+    { "priority": "LOW", "action": "Review 1 learning event from draft revision", "count": 1 }
+  ]
+}

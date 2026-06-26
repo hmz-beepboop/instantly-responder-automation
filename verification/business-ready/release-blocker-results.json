@@ -1,0 +1,180 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-06-15T17:27:08.700Z",
+  "total": 34,
+  "passed": 34,
+  "failed": 0,
+  "overall_result": "PASS",
+  "results": [
+    {
+      "id": "workflows_parse",
+      "description": "All 7 workflow JSON files parse as valid JSON",
+      "passed": true
+    },
+    {
+      "id": "regression_phase4a",
+      "description": "verification\\phase4a\\run-offline-tests.mjs regression suite reports 42/42",
+      "passed": true
+    },
+    {
+      "id": "regression_phase4b",
+      "description": "verification\\phase4b\\run-offline-tests.mjs regression suite reports 31/31",
+      "passed": true
+    },
+    {
+      "id": "regression_integration_closure",
+      "description": "verification\\integration-closure\\run-offline-tests.mjs regression suite reports 16/16",
+      "passed": true
+    },
+    {
+      "id": "regression_business_ready",
+      "description": "verification\\business-ready\\run-offline-tests.mjs regression suite reports 23/23",
+      "passed": true
+    },
+    {
+      "id": "regression_live_path",
+      "description": "verification\\business-ready\\run-live-path-offline-tests.mjs regression suite reports 41/41",
+      "passed": true
+    },
+    {
+      "id": "blocker_a_q_node_is_real_gated_reply_adapter",
+      "description": "Q is a real httpRequest POST to https://api.instantly.ai/api/v2/emails/reply, gated via credentialPlaceholder hmzInstantlyApi, neverError+fullResponse, continueRegularOutput",
+      "passed": true
+    },
+    {
+      "id": "blocker_a_r_classifies_valid_email_object_as_sent",
+      "description": "R classifies HTTP 2xx with a valid Email object {id, message_id, thread_id} as terminal SENT, non-ambiguous",
+      "passed": true
+    },
+    {
+      "id": "blocker_a_r_classifies_invalid_2xx_contract_as_send_uncertain",
+      "description": "R classifies HTTP 2xx without a valid {id, message_id, thread_id} body as terminal SEND_UNCERTAIN, ambiguous, never blindly retried",
+      "passed": true
+    },
+    {
+      "id": "blocker_a_x2_terminal_carries_email_thread_message_ids",
+      "description": "X2 builds terminal.result=SENT, send_state=SENT, sent=true, carrying email_id/message_id/thread_id and confirmed cross-checks from the Email object",
+      "passed": true
+    },
+    {
+      "id": "blocker_b_v_node_get_emails_with_required_query_params",
+      "description": "V is a real httpRequest GET to https://api.instantly.ai/api/v2/emails carrying search/eaccount/lead/email_type=sent/min_timestamp_created/max_timestamp_created/preview_only=false/limit, gated the same as Q",
+      "passed": true
+    },
+    {
+      "id": "blocker_b_reconciliation_single_match_then_consistent_reconciles",
+      "description": "W reconciles to SENT_RECONCILED only after 2 consecutive single-match polls of the same id; the first single-match poll is HUMAN_REVIEW_ZERO_MATCHES (uncertain awaiting a second confirming poll)",
+      "passed": true
+    },
+    {
+      "id": "blocker_b_reconciliation_multiple_matches_human_review",
+      "description": "W reconciles to HUMAN_REVIEW_MULTIPLE_MATCHES when a poll returns more than one match id",
+      "passed": true
+    },
+    {
+      "id": "blocker_c_safety_action_plan_four_actions_with_request_contracts",
+      "description": "F (Safety Action Plan) emits schema_version 1.1 with exactly the 4 named actions, each carrying enabled/executed/verification_status/request_contract, plus requires_canonical_lead",
+      "passed": true
+    },
+    {
+      "id": "blocker_c_per_action_chain_g0_through_g6_present",
+      "description": "Workflow 02 has the per-action gated chain G0g/G0h/G0r, G1g-G4g (gate/execute/record per action), G5g/G5h/G5r (blocklist verification), G6 (aggregator); every gate is an IF node and every httpRequest carries credentialPlaceholder hmzInstantlyApi and continueRegularOutput",
+      "passed": true
+    },
+    {
+      "id": "blocker_c_per_action_chain_fully_connected",
+      "description": "F -> G0g -> ... -> G6 -> E. Output Validation forms one fully-connected chain with no orphaned gate/record nodes (each Gn record feeds the next gate)",
+      "passed": true
+    },
+    {
+      "id": "blocker_c_actions_disabled_by_default_config",
+      "description": "With the shipped suppression_action_enablement (all false), every planned action has enabled=false and verification_status=SUPPRESSION_ACTION_DISABLED_BY_CONFIG, and execution remains gated offline",
+      "passed": true
+    },
+    {
+      "id": "blocker_d_apply_script_parses",
+      "description": "apply-business-ready.ps1 is syntactically valid PowerShell",
+      "passed": true
+    },
+    {
+      "id": "blocker_d_assert_owner_inputs_complete_fails_closed",
+      "description": "Assert-OwnerInputsComplete throws unless config.owner_inputs_status === \"COMPLETE\" and no <REQUIRED_*> placeholders remain",
+      "passed": true
+    },
+    {
+      "id": "blocker_d_injected_constants_match_config",
+      "description": "config/business-ready.config.json is injected as the source of truth for LAUNCH_PROFILE (wf03 O), ALLOWLISTS (wf01 F1), REVIEWER_ALLOWLIST (wf07 M1), and SUPPRESSION_ACTION_ENABLEMENT (wf02 F) via HMZ_INJECT markers",
+      "passed": true
+    },
+    {
+      "id": "blocker_d_test_allowed_http_url_covers_per_action_executors",
+      "description": "Test-AllowedHttpUrl in apply-business-ready.ps1 allows G1h-G4h's expression-derived request_contract.url targets (Blocker C) in addition to literal https://api.instantly.ai/... targets, so Assert-WorkflowBodySafe does not reject workflow 02",
+      "passed": true
+    },
+    {
+      "id": "blocker_e_controlled_live_invokes_n8n_not_instantly_directly",
+      "description": "run-controlled-live-acceptance.ps1 uses the real production reply plus authenticated human-approval path, polls n8n/Instantly read-only for the result, and never POSTs directly to /api/v2/emails/reply or to the dev Intake webhook",
+      "passed": true
+    },
+    {
+      "id": "blocker_e_controlled_live_two_modes_and_confirmation_phrase",
+      "description": "run-controlled-live-acceptance.ps1 supports -PreflightOnly (default, read-only) and -AllowOneControlledReply (requires -ConfirmationPhrase \"RUN-ONE-CONTROLLED-REPLY\" typed exactly)",
+      "passed": true
+    },
+    {
+      "id": "blocker_e_controlled_live_restores_workflow_activation_state",
+      "description": "run-controlled-live-acceptance.ps1 temporarily activates the six required runtime workflows, keeps the Full Test Harness inactive, and restores safe config plus all-workflows-inactive in finally",
+      "passed": true
+    },
+    {
+      "id": "blocker_f_security_gate_dev_passthrough",
+      "description": "F1 is a passthrough (checked=false, passed=true) for non-PRODUCTION_WEBHOOK entries, preserving the dev/synthetic/test path",
+      "passed": true
+    },
+    {
+      "id": "blocker_f_security_gate_empty_allowlists_fails_closed",
+      "description": "F1 fails closed (passed=false) for PRODUCTION_WEBHOOK entries while ALLOWLISTS is empty (the shipped default); a missing/non-allowlisted workspace_id means campaign and sender allowlisting can never succeed either",
+      "passed": true
+    },
+    {
+      "id": "blocker_f_security_gate_routing_f1_f2_f3",
+      "description": "F -> F1 -> F2 -> {G (true) / F3 (false)}; F3 builds terminal.result=REJECTED with reason PRODUCTION_SECURITY_GATE_FAILED",
+      "passed": true
+    },
+    {
+      "id": "blocker_g_review_webhooks_use_basic_auth_credential",
+      "description": "The production review-form and review-submit webhooks in workflow 07 require Basic Auth via credentialPlaceholder hmzReviewBasicAuth, separate from the unauthenticated dev webhooks",
+      "passed": true
+    },
+    {
+      "id": "blocker_g_reviewer_allowlist_fails_closed_when_empty",
+      "description": "M1 (Reviewer Identity Allowlist Check) is fail-closed: with the shipped empty REVIEWER_ALLOWLIST, configured=false and allowlisted=false (never null/true)",
+      "passed": true
+    },
+    {
+      "id": "blocker_g_reviewer_allowlist_router_rejects_non_allowlisted",
+      "description": "M2 (Reviewer Allowlist Router) routes allowlisted=true to N and allowlisted=false to M2b -> N2 (REVIEWER_NOT_ALLOWLISTED), inserted between M(true) and N without altering M(false)",
+      "passed": true
+    },
+    {
+      "id": "blocker_g_reviewer_decision_logic_unchanged",
+      "description": "N (Process Reviewer Decision) still receives submit_action/submit_approver_identity/submit_edited_text/review_case fields untouched by the M1/M2 insertion",
+      "passed": true
+    },
+    {
+      "id": "blocker_h_local_runtime_acceptance_covers_error_and_sla_workflows",
+      "description": "run-local-runtime-acceptance.ps1 temporarily activates the SLA Watchdog (in addition to Sender/Error Handler/Human Approval) and, within the same isolated window, runs standalone n8n execute for both the Error Handler's real Error Trigger and the SLA Watchdog's real Schedule Trigger, recording errorTriggerAcceptance/slaWatchdogAcceptance",
+      "passed": true
+    },
+    {
+      "id": "blocker_h_local_runtime_acceptance_restores_inactive_state",
+      "description": "run-local-runtime-acceptance.ps1 reverses all temporary activations (including the SLA Watchdog) in a finally block and verifies allWorkflowsInactiveAfter, regardless of success or failure",
+      "passed": true
+    },
+    {
+      "id": "blocker_h_config_safe_defaults_unchanged",
+      "description": "config/business-ready.config.json remains safe-by-default after all A-H corrections: dry_run=true, live_campaigns=[], operating_mode/launch_profile remain SUPERVISED_VALIDATION, no unattended auto-send",
+      "passed": true
+    }
+  ]
+}

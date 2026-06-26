@@ -1,0 +1,83 @@
+{
+  "fixture_id": "phase3_05_out_of_office",
+  "description": "Automated out-of-office reply (T8 / OUT_OF_OFFICE). Must be matched deterministically by det-ooo-001 (which is checked before det-referral-001, so the 'contact my colleague' phrase does not get misread as a referral). No human review required, no reply, sequence is paused (not stopped) pending the prospect's return.",
+  "input": {
+    "intake_id": "phase3-fixture-05-out-of-office",
+    "event_id": "evt-phase3-005",
+    "email_id": "email-phase3-005",
+    "event_type": "auto_reply_received",
+    "lead_email": "riley.cooper@prospectco.test",
+    "from_address_email": "riley.cooper@prospectco.test",
+    "email_account": "outbound1@hmzvalidation.test",
+    "reply_subject": "Automatic reply: Quick question about your sales pipeline",
+    "reply_text": "I am currently out of the office and will return on Monday. For urgent matters, please contact my colleague.",
+    "reply_text_snippet": "I am currently out of the office and will return on Monday.",
+    "timestamp": "2026-06-08T18:20:00Z",
+    "campaign_id": "campaign-validation-002",
+    "validation_cell": "CELL_2_SAAS_EXISTING_OUTBOUND",
+    "workspace": "hmz-workspace-dev",
+    "campaign_name": "US B2B Validation Sprint - Cell 2",
+    "step": 1,
+    "variant": 2,
+    "is_first": true,
+    "thread_id": "thread-phase3-005",
+    "message_id": "<msg-phase3-005@instantly.test>",
+    "unibox_url": "https://app.instantly.test/unibox/thread-phase3-005"
+  },
+  "expected": {
+    "payload_status": "COMPLETE",
+    "deterministic": {
+      "deterministic_match": true,
+      "noop_match": false,
+      "category": "OUT_OF_OFFICE",
+      "rule_id": "det-ooo-001",
+      "media_flag": false
+    },
+    "prefilter": {
+      "is_out_of_office": true,
+      "is_automated_response": true,
+      "is_unsupported_event_type": false
+    },
+    "classifier": {
+      "category": "OUT_OF_OFFICE",
+      "confidence": 1,
+      "interest_stage": "UNKNOWN",
+      "permitted_automation_action": "NONE",
+      "requested_action": "NONE"
+    },
+    "decision": {
+      "category": "OUT_OF_OFFICE",
+      "confidence": 1,
+      "confidence_overridden": false,
+      "stop_active_sequence": false,
+      "durable_dnc_intent": false,
+      "address_suppression_intent": "NONE",
+      "review_hold": false,
+      "legal_review_required": false,
+      "privacy_review_required": false,
+      "reputational_review_required": false,
+      "human_review_required": false,
+      "reply_permitted": false,
+      "reply_template_id": null,
+      "reply_draft_status": "NOT_APPLICABLE",
+      "external_action_status": "NOT_PERFORMED",
+      "follow_up_date": null,
+      "interest_stage": "UNKNOWN",
+      "terminal_status": "COMPLETED_NO_SEND",
+      "pause_active_sequence": true
+    },
+    "draft": {
+      "template_id": null,
+      "draft_text_is_null": true,
+      "missing_variables": [],
+      "human_review_required": false
+    },
+    "validation_learning": {
+      "all_other_fields": "unknown_or_null_default"
+    },
+    "validation": {
+      "valid": true
+    },
+    "notes": "event_type=auto_reply_received is in SUPPORTED_EVENT_TYPES (Section F) so is_unsupported_event_type=false; it also makes prefilter.is_automated_response=true. det-ooo-001 (priority 13) is checked before det-referral-001 (priority 16) in Section A's chain, so the 'please contact my colleague' phrase never reaches the referral rule. terminal_status=COMPLETED_NO_SEND with human_review_required=false is an intentional successful resolution under the project's five-minute objective (no reply needed), not a failure."
+  }
+}

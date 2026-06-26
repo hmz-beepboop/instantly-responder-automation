@@ -1,0 +1,140 @@
+[
+  {
+    "id": "blocker-a-sent-email-object-contract",
+    "group": "reply_success_classification",
+    "synthetic": true,
+    "description": "R (Classify Send Attempt, workflow 03) treats an HTTP 2xx response from Q (POST /api/v2/emails/reply) as terminal SENT only when the response body is a valid Email object: non-empty string id, message_id, and thread_id. Any 2xx response missing one of these fields is SEND_UNCERTAIN (ambiguous, never retried).",
+    "input": {
+      "valid": { "statusCode": 200, "body": { "id": "email-abc", "message_id": "msg-123", "thread_id": "thread-abc" } },
+      "invalid": { "statusCode": 200, "body": { "status": "sent" } }
+    },
+    "expected": {
+      "valid.send_classification.final_state": "SENT",
+      "valid.send_classification.ambiguous_side_effect": false,
+      "invalid.send_classification.final_state": "SEND_UNCERTAIN",
+      "invalid.send_classification.ambiguous_side_effect": true,
+      "invalid.send_classification.retryable": false
+    }
+  },
+  {
+    "id": "blocker-b-reconciliation-get-emails-contract",
+    "group": "reconciliation",
+    "synthetic": true,
+    "description": "V (Reconciliation Poll, workflow 03) issues a GET to https://api.instantly.ai/api/v2/emails with search/eaccount/lead/email_type=sent/min_timestamp_created/max_timestamp_created/preview_only=false/limit query params. W (Process Reconciliation Poll) locally filters the returned items and reconciles to SENT_RECONCILED only after two consecutive single-match polls of the same id; zero matches or multiple matches route to HUMAN_REVIEW_*.",
+    "input": {
+      "first_poll": { "body": { "items": [{ "id": "email-abc" }] } },
+      "second_poll": { "body": { "items": [{ "id": "email-abc" }] } },
+      "multi_match_poll": { "body": { "items": [{ "id": "a" }, { "id": "b" }] } }
+    },
+    "expected": {
+      "first_poll.reconciliation.state": "HUMAN_REVIEW_ZERO_MATCHES",
+      "second_poll.reconciliation.state": "SENT_RECONCILED",
+      "second_poll.reconciliation.matchId": "email-abc",
+      "multi_match_poll.reconciliation.state": "HUMAN_REVIEW_MULTIPLE_MATCHES"
+    }
+  },
+  {
+    "id": "blocker-c-suppression-per-action-gating",
+    "group": "suppression_plan_and_execution",
+    "synthetic": true,
+    "description": "F (Safety Action Plan, workflow 02) emits a schema_version 1.1 plan with exactly 4 actions (SOURCE_CAMPAIGN_STOP, UPDATE_INTEREST_STATUS, SUBSEQUENCE_REMOVAL, EXACT_EMAIL_BLOCKLIST), each with its own request_contract {method,url,body}. The G0..G6 chain gates execution of each action individually by suppression_action_enablement.*; with the shipped config (all disabled), every action remains enabled=false / executed=false / verification_status=SUPPRESSION_ACTION_DISABLED_BY_CONFIG and G6 reports verification_status=EXECUTION_AND_VERIFICATION_GATED_OFFLINE.",
+    "input": {
+      "nes": { "campaign_context": { "campaign_id": "camp-1" }, "lead_email": "lead@example.com" },
+      "decision": { "stop_active_sequence": true, "address_suppression_intent": "GLOBAL_BLOCKLIST" }
+    },
+    "expected": {
+      "safety_action_plan.schema_version": "1.1",
+      "safety_action_plan.execution_order": "BEFORE_REPLY_APPROVAL_GATE",
+      "safety_action_plan.actions[*].enabled": false,
+      "safety_action_plan.actions[*].verification_status": "SUPPRESSION_ACTION_DISABLED_BY_CONFIG",
+      "suppression_execution.verification_status": "EXECUTION_AND_VERIFICATION_GATED_OFFLINE"
+    }
+  },
+  {
+    "id": "blocker-d-apply-config-source-of-truth",
+    "group": "apply_script",
+    "synthetic": true,
+    "description": "apply-business-ready.ps1 refuses to run unless config.owner_inputs_status === 'COMPLETE' and no <REQUIRED_*> placeholders remain (Assert-OwnerInputsComplete), then re-embeds config.launch_profile / config.allowlists / config.reviewer_allowlist / config.suppression_action_enablement verbatim into the HMZ_INJECT-marked LAUNCH_PROFILE (wf03 O), ALLOWLISTS (wf01 F1), REVIEWER_ALLOWLIST (wf07 M1), and SUPPRESSION_ACTION_ENABLEMENT (wf02 F) constants, re-verifying the remote copies afterwards (Assert-InjectedConstantsMatchConfig). Test-AllowedHttpUrl additionally allows the per-action suppression executors (G1h-G4h) whose URL is an expression derived from safety_action_plan.actions[].request_contract.url.",
+    "input": {
+      "owner_inputs_status": "INCOMPLETE"
+    },
+    "expected": {
+      "Assert-OwnerInputsComplete": "throws when owner_inputs_status !== 'COMPLETE' or a <REQUIRED_*> placeholder remains",
+      "Assert-WorkflowBodySafe(workflow_02)": "does not throw (G1h-G4h request_contract.url expressions are recognised as gated Instantly adapters)"
+    }
+  },
+  {
+    "id": "blocker-e-controlled-live-via-n8n",
+    "group": "controlled_live_acceptance",
+    "synthetic": true,
+    "description": "run-controlled-live-acceptance.ps1 -AllowOneControlledReply -ConfirmationPhrase 'RUN-ONE-CONTROLLED-REPLY' performs the single controlled live reply by POSTing a synthetic NES payload to the Intake workflow's dev webhook (hmz-validation-reply-intake-dev), temporarily activating the Intake workflow only, then polling n8n's executions API for the Sender workflow's run and reading terminal.send_state / terminal.email_id / terminal.message_id / terminal.thread_id. It never calls POST /api/v2/emails/reply directly, and restores the Intake workflow's prior active state plus dry_run=true / live_campaigns=[] in a finally block regardless of outcome.",
+    "input": {
+      "mode": "ALLOW_ONE_CONTROLLED_REPLY",
+      "confirmation_phrase": "RUN-ONE-CONTROLLED-REPLY"
+    },
+    "expected": {
+      "direct_instantly_post": false,
+      "n8n_webhook_invoked": "hmz-validation-reply-intake-dev",
+      "sender_workflow_terminal_read": true,
+      "intake_activation_restored": true,
+      "dry_run_after": true,
+      "live_campaigns_after": []
+    }
+  },
+  {
+    "id": "blocker-f-production-security-gate-fail-closed",
+    "group": "preflight_security_gate",
+    "synthetic": true,
+    "description": "F1 (Production Security & Allowlist Gate, workflow 01) is a passthrough for non-PRODUCTION_WEBHOOK entries, but for PRODUCTION_WEBHOOK entries it fails closed against the embedded ALLOWLISTS constant: campaign and sender-eaccount allowlisting are conditional on workspace_id first being allowlisted, so a missing/non-allowlisted workspace_id alone is sufficient to fail CAMPAIGN_NOT_ALLOWLISTED_OR_WORKSPACE_NOT_ALLOWLISTED and SENDER_EACCOUNT_NOT_ALLOWLISTED_OR_WORKSPACE_NOT_ALLOWLISTED as well as WORKSPACE_NOT_ALLOWLISTED. F2 routes passed=false to F3, which builds terminal.result=REJECTED, reason=PRODUCTION_SECURITY_GATE_FAILED.",
+    "input": {
+      "entry_source": "PRODUCTION_WEBHOOK",
+      "nes": { "workspace_id": "ws-1", "campaign_id": "camp-1", "eaccount": "sender@example.com" }
+    },
+    "expected": {
+      "security_gate.checked": true,
+      "security_gate.passed": false,
+      "security_gate.reasons": [
+        "WORKSPACE_NOT_ALLOWLISTED",
+        "CAMPAIGN_NOT_ALLOWLISTED_OR_WORKSPACE_NOT_ALLOWLISTED",
+        "SENDER_EACCOUNT_NOT_ALLOWLISTED_OR_WORKSPACE_NOT_ALLOWLISTED"
+      ],
+      "terminal.result": "REJECTED",
+      "terminal.reason": "PRODUCTION_SECURITY_GATE_FAILED"
+    }
+  },
+  {
+    "id": "blocker-g-reviewer-auth-and-allowlist-fail-closed",
+    "group": "reviewer_identity",
+    "synthetic": true,
+    "description": "The production review-form/review-submit webhooks (workflow 07) require Basic Auth via credentialPlaceholder hmzReviewBasicAuth (dev webhooks remain unauthenticated). M1 (Reviewer Identity Allowlist Check) is fail-closed: with the shipped empty REVIEWER_ALLOWLIST, configured=false and allowlisted=false (never null). M2 (Reviewer Allowlist Router) routes allowlisted=true to N (Process Reviewer Decision) and allowlisted=false to M2b (Mark Reviewer Not Allowlisted) -> N2 (Render Submit Token Error), with token_invalid_reason=REVIEWER_NOT_ALLOWLISTED.",
+    "input": {
+      "submit_approver_identity": "reviewer@example.com"
+    },
+    "expected": {
+      "review_form_webhook.authentication": "basicAuth",
+      "review_form_webhook.credentialPlaceholder": "hmzReviewBasicAuth",
+      "reviewer_allowlist_check.configured": false,
+      "reviewer_allowlist_check.allowlisted": false,
+      "m2_router.false_branch.token_invalid_reason": "REVIEWER_NOT_ALLOWLISTED"
+    }
+  },
+  {
+    "id": "blocker-h-error-and-schedule-trigger-acceptance",
+    "group": "local_runtime_acceptance",
+    "synthetic": true,
+    "description": "run-local-runtime-acceptance.ps1 temporarily activates the Reply Sender, Error Handler, Human Approval, and SLA Watchdog workflows for an isolated window (main n8n stopped), runs the Full Test Harness, then additionally runs standalone `n8n execute` for the Error Handler's real Error Trigger entry node and the SLA Watchdog's real Schedule Trigger entry node, checking persisted_error.errorId and watchdog_result.schema_version/phase4b_result_id respectively. The finally block restarts n8n and deactivates every temporarily-activated workflow, verifying allWorkflowsInactiveAfter=true.",
+    "input": {
+      "temporarily_activated": [
+        "HMZ - Instantly Reply Sender - Validation",
+        "HMZ - Reply Error Handler - Validation",
+        "HMZ - Reply Human Approval - Validation",
+        "HMZ - Reply SLA Watchdog - Validation"
+      ]
+    },
+    "expected": {
+      "errorTriggerAcceptance.passed": true,
+      "slaWatchdogAcceptance.passed": true,
+      "allWorkflowsInactiveAfter": true
+    }
+  }
+]

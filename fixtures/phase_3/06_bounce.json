@@ -1,0 +1,83 @@
+{
+  "fixture_id": "phase3_06_bounce",
+  "description": "Delivery failure / bounce notice (T9 / BOUNCE_OR_DELIVERY_NOTICE). Sent from a mailer-daemon address with DSN evidence, matched deterministically by det-bounce-001. No human review required, no reply, but flagged for data cleanup (suppress/remove the bouncing address from future sends).",
+  "input": {
+    "intake_id": "phase3-fixture-06-bounce",
+    "event_id": "evt-phase3-006",
+    "email_id": "email-phase3-006",
+    "event_type": "email_bounced",
+    "lead_email": "alex.diaz@prospectco.test",
+    "from_address_email": "mailer-daemon@prospectco-mail.test",
+    "email_account": "outbound1@hmzvalidation.test",
+    "reply_subject": "Delivery Status Notification (Failure)",
+    "reply_text": "This is an automatically generated Delivery Status Notification. Delivery to the following recipient failed permanently: alex.diaz@prospectco.test. The error was: 550 5.1.1 The email account that you tried to reach does not exist.",
+    "reply_text_snippet": "Delivery to the following recipient failed permanently: alex.diaz@prospectco.test.",
+    "timestamp": "2026-06-08T19:05:00Z",
+    "campaign_id": "campaign-validation-001",
+    "validation_cell": "CELL_1_SAAS_SALES_HIRING",
+    "workspace": "hmz-workspace-dev",
+    "campaign_name": "US B2B Validation Sprint - Cell 1",
+    "step": 1,
+    "variant": 1,
+    "is_first": true,
+    "thread_id": "thread-phase3-006",
+    "message_id": "<msg-phase3-006@prospectco-mail.test>",
+    "unibox_url": "https://app.instantly.test/unibox/thread-phase3-006"
+  },
+  "expected": {
+    "payload_status": "COMPLETE",
+    "deterministic": {
+      "deterministic_match": true,
+      "noop_match": false,
+      "category": "BOUNCE_OR_DELIVERY_NOTICE",
+      "rule_id": "det-bounce-001",
+      "media_flag": false
+    },
+    "prefilter": {
+      "is_bounce": true,
+      "is_unsupported_event_type": false,
+      "is_automated_response": false
+    },
+    "classifier": {
+      "category": "BOUNCE_OR_DELIVERY_NOTICE",
+      "confidence": 1,
+      "interest_stage": "UNKNOWN",
+      "permitted_automation_action": "NONE",
+      "requested_action": "NONE"
+    },
+    "decision": {
+      "category": "BOUNCE_OR_DELIVERY_NOTICE",
+      "confidence": 1,
+      "confidence_overridden": false,
+      "stop_active_sequence": true,
+      "durable_dnc_intent": false,
+      "address_suppression_intent": "NONE",
+      "review_hold": false,
+      "legal_review_required": false,
+      "privacy_review_required": false,
+      "reputational_review_required": false,
+      "human_review_required": false,
+      "reply_permitted": false,
+      "reply_template_id": null,
+      "reply_draft_status": "NOT_APPLICABLE",
+      "external_action_status": "NOT_PERFORMED",
+      "follow_up_date": null,
+      "interest_stage": "UNKNOWN",
+      "terminal_status": "COMPLETED_NO_SEND",
+      "data_cleanup_required": true
+    },
+    "draft": {
+      "template_id": null,
+      "draft_text_is_null": true,
+      "missing_variables": [],
+      "human_review_required": false
+    },
+    "validation_learning": {
+      "all_other_fields": "unknown_or_null_default"
+    },
+    "validation": {
+      "valid": true
+    },
+    "notes": "from_address_email contains 'mailer-daemon' AND the reply text contains 'Delivery Status Notification' (dsnEvidence), so det-bounce-001 fires (not the weaker det-bounce-002). event_type=email_bounced is in SUPPORTED_EVENT_TYPES. 'automatically generated' does not match the AUTOMATED_RESPONSE_PATTERN ('automatic reply' / 'automated response' / 'auto-reply' / 'do not reply'), so is_automated_response=false here - this is expected and does not affect the bounce classification. data_cleanup_required=true is a flag only; no Instantly suppression call is made (external_action_status stays NOT_PERFORMED)."
+  }
+}

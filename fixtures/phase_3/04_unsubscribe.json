@@ -1,0 +1,82 @@
+{
+  "fixture_id": "phase3_04_unsubscribe",
+  "description": "Explicit unsubscribe / opt-out language (T7 / UNSUBSCRIBE). Must be matched deterministically by det-unsub-001, create a durable DNC intent (ORGANISATION_DNC), and block any reply draft pending suppression verification - no transmission occurs.",
+  "input": {
+    "intake_id": "phase3-fixture-04-unsubscribe",
+    "event_id": "evt-phase3-004",
+    "email_id": "email-phase3-004",
+    "event_type": "reply_received",
+    "lead_email": "taylor.brooks@prospectco.test",
+    "from_address_email": "taylor.brooks@prospectco.test",
+    "email_account": "outbound1@hmzvalidation.test",
+    "reply_subject": "Re: Quick question about your sales pipeline",
+    "reply_text": "Please unsubscribe me from this list. Do not contact me again.",
+    "reply_text_snippet": "Please unsubscribe me from this list. Do not contact me again.",
+    "timestamp": "2026-06-08T17:00:00Z",
+    "campaign_id": "campaign-validation-001",
+    "validation_cell": "CELL_1_SAAS_SALES_HIRING",
+    "workspace": "hmz-workspace-dev",
+    "campaign_name": "US B2B Validation Sprint - Cell 1",
+    "step": 3,
+    "variant": 1,
+    "is_first": false,
+    "thread_id": "thread-phase3-004",
+    "message_id": "<msg-phase3-004@instantly.test>",
+    "unibox_url": "https://app.instantly.test/unibox/thread-phase3-004"
+  },
+  "expected": {
+    "payload_status": "COMPLETE",
+    "deterministic": {
+      "deterministic_match": true,
+      "noop_match": false,
+      "category": "UNSUBSCRIBE",
+      "rule_id": "det-unsub-001",
+      "media_flag": false
+    },
+    "prefilter": {
+      "is_unsubscribe_language": true
+    },
+    "classifier": {
+      "category": "UNSUBSCRIBE",
+      "confidence": 1,
+      "interest_stage": "UNKNOWN",
+      "permitted_automation_action": "TEMPLATE_DRAFT",
+      "requested_action": "STOP_ALL_CONTACT"
+    },
+    "decision": {
+      "category": "UNSUBSCRIBE",
+      "confidence": 1,
+      "confidence_overridden": false,
+      "stop_active_sequence": true,
+      "durable_dnc_intent": true,
+      "address_suppression_intent": "ORGANISATION_DNC",
+      "review_hold": false,
+      "legal_review_required": false,
+      "privacy_review_required": false,
+      "reputational_review_required": false,
+      "human_review_required": true,
+      "reply_permitted": false,
+      "reply_template_id": "T7_UNSUBSCRIBE_CONFIRMATION",
+      "reply_draft_status": "BLOCKED_PENDING_SUPPRESSION_VERIFICATION",
+      "external_action_status": "NOT_PERFORMED",
+      "follow_up_date": null,
+      "interest_stage": "UNKNOWN",
+      "terminal_status": "REVIEW_HOLD"
+    },
+    "draft": {
+      "template_id": "T7_UNSUBSCRIBE_CONFIRMATION",
+      "draft_text_is_null": false,
+      "draft_status": "BLOCKED_PENDING_SUPPRESSION_VERIFICATION",
+      "missing_variables": ["firstName", "senderName"],
+      "human_review_required": true,
+      "notes_mention": "may be transmitted only after suppression has been verified complete"
+    },
+    "validation_learning": {
+      "all_other_fields": "unknown_or_null_default"
+    },
+    "validation": {
+      "valid": true
+    },
+    "notes": "det-unsub-001 matches 'unsubscribe' (and prefilter.is_unsubscribe_language is also true via the same regex family in Section F, though Section A's own combined-text match is what fires first). durable_dnc_intent=true and address_suppression_intent=ORGANISATION_DNC are intents only - external_action_status stays NOT_PERFORMED, no Instantly call is made. reply_draft_status=BLOCKED_PENDING_SUPPRESSION_VERIFICATION enforces that the confirmation reply cannot be sent before suppression is verified (policy-HMZ-1.2 Section 7)."
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-06-15T17:27:07.288Z",
+  "total": 16,
+  "passed": 16,
+  "failed": 0,
+  "overall_result": "PASS",
+  "results": [
+    {
+      "id": "workflows_parse",
+      "description": "All six workflow JSON files parse as valid JSON",
+      "passed": true
+    },
+    {
+      "id": "workflows_inactive",
+      "description": "All six workflows have active=false",
+      "passed": true
+    },
+    {
+      "id": "no_credentials",
+      "description": "No node in any of the six workflows has a credentials field",
+      "passed": true
+    },
+    {
+      "id": "no_external_http_targets",
+      "description": "Every httpRequest node targets only the hmz-send-state sidecar, the gated Google Chat env var, or a gated credentialPlaceholder live-path Instantly adapter",
+      "passed": true
+    },
+    {
+      "id": "intake_single_decision_and_sender_calls",
+      "description": "Reply Intake contains exactly one Decision Engine call and exactly one Human Approval call",
+      "passed": true,
+      "details": {
+        "decisionEngineCalls": 1,
+        "humanApprovalCalls": 1
+      }
+    },
+    {
+      "id": "sender_follows_decision_engine",
+      "description": "G. Decision Engine Handoff connects directly to H. Human Approval Handoff",
+      "passed": true
+    },
+    {
+      "id": "reject_duplicate_cannot_reach_sender",
+      "description": "B2 (config-gate rejection) and E5 (duplicate-event terminal) are dead-end leaves and cannot reach H. Human Approval Handoff",
+      "passed": true
+    },
+    {
+      "id": "five_workflows_identify_error_handler",
+      "description": "Reply Intake, Decision Engine, Reply Sender, SLA Watchdog and Full Test Harness all set settings.errorWorkflow to the Error Handler",
+      "passed": true
+    },
+    {
+      "id": "error_handler_not_self_referencing",
+      "description": "Reply Error Handler does not set settings.errorWorkflow on itself",
+      "passed": true
+    },
+    {
+      "id": "full_harness_calls_sender_and_error_handler",
+      "description": "Full Test Harness contains Execute Sub-workflow calls into the real Reply Sender and Error Handler workflows",
+      "passed": true,
+      "details": {
+        "senderCalls": 2,
+        "errorHandlerCalls": 1
+      }
+    },
+    {
+      "id": "workflow_id_references_patchable",
+      "description": "Every Execute Sub-workflow target and settings.errorWorkflow uses a placeholder ID that apply-integration-closure.ps1 or apply-business-ready.ps1 can globally patch after a fresh import",
+      "passed": true
+    },
+    {
+      "id": "fresh_install_dependency_order",
+      "description": "build-integration.mjs DEPENDENCY_ORDER is Decision Engine -> Error Handler -> Sender -> SLA Watchdog -> Full Test Harness -> Intake, covers all six canonical workflows exactly once, and apply-integration-closure.ps1 uses the same order",
+      "passed": true,
+      "details": {
+        "orderCovers": true,
+        "orderMatchesExpected": true,
+        "applyScriptHasOrder": true,
+        "dependencyOrder": [
+          "HMZ - Reply Decision Engine - Validation",
+          "HMZ - Reply Error Handler - Validation",
+          "HMZ - Instantly Reply Sender - Validation",
+          "HMZ - Reply SLA Watchdog - Validation",
+          "HMZ - Reply Full Test Harness - Validation",
+          "HMZ - Instantly Reply Intake - Validation"
+        ]
+      }
+    },
+    {
+      "id": "apply_script_idempotent_by_name",
+      "description": "apply-integration-closure.ps1 exists, discovers workflows by exact canonical name, refuses duplicates, requires an offline pass, and patches every placeholder",
+      "passed": true
+    },
+    {
+      "id": "embedded_code_nodes_compile",
+      "description": "Every Code node jsCode body in all six workflows is syntactically valid JavaScript",
+      "passed": true
+    },
+    {
+      "id": "phase4a_regression",
+      "description": "verification\\phase4a\\run-offline-tests.mjs regression suite reports 42/42",
+      "passed": true
+    },
+    {
+      "id": "phase4b_regression",
+      "description": "verification\\phase4b\\run-offline-tests.mjs regression suite reports 31/31",
+      "passed": true
+    }
+  ]
+}

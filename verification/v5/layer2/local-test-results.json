@@ -1,0 +1,67 @@
+{
+  "generatedAt": "2026-06-14T01:42:38.648Z",
+  "nodeVersion": "v24.15.0",
+  "pollConfig": {
+    "intervalMs": 40,
+    "maxDurationMs": 260,
+    "consecutiveRequired": 2
+  },
+  "livePollDefaults": {
+    "intervalMs": 20000,
+    "maxDurationMs": 180000,
+    "consecutiveRequired": 2
+  },
+  "scenarios": {
+    "success": {
+      "pass": true,
+      "state": "SENT_RECONCILED",
+      "replyPostCount": 1,
+      "forwardedPostCount": 1,
+      "reconciliationChecks": 2,
+      "reconciliationFilters": {
+        "search": "thread:thread-test-001",
+        "eaccount": "sender@example.test",
+        "lead": "recipient@example.test",
+        "email_type": "sent",
+        "min_timestamp_created": "2026-06-14T01:40:38.143Z",
+        "preview_only": "false",
+        "limit": "100"
+      }
+    },
+    "zero": {
+      "pass": true,
+      "state": "HUMAN_REVIEW_ZERO_MATCHES",
+      "replyPostCount": 1
+    },
+    "multiple": {
+      "pass": true,
+      "state": "HUMAN_REVIEW_MULTIPLE_MATCHES",
+      "replyPostCount": 1
+    },
+    "concurrent": {
+      "pass": true,
+      "firstState": "SENT_RECONCILED",
+      "secondState": "BLOCKED",
+      "secondReason": "LOCK_ALREADY_HELD",
+      "replyPostCount": 1
+    },
+    "sequentialRerun": {
+      "pass": true,
+      "firstState": "SENT_RECONCILED",
+      "secondState": "BLOCKED",
+      "secondReason": "DURABLE_STATE_EXISTS",
+      "replyPostCount": 1
+    }
+  },
+  "assertions": {
+    "allLocalhostOnly": true,
+    "maximumPostCount": 1,
+    "noUncertainRetry": true,
+    "concurrentDuplicateBlocked": true,
+    "sequentialRerunBlocked": true,
+    "sameMatchIdRequiredTwice": true,
+    "noSecretsPresent": true
+  },
+  "failedAssertions": [],
+  "overallPass": true
+}

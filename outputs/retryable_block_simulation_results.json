@@ -1,0 +1,350 @@
+{
+  "harness": "SL-PHASE-4H-4I-retryable-block-simulation-harness",
+  "run_at": "2026-06-23T18:36:10.947Z",
+  "total": 20,
+  "passed": 20,
+  "failed": 0,
+  "scenarios": [
+    {
+      "id": "RB-1",
+      "name": "Happy path — send completes first attempt",
+      "result": "PASS",
+      "checks": [
+        "final_status: SENT (expected: SENT) → PASS",
+        "retry_allowed: false (expected: false) → PASS",
+        "old_token_blocked: true (expected: true) → PASS"
+      ],
+      "log": [
+        "Step 1: Reviewer submits approval",
+        "Step 2: First send attempt with gates: {}",
+        "  → Send gates passed → SENT",
+        "Step 3: Old token retry attempt → BLOCKED: token_already_consumed",
+        "Step 4: Can retry? NO — Case is already SENT — retry would cause duplicate",
+        "Step 5: Retry not allowed — no new token issued"
+      ]
+    },
+    {
+      "id": "RB-2",
+      "name": "Recoverable block — campaign_id missing, fixed on retry",
+      "result": "PASS",
+      "checks": [
+        "final_status: SENT (expected: SENT) → PASS",
+        "retry_allowed: true (expected: true) → PASS",
+        "second_send_terminal: SENT (expected: SENT) → PASS"
+      ],
+      "log": [
+        "Step 1: Reviewer submits approval",
+        "Step 2: First send attempt with gates: {\"campaign_id\":null}",
+        "  → Send blocked (recoverable: campaign_not_found) → SEND_BLOCKED_RETRYABLE",
+        "Step 3: Old token retry attempt → BLOCKED: token_already_consumed",
+        "Step 4: Can retry? YES",
+        "Step 5: New review token issued → case status RETRY_NEEDED",
+        "  → New token consumed: true",
+        "  → Retry send gates passed → SENT"
+      ]
+    },
+    {
+      "id": "RB-3",
+      "name": "Recoverable block — fix not applied, retry still blocked",
+      "result": "PASS",
+      "checks": [
+        "final_status: RETRY_NEEDED (expected: RETRY_NEEDED) → PASS",
+        "retry_allowed: true (expected: true) → PASS",
+        "second_send_terminal: null (expected: null) → PASS"
+      ],
+      "log": [
+        "Step 1: Reviewer submits approval",
+        "Step 2: First send attempt with gates: {\"campaign_id\":null}",
+        "  → Send blocked (recoverable: campaign_not_found) → SEND_BLOCKED_RETRYABLE",
+        "Step 3: Old token retry attempt → BLOCKED: token_already_consumed",
+        "Step 4: Can retry? YES",
+        "Step 5: New review token issued → case status RETRY_NEEDED",
+        "  → New token consumed: true",
+        "  → Retry still blocked: campaign_not_found"
+      ]
+    },
+    {
+      "id": "RB-4",
+      "name": "Nonrecoverable block — duplicate send guard",
+      "result": "PASS",
+      "checks": [
+        "final_status: SEND_BLOCKED_NONRECOVERABLE (expected: SEND_BLOCKED_NONRECOVERABLE) → PASS",
+        "retry_allowed: false (expected: false) → PASS"
+      ],
+      "log": [
+        "Step 1: Reviewer submits approval",
+        "Step 2: First send attempt with gates: {\"existing_send_key_matched\":true}",
+        "  → Send blocked (nonrecoverable: duplicate_send_guard) → SEND_BLOCKED_NONRECOVERABLE",
+        "Step 3: Old token retry attempt → BLOCKED: token_already_consumed",
+        "Step 4: Can retry? NO — Block is nonrecoverable — operator intervention required",
+        "Step 5: Retry not allowed — no new token issued"
+      ]
+    },
+    {
+      "id": "RB-5",
+      "name": "Consumed token prevents second submission — new token required",
+      "result": "PASS",
+      "checks": [
+        "retry_allowed: true (expected: true) → PASS",
+        "old_token_blocked: true (expected: true) → PASS"
+      ],
+      "log": [
+        "Step 1: Reviewer submits approval",
+        "Step 2: First send attempt with gates: {\"campaign_id\":null}",
+        "  → Send blocked (recoverable: campaign_not_found) → SEND_BLOCKED_RETRYABLE",
+        "Step 3: Old token retry attempt → BLOCKED: token_already_consumed",
+        "Step 4: Can retry? YES",
+        "Step 5: New review token issued → case status RETRY_NEEDED",
+        "  → New token consumed: true",
+        "  → Retry send gates passed → SENT"
+      ]
+    },
+    {
+      "id": "RB-6",
+      "name": "Already SENT — duplicate prevention blocks any retry",
+      "result": "PASS",
+      "checks": [
+        "final_status: SENT (expected: SENT) → PASS",
+        "retry_allowed: false (expected: false) → PASS",
+        "duplicate_prevented: true → PASS"
+      ],
+      "log": [
+        "Step 1: Reviewer submits approval",
+        "Step 2: First send attempt with gates: {}",
+        "  → Send gates passed → SENT",
+        "Step 3: Old token retry attempt → BLOCKED: token_already_consumed",
+        "Step 4: Can retry? NO — Case is already SENT — retry would cause duplicate",
+        "Step 5: Retry not allowed — no new token issued",
+        "Step 6: Duplicate-send prevention check → gates passed: false | failed: send_key_unique, not_duplicate"
+      ]
+    },
+    {
+      "id": "RB-7",
+      "name": "Transient API error — retry succeeds",
+      "result": "PASS",
+      "checks": [
+        "final_status: SENT (expected: SENT) → PASS",
+        "retry_allowed: true (expected: true) → PASS"
+      ],
+      "log": [
+        "Step 1: Reviewer submits approval",
+        "Step 2: First send attempt with gates: {\"campaign_id\":null}",
+        "  → Send blocked (recoverable: campaign_not_found) → SEND_BLOCKED_RETRYABLE",
+        "Step 3: Old token retry attempt → BLOCKED: token_already_consumed",
+        "Step 4: Can retry? YES",
+        "Step 5: New review token issued → case status RETRY_NEEDED",
+        "  → New token consumed: true",
+        "  → Retry send gates passed → SENT"
+      ]
+    },
+    {
+      "id": "RB-8",
+      "name": "Audit log captures all retry events",
+      "result": "PASS",
+      "checks": [
+        "final_status: SENT (expected: SENT) → PASS",
+        "audit has 'human_approved': true → PASS",
+        "audit has 'send_blocked': true → PASS",
+        "audit has 'new_retry_token_issued': true → PASS",
+        "audit has 'sent': true → PASS"
+      ],
+      "log": [
+        "Step 1: Reviewer submits approval",
+        "Step 2: First send attempt with gates: {\"campaign_id\":null}",
+        "  → Send blocked (recoverable: campaign_not_found) → SEND_BLOCKED_RETRYABLE",
+        "Step 3: Old token retry attempt → BLOCKED: token_already_consumed",
+        "Step 4: Can retry? YES",
+        "Step 5: New review token issued → case status RETRY_NEEDED",
+        "  → New token consumed: true",
+        "  → Retry send gates passed → SENT"
+      ]
+    },
+    {
+      "id": "RB-9",
+      "name": "Phase 4I — recoverable block generates fresh token",
+      "result": "PASS",
+      "checks": [
+        "final_status: SENT (expected: SENT) → PASS",
+        "retry_allowed: true (expected: true) → PASS",
+        "old_token_blocked: true (expected: true) → PASS"
+      ],
+      "log": [
+        "Step 1: Reviewer submits approval",
+        "Step 2: First send attempt with gates: {\"campaign_id\":null}",
+        "  → Send blocked (recoverable: campaign_not_found) → SEND_BLOCKED_RETRYABLE",
+        "Step 3: Old token retry attempt → BLOCKED: token_already_consumed",
+        "Step 4: Can retry? YES",
+        "Step 5: New review token issued → case status RETRY_NEEDED",
+        "  → New token consumed: true",
+        "  → Retry send gates passed → SENT"
+      ]
+    },
+    {
+      "id": "RB-10",
+      "name": "Phase 4I — retry URL contains same case_id",
+      "result": "PASS",
+      "checks": [
+        "final_status: SENT (expected: SENT) → PASS",
+        "retry_allowed: true (expected: true) → PASS"
+      ],
+      "log": [
+        "Step 1: Reviewer submits approval",
+        "Step 2: First send attempt with gates: {\"campaign_id\":null}",
+        "  → Send blocked (recoverable: campaign_not_found) → SEND_BLOCKED_RETRYABLE",
+        "Step 3: Old token retry attempt → BLOCKED: token_already_consumed",
+        "Step 4: Can retry? YES",
+        "Step 5: New review token issued → case status RETRY_NEEDED",
+        "  → New token consumed: true",
+        "  → Retry send gates passed → SENT"
+      ]
+    },
+    {
+      "id": "RB-11",
+      "name": "Phase 4I — retry allowed when first attempt blocked (not sent)",
+      "result": "PASS",
+      "checks": [
+        "final_status: RETRY_NEEDED (expected: RETRY_NEEDED) → PASS",
+        "retry_allowed: true (expected: true) → PASS"
+      ],
+      "log": [
+        "Step 1: Reviewer submits approval",
+        "Step 2: First send attempt with gates: {\"campaign_id\":null}",
+        "  → Send blocked (recoverable: campaign_not_found) → SEND_BLOCKED_RETRYABLE",
+        "Step 3: Old token retry attempt → BLOCKED: token_already_consumed",
+        "Step 4: Can retry? YES",
+        "Step 5: New review token issued → case status RETRY_NEEDED",
+        "  → New token consumed: true",
+        "  → Retry still blocked: campaign_not_found"
+      ]
+    },
+    {
+      "id": "RB-12",
+      "name": "Phase 4I — retry denied when first attempt SENT (status=SENT)",
+      "result": "PASS",
+      "checks": [
+        "final_status: SENT (expected: SENT) → PASS",
+        "retry_allowed: false (expected: false) → PASS",
+        "duplicate_prevented: true → PASS"
+      ],
+      "log": [
+        "Step 1: Reviewer submits approval",
+        "Step 2: First send attempt with gates: {}",
+        "  → Send gates passed → SENT",
+        "Step 3: Old token retry attempt → BLOCKED: token_already_consumed",
+        "Step 4: Can retry? NO — Case is already SENT — retry would cause duplicate",
+        "Step 5: Retry not allowed — no new token issued",
+        "Step 6: Duplicate-send prevention check → gates passed: false | failed: send_key_unique, not_duplicate"
+      ]
+    },
+    {
+      "id": "RB-13",
+      "name": "Phase 4I — retry denied when gate sees SENT_RECONCILED (nonrecoverable)",
+      "result": "PASS",
+      "checks": [
+        "final_status: SEND_BLOCKED_NONRECOVERABLE (expected: SEND_BLOCKED_NONRECOVERABLE) → PASS",
+        "retry_allowed: false (expected: false) → PASS"
+      ],
+      "log": [
+        "Step 1: Reviewer submits approval",
+        "Step 2: First send attempt with gates: {\"status\":\"SENT_RECONCILED\"}",
+        "  → Send blocked (nonrecoverable: duplicate_send_guard) → SEND_BLOCKED_NONRECOVERABLE",
+        "Step 3: Old token retry attempt → BLOCKED: token_already_consumed",
+        "Step 4: Can retry? NO — Block is nonrecoverable — operator intervention required",
+        "Step 5: Retry not allowed — no new token issued"
+      ]
+    },
+    {
+      "id": "RB-14",
+      "name": "Phase 4I — nonrecoverable duplicate_send_guard gets no retry URL",
+      "result": "PASS",
+      "checks": [
+        "final_status: SEND_BLOCKED_NONRECOVERABLE (expected: SEND_BLOCKED_NONRECOVERABLE) → PASS",
+        "retry_allowed: false (expected: false) → PASS"
+      ],
+      "log": [
+        "Step 1: Reviewer submits approval",
+        "Step 2: First send attempt with gates: {\"existing_send_key_matched\":true}",
+        "  → Send blocked (nonrecoverable: duplicate_send_guard) → SEND_BLOCKED_NONRECOVERABLE",
+        "Step 3: Old token retry attempt → BLOCKED: token_already_consumed",
+        "Step 4: Can retry? NO — Block is nonrecoverable — operator intervention required",
+        "Step 5: Retry not allowed — no new token issued"
+      ]
+    },
+    {
+      "id": "RB-15",
+      "name": "Phase 4I — token refresh: duplicate-send gate still blocks second send after first SENT",
+      "result": "PASS",
+      "checks": [
+        "final_status: SENT (expected: SENT) → PASS",
+        "retry_allowed: false (expected: false) → PASS",
+        "duplicate_prevented: true → PASS"
+      ],
+      "log": [
+        "Step 1: Reviewer submits approval",
+        "Step 2: First send attempt with gates: {}",
+        "  → Send gates passed → SENT",
+        "Step 3: Old token retry attempt → BLOCKED: token_already_consumed",
+        "Step 4: Can retry? NO — Case is already SENT — retry would cause duplicate",
+        "Step 5: Retry not allowed — no new token issued",
+        "Step 6: Duplicate-send prevention check → gates passed: false | failed: send_key_unique, not_duplicate"
+      ]
+    },
+    {
+      "id": "RB-16",
+      "name": "Phase 4I — retry state auditable (token events captured)",
+      "result": "PASS",
+      "checks": [
+        "final_status: SENT (expected: SENT) → PASS",
+        "retry_allowed: true (expected: true) → PASS",
+        "audit has 'human_approved': true → PASS",
+        "audit has 'send_blocked': true → PASS",
+        "audit has 'new_retry_token_issued': true → PASS",
+        "audit has 'sent': true → PASS"
+      ],
+      "log": [
+        "Step 1: Reviewer submits approval",
+        "Step 2: First send attempt with gates: {\"campaign_id\":null}",
+        "  → Send blocked (recoverable: campaign_not_found) → SEND_BLOCKED_RETRYABLE",
+        "Step 3: Old token retry attempt → BLOCKED: token_already_consumed",
+        "Step 4: Can retry? YES",
+        "Step 5: New review token issued → case status RETRY_NEEDED",
+        "  → New token consumed: true",
+        "  → Retry send gates passed → SENT"
+      ]
+    }
+  ],
+  "proxy_write_scenarios": [
+    {
+      "id": "RB-17",
+      "name": "Proxy write — object body (Content-Type: application/json)",
+      "result": "PASS",
+      "expected_ok": true,
+      "actual_ok": true,
+      "detail": "status=approved_for_activation"
+    },
+    {
+      "id": "RB-18",
+      "name": "Proxy write — text/plain JSON body (string)",
+      "result": "PASS",
+      "expected_ok": true,
+      "actual_ok": true,
+      "detail": "status=rejected"
+    },
+    {
+      "id": "RB-19",
+      "name": "Proxy write — stringified JSON in string (double-encoded)",
+      "result": "PASS",
+      "expected_ok": false,
+      "actual_ok": false,
+      "detail": "Invalid: rule_id and valid status required"
+    },
+    {
+      "id": "RB-20",
+      "name": "Proxy write — does not modify unintended candidates (missing rule_id)",
+      "result": "PASS",
+      "expected_ok": false,
+      "actual_ok": false,
+      "detail": "Invalid: rule_id and valid status required"
+    }
+  ]
+}

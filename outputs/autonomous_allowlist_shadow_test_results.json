@@ -1,0 +1,194 @@
+{
+  "would_send_live_now_all_false": true,
+  "total_tests": 20,
+  "script": "SL-PHASE-5I-shadow-evaluator-allowlist-enforcement.ps1",
+  "rc_shadow_003": "APPLIED",
+  "overall_result": "PASS",
+  "phase": "5I",
+  "failed": 0,
+  "results": [
+    {
+      "test_id": "T01",
+      "description": "Allowlisted: scheduling out-of-hours",
+      "intent_permanently_blocked": false,
+      "would_send_live_now": false,
+      "would_be_shadow_eligible": true,
+      "allowlist_block_reason": null,
+      "result": "PASS"
+    },
+    {
+      "test_id": "T02",
+      "description": "Allowlisted: information request out-of-hours",
+      "intent_permanently_blocked": false,
+      "would_send_live_now": false,
+      "would_be_shadow_eligible": true,
+      "allowlist_block_reason": null,
+      "result": "PASS"
+    },
+    {
+      "test_id": "T03",
+      "description": "Allowlisted: positive interest out-of-hours",
+      "intent_permanently_blocked": false,
+      "would_send_live_now": false,
+      "would_be_shadow_eligible": true,
+      "allowlist_block_reason": null,
+      "result": "PASS"
+    },
+    {
+      "test_id": "T04",
+      "description": "Allowlisted: safe intent in working hours",
+      "intent_permanently_blocked": false,
+      "would_send_live_now": false,
+      "would_be_shadow_eligible": true,
+      "allowlist_block_reason": null,
+      "result": "PASS"
+    },
+    {
+      "test_id": "T05",
+      "description": "Non-allowlisted campaign",
+      "intent_permanently_blocked": false,
+      "would_send_live_now": false,
+      "would_be_shadow_eligible": false,
+      "allowlist_block_reason": "campaign_not_allowlisted",
+      "result": "PASS"
+    },
+    {
+      "test_id": "T06",
+      "description": "Non-allowlisted sender",
+      "intent_permanently_blocked": false,
+      "would_send_live_now": false,
+      "would_be_shadow_eligible": false,
+      "allowlist_block_reason": "sender_not_allowlisted",
+      "result": "PASS"
+    },
+    {
+      "test_id": "T07",
+      "description": "Empty intent allowlist",
+      "intent_permanently_blocked": false,
+      "would_send_live_now": false,
+      "would_be_shadow_eligible": false,
+      "allowlist_block_reason": "intent_allowlist_empty",
+      "result": "PASS"
+    },
+    {
+      "test_id": "T08",
+      "description": "PRICING_REQUEST with allowlisted campaign/sender",
+      "intent_permanently_blocked": true,
+      "would_send_live_now": false,
+      "would_be_shadow_eligible": false,
+      "allowlist_block_reason": "intent_permanently_blocked",
+      "result": "PASS"
+    },
+    {
+      "test_id": "T09",
+      "description": "CONTRACT_TERMS with allowlisted campaign/sender",
+      "intent_permanently_blocked": true,
+      "would_send_live_now": false,
+      "would_be_shadow_eligible": false,
+      "allowlist_block_reason": "intent_permanently_blocked",
+      "result": "PASS"
+    },
+    {
+      "test_id": "T10",
+      "description": "GDPR_REQUEST with allowlisted campaign/sender",
+      "intent_permanently_blocked": true,
+      "would_send_live_now": false,
+      "would_be_shadow_eligible": false,
+      "allowlist_block_reason": "intent_permanently_blocked",
+      "result": "PASS"
+    },
+    {
+      "test_id": "T11",
+      "description": "UNSUBSCRIBE with allowlisted campaign/sender",
+      "intent_permanently_blocked": true,
+      "would_send_live_now": false,
+      "would_be_shadow_eligible": false,
+      "allowlist_block_reason": "intent_permanently_blocked",
+      "result": "PASS"
+    },
+    {
+      "test_id": "T12",
+      "description": "ANGRY_REPLY with allowlisted campaign/sender",
+      "intent_permanently_blocked": true,
+      "would_send_live_now": false,
+      "would_be_shadow_eligible": false,
+      "allowlist_block_reason": "intent_permanently_blocked",
+      "result": "PASS"
+    },
+    {
+      "test_id": "T13",
+      "description": "Multi-intent: safe + PRICING (blocked by add_intent)",
+      "intent_permanently_blocked": false,
+      "would_send_live_now": false,
+      "would_be_shadow_eligible": false,
+      "allowlist_block_reason": "additional_intent_permanently_blocked",
+      "result": "PASS"
+    },
+    {
+      "test_id": "T14",
+      "description": "Multi-intent: safe + CONTRACT (blocked by add_intent)",
+      "intent_permanently_blocked": false,
+      "would_send_live_now": false,
+      "would_be_shadow_eligible": false,
+      "allowlist_block_reason": "additional_intent_permanently_blocked",
+      "result": "PASS"
+    },
+    {
+      "test_id": "T15",
+      "description": "AMBIGUOUS_INTENT (permanent block)",
+      "intent_permanently_blocked": true,
+      "would_send_live_now": false,
+      "would_be_shadow_eligible": false,
+      "allowlist_block_reason": "intent_permanently_blocked",
+      "result": "PASS"
+    },
+    {
+      "test_id": "T16",
+      "description": "OUT_OF_OFFICE (not in intent allowlist)",
+      "intent_permanently_blocked": false,
+      "would_send_live_now": false,
+      "would_be_shadow_eligible": false,
+      "allowlist_block_reason": "intent_not_allowlisted",
+      "result": "PASS"
+    },
+    {
+      "test_id": "T17",
+      "description": "Low confidence (below threshold)",
+      "intent_permanently_blocked": false,
+      "would_send_live_now": false,
+      "would_be_shadow_eligible": false,
+      "allowlist_block_reason": "confidence_below_threshold",
+      "result": "PASS"
+    },
+    {
+      "test_id": "T18",
+      "description": "Empty campaign allowlist (production default)",
+      "intent_permanently_blocked": false,
+      "would_send_live_now": false,
+      "would_be_shadow_eligible": false,
+      "allowlist_block_reason": "campaign_allowlist_empty",
+      "result": "PASS"
+    },
+    {
+      "test_id": "T19",
+      "description": "SENSITIVE_PERSONAL_DATA (permanent block)",
+      "intent_permanently_blocked": true,
+      "would_send_live_now": false,
+      "would_be_shadow_eligible": false,
+      "allowlist_block_reason": "intent_permanently_blocked",
+      "result": "PASS"
+    },
+    {
+      "test_id": "T20",
+      "description": "All allowlists empty (production default state)",
+      "intent_permanently_blocked": false,
+      "would_send_live_now": false,
+      "would_be_shadow_eligible": false,
+      "allowlist_block_reason": "campaign_allowlist_empty",
+      "result": "PASS"
+    }
+  ],
+  "passed": 20,
+  "generated": "2026-06-24T11:30:24Z",
+  "test_mode": "offline_simulation"
+}

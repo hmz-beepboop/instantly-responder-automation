@@ -1,0 +1,282 @@
+{
+  "generated": "2026-06-24T11:35:12Z",
+  "tests": [
+    {
+      "id": "A01",
+      "test": "Sample config autonomous_enabled=false",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "A02",
+      "test": "Sample config shadow_only=true",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "A03",
+      "test": "Sample config dry_run=true",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "A04",
+      "test": "Sample config emergency_disabled=true",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "A05",
+      "test": "Sample config campaign_allowlist empty",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "A06",
+      "test": "Sample config sender_allowlist empty",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "A07",
+      "test": "Sample config intent_allowlist empty",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "A08",
+      "test": "Sample config max_sends_per_day=0",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "A09",
+      "test": "Sample config is valid JSON",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "A10",
+      "test": "Config schema exists",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "B01",
+      "test": "All scenarios would_send_live_now=false",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "B02",
+      "test": "75+ scenarios evaluated",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "B03",
+      "test": "Safety gate result=PASS in summary",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "B04",
+      "test": "Decision matrix is valid JSON",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "B05",
+      "test": "Eligibility summary is valid JSON",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "B06",
+      "test": "UNSUBSCRIBE case: would_send_live_now=false",
+      "note": "Permanently blocked",
+      "result": "PASS"
+    },
+    {
+      "id": "B07",
+      "test": "PRICING_REQUEST case: would_send_live_now=false",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "B08",
+      "test": "LEGAL_COMPLAINT case: would_send_live_now=false",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "B09",
+      "test": "INFORMATION_REQUEST in-hours: shadow_eligible",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "C01",
+      "test": "Disabled workflow exists",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "C02",
+      "test": "Workflow active=false",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "C03",
+      "test": "Workflow name contains DISABLED",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "C04",
+      "test": "No Sender node in workflow",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "C05",
+      "test": "No Instantly node in workflow",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "C06",
+      "test": "shadow_evaluator_mode marker present",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "D01",
+      "test": "Kill switch doc exists",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "D02",
+      "test": "Owner approval checklist exists",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "D03",
+      "test": "Failure modes doc exists",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "D04",
+      "test": "Post-action review spec exists",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "D05",
+      "test": "Follow-up learning spec exists",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "D06",
+      "test": "Daily digest spec exists",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "D07",
+      "test": "Audit trail spec exists",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "D08",
+      "test": "Shadow candidate logging spec exists",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "D09",
+      "test": "Go/no-go checklist exists",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "D10",
+      "test": "Architecture doc exists",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "D11",
+      "test": "System boundaries doc exists",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "D12",
+      "test": "Safety model doc exists",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "E01",
+      "test": "Config schema valid JSON",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "E02",
+      "test": "Sample config valid JSON",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "E03",
+      "test": "Shadow log schema valid JSON",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "E04",
+      "test": "Daily digest sample valid JSON",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "E05",
+      "test": "Review queue sample valid JSON",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "E06",
+      "test": "Eligibility decision matrix valid",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "E07",
+      "test": "Eligibility summary valid JSON",
+      "note": "",
+      "result": "PASS"
+    },
+    {
+      "id": "E08",
+      "test": "Config validation report valid",
+      "note": "",
+      "result": "PASS"
+    }
+  ],
+  "overall_result": "PASS",
+  "passed": 45,
+  "failed": 0,
+  "production_writes": false,
+  "total_tests": 45,
+  "script": "SL-PHASE-5E-autonomous-readiness-acceptance-harness.ps1",
+  "live_autonomy_possible": false
+}

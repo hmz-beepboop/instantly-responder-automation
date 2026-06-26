@@ -1,0 +1,93 @@
+{
+  "script": "SL-PHASE-5M",
+  "timestamp": "2026-06-26T00:16:58Z",
+  "root_cause": "hmzDraftReasonSection used display:none + JS change-detection. Fields only visible after draft edit. 5L verification was code-anchor only, not rendered visibility.",
+  "whatif_checks": [],
+  "apply_result": null,
+  "verify_html": [
+    {
+      "check": "display:none ABSENT from hmzDraftReasonSection (always visible)",
+      "pass": true
+    },
+    {
+      "check": "'Draft improvement learning' heading present",
+      "pass": true
+    },
+    {
+      "check": "'Why did you change the draft reply?' present",
+      "pass": true
+    },
+    {
+      "check": "Help text 'Explain what the system should learn' present",
+      "pass": true
+    },
+    {
+      "check": "'What type of draft improvement was this?' label present",
+      "pass": true
+    },
+    {
+      "check": "'What should the system do next time?' present",
+      "pass": true
+    },
+    {
+      "check": "Warning div hmzEditWarn present",
+      "pass": true
+    },
+    {
+      "check": "Show/hide JS removed (section not hidden by JS)",
+      "pass": true
+    },
+    {
+      "check": "Warning-only JS present (querySelector draft_revision_reason)",
+      "pass": true
+    },
+    {
+      "check": "Classification correction fields preserved (corrected_category)",
+      "pass": true
+    },
+    {
+      "check": "Approval button preserved",
+      "pass": true
+    }
+  ],
+  "verify_capture": [
+    {
+      "check": "L parses submit_draft_revision_reason",
+      "pass": true
+    },
+    {
+      "check": "L parses submit_draft_revision_type",
+      "pass": true
+    },
+    {
+      "check": "L parses submit_desired_future_behavior",
+      "pass": true
+    },
+    {
+      "check": "SL-P1A event includes draft_revision_reason",
+      "pass": true
+    },
+    {
+      "check": "SL-P1A event includes draft_revision_type",
+      "pass": true
+    },
+    {
+      "check": "SL-P1A event includes desired_future_behavior",
+      "pass": true
+    },
+    {
+      "check": "SL-P2A uses human reason (not hardcoded string)",
+      "pass": true
+    },
+    {
+      "check": "SL-P2A candidate status proposed_shadow",
+      "pass": true
+    },
+    {
+      "check": "SL-P2A no auto-activation of rules",
+      "pass": true
+    }
+  ],
+  "new_version_id": null,
+  "pass": true
+}

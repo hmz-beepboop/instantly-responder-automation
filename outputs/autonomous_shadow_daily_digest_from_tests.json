@@ -1,0 +1,58 @@
+{
+  "digest_type": "autonomous_shadow_daily_digest",
+  "digest_date": "2026-06-24",
+  "generated_at": "2026-06-24T10:51:06Z",
+  "source": "shadow_controlled_tests_phase_5f",
+  "total_test_payloads": 20,
+  "shadow_eligible_count": 11,
+  "blocked_count": 9,
+  "human_review_count": 0,
+  "shadow_log_count": 11,
+  "error_count": 0,
+  "would_send_live_now_ever_true": false,
+  "top_blocked_reasons": {
+    "shadow_evaluator_always_disabled": 9
+  },
+  "escalations": [],
+  "escalation_channel": "GOOGLE_CHAT_WEBHOOK_URL (env reference only)",
+  "follow_ups_needed": [],
+  "learning_signals_would_be_created": 3,
+  "proposed_shadow_rule_candidates": [
+    {
+      "status": "PROPOSED — requires owner review",
+      "observation": "T06 (proof/examples request) classified as SHADOW_LOG at confidence 0.88 — below 0.85 threshold produces HUMAN_REVIEW. Rule: if broad_category=PROOF_REQUEST and confidence>=0.85, promote to shadow-eligible.",
+      "label": "Proof/examples request → SHADOW_LOG",
+      "proposed_by": "shadow_digest_simulator",
+      "rc_id": "RC-SHADOW-001"
+    },
+    {
+      "status": "PROPOSED — requires owner review",
+      "observation": "T16 (out-of-office) returned SHADOW_LOG not BLOCKED_PERMANENT. Confirm this is correct per approved reply policy — typically OOO gets a NOOP, not a shadow draft.",
+      "label": "OUT_OF_OFFICE not permanently blocked — verify suppression policy",
+      "proposed_by": "shadow_digest_simulator",
+      "rc_id": "RC-SHADOW-002"
+    },
+    {
+      "status": "ACTION_REQUIRED — verify before Gate 2",
+      "observation": "T17 (unlisted sender) and T18 (unlisted campaign) returned SHADOW_LOG because the shadow evaluator always uses empty allowlists. In production, these would route to BLOCKED — verify allowlist logic wire-up before Gate 2.",
+      "label": "Allowlist-controlled decisions need config wire-up",
+      "proposed_by": "shadow_digest_simulator",
+      "rc_id": "RC-SHADOW-003"
+    }
+  ],
+  "owner_actions": [
+    "Review shadow test results in outputs/autonomous_shadow_test_results.json",
+    "Confirm SHADOW_LOG decisions are correct for: T01-T06, T09, T16-T20",
+    "Confirm BLOCKED_PERMANENT decisions are correct for: T07-T08, T10-T15, T19",
+    "Review proposed rule candidates RC-SHADOW-001 through RC-SHADOW-003",
+    "Confirm OUT_OF_OFFICE handling policy (T16)",
+    "Plan allowlist wire-up verification before Gate 2 (RC-SHADOW-003)",
+    "Continue shadow review for 14 days before Gate 2 decision"
+  ],
+  "production_changes": false,
+  "live_sends": false,
+  "shadow_evaluator_active_at_end": false,
+  "workflow_id": "aHzLtQiv6G8h1bqD",
+  "workflow_version_id": "51ebacbd-f68c-47e4-af38-537bcdccebf1",
+  "gate_2_recommendation": "14 days shadow review before any controlled pilot. Owner must approve Gate 2 explicitly. Do not change autonomous_enabled, shadow_only, or dry_run without Gate 2 sign-off."
+}

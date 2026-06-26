@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-06-14T01:52:22.415Z",
+  "state": "SENT_RECONCILED",
+  "reason": null,
+  "priorState": null,
+  "inboundEmailIdMasked": "019ebd2e...c28f",
+  "sendKeyPrefix": "df51dbe5e8db",
+  "marker": "HMZ-V5-L2-72b97c7be78c8c35",
+  "sendOutcome": "response_dropped",
+  "proxyBoundAddress": "127.0.0.1",
+  "forwardedPostCount": 1,
+  "upstreamStatus": 200,
+  "upstreamResponseCompleted": true,
+  "reconciliationState": "SENT_RECONCILED",
+  "reconciliationChecks": 2,
+  "reconciliationMatchCount": 1,
+  "reconciledEmailIdMasked": "019ec3d4...34d9",
+  "duplicateRiskingRetryObserved": false,
+  "secondReplyPostAttempted": false,
+  "verificationPassed": true,
+  "secretsPresent": false
+}

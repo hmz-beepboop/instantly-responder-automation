@@ -1,0 +1,102 @@
+# HMZ_BUSINESS_LIVE_HOSTING (SUPERVISED VALIDATION PROFILE)
+#
+# Hosting stack for the 7 "...- Validation" workflows once they are applied
+# via verification/business-ready/apply-business-ready.ps1. This compose
+# file does NOT change DRY_RUN, does NOT populate LIVE_CAMPAIGNS, and does
+# NOT activate any workflow - it only provides a place for n8n to run with
+# a public HTTPS endpoint for the Instantly reply webhook and the Human
+# Approval review links.
+#
+# Contains NO secrets. Copy .env.example to .env in this directory and fill
+# in real values there; .env is not committed (see project .gitignore).
+#
+# Usage:
+#   docker compose -f infrastructure/business-live/docker-compose.yml up -d
+#
+# n8n admin UI / REST API remains bound to 127.0.0.1:5678 only (same as
+# infrastructure/local-n8n), for use by the apply/acceptance/rollback
+# scripts. The reverse proxy is the ONLY component that is publicly
+# reachable, and it forwards to n8n over the internal compose network.
+
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.25.7
+    container_name: hmz-n8n-business-live
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Europe/London}
+      - TZ=${GENERIC_TIMEZONE:-Europe/London}
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - N8N_HOST=${N8N_HOST}
+      - N8N_PROTOCOL=https
+      - N8N_PORT=5678
+      - N8N_EDITOR_BASE_URL=https://${N8N_HOST}/
+      - WEBHOOK_URL=https://${N8N_HOST}/
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - GOOGLE_CHAT_WEBHOOK_URL=${GOOGLE_CHAT_WEBHOOK_URL}
+    volumes:
+      - hmz_n8n_business_live_data:/home/node/.n8n
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5678/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      hmz-send-state:
+        condition: service_healthy
+
+  # Internal sidecar: durable atomic send-ownership + sanitised error
+  # records for the Reply Sender and Reply Error Handler validation
+  # workflows. No host port is published - reachable only as
+  # http://hmz-send-state:5681 on this compose network.
+  # See infrastructure/send-state/README.md.
+  hmz-send-state:
+    build:
+      context: ../send-state
+    container_name: hmz-send-state-business-live
+    restart: unless-stopped
+    environment:
+      - STATE_DIR=/data
+    volumes:
+      - hmz_send_state_business_live_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5681/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Reverse proxy: the ONLY publicly reachable component. Terminates HTTPS
+  # (automatic Let's Encrypt certificate for ${N8N_HOST}) and forwards to
+  # n8n over the internal compose network. Publishes 80 (ACME HTTP
+  # challenge + redirect) and 443 only.
+  reverse-proxy:
+    image: caddy:2-alpine
+    container_name: hmz-reverse-proxy-business-live
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - N8N_HOST=${N8N_HOST}
+      - ACME_EMAIL=${ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - hmz_caddy_data:/data
+      - hmz_caddy_config:/config
+    depends_on:
+      n8n:
+        condition: service_healthy
+
+volumes:
+  hmz_n8n_business_live_data:
+    name: hmz_n8n_business_live_data
+  hmz_send_state_business_live_data:
+    name: hmz_send_state_business_live_data
+  hmz_caddy_data:
+    name: hmz_caddy_data
+  hmz_caddy_config:
+    name: hmz_caddy_config

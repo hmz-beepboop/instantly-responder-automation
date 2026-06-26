@@ -1,0 +1,95 @@
+# Phase 4A Minimal n8n Validation Only
+
+## Entry conditions
+
+Proceed only after:
+
+- `reports/PHASE_4A_OFFLINE_BUILD.md` says `PHASE_4A_OFFLINE_READY`
+- the user has run `verification/phase4a/import-phase4a.ps1`
+- the user supplies the two new workflow IDs
+- both imported workflows are inactive
+
+## Objective
+
+Validate the two imported Phase 4A workflows with the smallest possible MCP usage.
+
+Do not build workflows from scratch.
+Do not inspect node documentation.
+Do not retrieve full existing Phase 3 workflows.
+Do not read broad project documentation.
+Do not run synthetic tests.
+Do not access Instantly.
+Do not activate anything.
+
+## Files you may read
+
+Read only:
+
+- `workflows/03_reply_sender_validation.json`
+- `workflows/04_reply_error_handler_validation.json`
+- `reports/PHASE_4A_OFFLINE_BUILD.md`
+
+## MCP limits
+
+Use only the project `n8n-mcp`.
+
+Maximum six MCP calls total:
+
+1. Validate Sender.
+2. Validate Error Handler.
+3. If Sender has a proven validation error, make one surgical update.
+4. Revalidate Sender.
+5. If Error Handler has a proven validation error, make one surgical update.
+6. Revalidate Error Handler.
+
+Do not call:
+
+- workflow search
+- workflow list
+- full workflow retrieval
+- node schema/documentation tools
+- template tools
+- execution-history tools
+- data-table tools
+- activation/deactivation tools
+
+If validation reports a warning that is demonstrably a false positive already present in the known local export pattern, record it rather than rewriting the workflow.
+
+Do not output raw MCP responses or workflow JSON.
+
+## Repair rules
+
+- Repair only exact validator errors.
+- Keep both workflows inactive.
+- Do not add credentials.
+- Do not add live Instantly access.
+- Mirror any accepted repair back into the local JSON export.
+- At most one repair pass per workflow.
+- If an error cannot be fixed within the call budget, stop with `PHASE_4A_VALIDATION_BLOCKED`.
+
+## Deliverable
+
+Create or update only:
+
+- `reports/PHASE_4A_VALIDATION.md`
+
+Include:
+
+- Workflow names and IDs
+- Active state
+- Validator error and warning counts
+- Repairs made
+- MCP call count
+- Credential scan result
+- External-call scan result
+- Final verdict
+
+Use exactly one verdict:
+
+- `PHASE_4A_VERIFIED`
+- `PHASE_4A_VALIDATION_FAILED`
+- `PHASE_4A_VALIDATION_BLOCKED`
+
+Final terminal response under 180 words.
+
+Stop after validation. Do not begin Phase 4B.

@@ -1,0 +1,2 @@
+idempotency_key,dedupe_key,intake_id,state,event_type,lead_email,campaign_id
+__DELETE_SCHEMA_ROW__,__DELETE_SCHEMA_ROW__,__DELETE_SCHEMA_ROW__,__DELETE_SCHEMA_ROW__,__DELETE_SCHEMA_ROW__,__DELETE_SCHEMA_ROW__,__DELETE_SCHEMA_ROW__

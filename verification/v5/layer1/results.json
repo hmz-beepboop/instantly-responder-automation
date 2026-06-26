@@ -1,0 +1,1903 @@
+{
+  "generatedAt": "2026-06-14T00:59:49.637Z",
+  "nodeVersion": "v24.15.0",
+  "policy": {
+    "maxAttempts": 3,
+    "baseBackoffMs": 100,
+    "maxBackoffMs": 2000,
+    "retryAfterCapMs": 5000,
+    "jitter": "deterministic: (attempt * 37) % 50"
+  },
+  "scenarios": [
+    {
+      "name": "http_400_bad_request",
+      "description": "HTTP 400 -> PERMANENT_FAILURE, no retry",
+      "expected": {
+        "finalState": "PERMANENT_FAILURE",
+        "attempts": 1,
+        "postSubmissions": 1,
+        "maxAllowedSubmissions": 1,
+        "retried": false,
+        "retryAfterHonoured": null,
+        "humanReviewRequired": true,
+        "backoffDelaysRequested": []
+      },
+      "actual": {
+        "finalState": "PERMANENT_FAILURE",
+        "attempts": 1,
+        "postSubmissions": 1,
+        "retried": false,
+        "backoffDelaysRequested": [],
+        "retryAfterHonoured": null,
+        "humanReviewRequired": true,
+        "duplicateRiskRetry": false,
+        "attemptOutcomes": [
+          {
+            "kind": "http",
+            "status": 400,
+            "errorPhase": null,
+            "serverReceived": true
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "check": "finalState",
+          "expected": "PERMANENT_FAILURE",
+          "actual": "PERMANENT_FAILURE",
+          "pass": true
+        },
+        {
+          "check": "attempts",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "check": "postSubmissions",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "check": "retried",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "retryAfterHonoured",
+          "expected": null,
+          "actual": null,
+          "pass": true
+        },
+        {
+          "check": "humanReviewRequired",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "duplicateRiskRetry",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "backoffDelaysRequested",
+          "expected": [],
+          "actual": [],
+          "pass": true
+        },
+        {
+          "check": "postSubmissions<=maxAllowed",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "name": "http_401_unauthorized",
+      "description": "HTTP 401 -> AUTH_OR_PLAN_FAILURE, no retry",
+      "expected": {
+        "finalState": "AUTH_OR_PLAN_FAILURE",
+        "attempts": 1,
+        "postSubmissions": 1,
+        "maxAllowedSubmissions": 1,
+        "retried": false,
+        "retryAfterHonoured": null,
+        "humanReviewRequired": true,
+        "backoffDelaysRequested": []
+      },
+      "actual": {
+        "finalState": "AUTH_OR_PLAN_FAILURE",
+        "attempts": 1,
+        "postSubmissions": 1,
+        "retried": false,
+        "backoffDelaysRequested": [],
+        "retryAfterHonoured": null,
+        "humanReviewRequired": true,
+        "duplicateRiskRetry": false,
+        "attemptOutcomes": [
+          {
+            "kind": "http",
+            "status": 401,
+            "errorPhase": null,
+            "serverReceived": true
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "check": "finalState",
+          "expected": "AUTH_OR_PLAN_FAILURE",
+          "actual": "AUTH_OR_PLAN_FAILURE",
+          "pass": true
+        },
+        {
+          "check": "attempts",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "check": "postSubmissions",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "check": "retried",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "retryAfterHonoured",
+          "expected": null,
+          "actual": null,
+          "pass": true
+        },
+        {
+          "check": "humanReviewRequired",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "duplicateRiskRetry",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "backoffDelaysRequested",
+          "expected": [],
+          "actual": [],
+          "pass": true
+        },
+        {
+          "check": "postSubmissions<=maxAllowed",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "name": "http_402_payment_required",
+      "description": "HTTP 402 -> AUTH_OR_PLAN_FAILURE, no retry",
+      "expected": {
+        "finalState": "AUTH_OR_PLAN_FAILURE",
+        "attempts": 1,
+        "postSubmissions": 1,
+        "maxAllowedSubmissions": 1,
+        "retried": false,
+        "retryAfterHonoured": null,
+        "humanReviewRequired": true,
+        "backoffDelaysRequested": []
+      },
+      "actual": {
+        "finalState": "AUTH_OR_PLAN_FAILURE",
+        "attempts": 1,
+        "postSubmissions": 1,
+        "retried": false,
+        "backoffDelaysRequested": [],
+        "retryAfterHonoured": null,
+        "humanReviewRequired": true,
+        "duplicateRiskRetry": false,
+        "attemptOutcomes": [
+          {
+            "kind": "http",
+            "status": 402,
+            "errorPhase": null,
+            "serverReceived": true
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "check": "finalState",
+          "expected": "AUTH_OR_PLAN_FAILURE",
+          "actual": "AUTH_OR_PLAN_FAILURE",
+          "pass": true
+        },
+        {
+          "check": "attempts",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "check": "postSubmissions",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "check": "retried",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "retryAfterHonoured",
+          "expected": null,
+          "actual": null,
+          "pass": true
+        },
+        {
+          "check": "humanReviewRequired",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "duplicateRiskRetry",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "backoffDelaysRequested",
+          "expected": [],
+          "actual": [],
+          "pass": true
+        },
+        {
+          "check": "postSubmissions<=maxAllowed",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "name": "http_403_forbidden",
+      "description": "HTTP 403 -> AUTH_OR_PLAN_FAILURE, no retry",
+      "expected": {
+        "finalState": "AUTH_OR_PLAN_FAILURE",
+        "attempts": 1,
+        "postSubmissions": 1,
+        "maxAllowedSubmissions": 1,
+        "retried": false,
+        "retryAfterHonoured": null,
+        "humanReviewRequired": true,
+        "backoffDelaysRequested": []
+      },
+      "actual": {
+        "finalState": "AUTH_OR_PLAN_FAILURE",
+        "attempts": 1,
+        "postSubmissions": 1,
+        "retried": false,
+        "backoffDelaysRequested": [],
+        "retryAfterHonoured": null,
+        "humanReviewRequired": true,
+        "duplicateRiskRetry": false,
+        "attemptOutcomes": [
+          {
+            "kind": "http",
+            "status": 403,
+            "errorPhase": null,
+            "serverReceived": true
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "check": "finalState",
+          "expected": "AUTH_OR_PLAN_FAILURE",
+          "actual": "AUTH_OR_PLAN_FAILURE",
+          "pass": true
+        },
+        {
+          "check": "attempts",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "check": "postSubmissions",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "check": "retried",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "retryAfterHonoured",
+          "expected": null,
+          "actual": null,
+          "pass": true
+        },
+        {
+          "check": "humanReviewRequired",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "duplicateRiskRetry",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "backoffDelaysRequested",
+          "expected": [],
+          "actual": [],
+          "pass": true
+        },
+        {
+          "check": "postSubmissions<=maxAllowed",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "name": "http_404_invalid_reply_target",
+      "description": "HTTP 404 invalid reply target -> INVALID_REPLY_TARGET, no retry",
+      "expected": {
+        "finalState": "INVALID_REPLY_TARGET",
+        "attempts": 1,
+        "postSubmissions": 1,
+        "maxAllowedSubmissions": 1,
+        "retried": false,
+        "retryAfterHonoured": null,
+        "humanReviewRequired": true,
+        "backoffDelaysRequested": []
+      },
+      "actual": {
+        "finalState": "INVALID_REPLY_TARGET",
+        "attempts": 1,
+        "postSubmissions": 1,
+        "retried": false,
+        "backoffDelaysRequested": [],
+        "retryAfterHonoured": null,
+        "humanReviewRequired": true,
+        "duplicateRiskRetry": false,
+        "attemptOutcomes": [
+          {
+            "kind": "http",
+            "status": 404,
+            "errorPhase": null,
+            "serverReceived": true
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "check": "finalState",
+          "expected": "INVALID_REPLY_TARGET",
+          "actual": "INVALID_REPLY_TARGET",
+          "pass": true
+        },
+        {
+          "check": "attempts",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "check": "postSubmissions",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "check": "retried",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "retryAfterHonoured",
+          "expected": null,
+          "actual": null,
+          "pass": true
+        },
+        {
+          "check": "humanReviewRequired",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "duplicateRiskRetry",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "backoffDelaysRequested",
+          "expected": [],
+          "actual": [],
+          "pass": true
+        },
+        {
+          "check": "postSubmissions<=maxAllowed",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "name": "http_429_with_retry_after",
+      "description": "HTTP 429 with Retry-After -> bounded retry honouring Retry-After -> RETRY_EXHAUSTED",
+      "expected": {
+        "finalState": "RETRY_EXHAUSTED",
+        "attempts": 3,
+        "postSubmissions": 3,
+        "maxAllowedSubmissions": 3,
+        "retried": true,
+        "retryAfterHonoured": true,
+        "humanReviewRequired": true,
+        "backoffDelaysRequested": [
+          1000,
+          1000
+        ]
+      },
+      "actual": {
+        "finalState": "RETRY_EXHAUSTED",
+        "attempts": 3,
+        "postSubmissions": 3,
+        "retried": true,
+        "backoffDelaysRequested": [
+          1000,
+          1000
+        ],
+        "retryAfterHonoured": true,
+        "humanReviewRequired": true,
+        "duplicateRiskRetry": false,
+        "attemptOutcomes": [
+          {
+            "kind": "http",
+            "status": 429,
+            "errorPhase": null,
+            "serverReceived": true
+          },
+          {
+            "kind": "http",
+            "status": 429,
+            "errorPhase": null,
+            "serverReceived": true
+          },
+          {
+            "kind": "http",
+            "status": 429,
+            "errorPhase": null,
+            "serverReceived": true
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "check": "finalState",
+          "expected": "RETRY_EXHAUSTED",
+          "actual": "RETRY_EXHAUSTED",
+          "pass": true
+        },
+        {
+          "check": "attempts",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "check": "postSubmissions",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "check": "retried",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "retryAfterHonoured",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "humanReviewRequired",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "duplicateRiskRetry",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "backoffDelaysRequested",
+          "expected": [
+            1000,
+            1000
+          ],
+          "actual": [
+            1000,
+            1000
+          ],
+          "pass": true
+        },
+        {
+          "check": "postSubmissions<=maxAllowed",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "name": "http_429_without_retry_after",
+      "description": "HTTP 429 without Retry-After -> bounded exponential backoff -> RETRY_EXHAUSTED",
+      "expected": {
+        "finalState": "RETRY_EXHAUSTED",
+        "attempts": 3,
+        "postSubmissions": 3,
+        "maxAllowedSubmissions": 3,
+        "retried": true,
+        "retryAfterHonoured": false,
+        "humanReviewRequired": true,
+        "backoffDelaysRequested": [
+          137,
+          224
+        ]
+      },
+      "actual": {
+        "finalState": "RETRY_EXHAUSTED",
+        "attempts": 3,
+        "postSubmissions": 3,
+        "retried": true,
+        "backoffDelaysRequested": [
+          137,
+          224
+        ],
+        "retryAfterHonoured": false,
+        "humanReviewRequired": true,
+        "duplicateRiskRetry": false,
+        "attemptOutcomes": [
+          {
+            "kind": "http",
+            "status": 429,
+            "errorPhase": null,
+            "serverReceived": true
+          },
+          {
+            "kind": "http",
+            "status": 429,
+            "errorPhase": null,
+            "serverReceived": true
+          },
+          {
+            "kind": "http",
+            "status": 429,
+            "errorPhase": null,
+            "serverReceived": true
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "check": "finalState",
+          "expected": "RETRY_EXHAUSTED",
+          "actual": "RETRY_EXHAUSTED",
+          "pass": true
+        },
+        {
+          "check": "attempts",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "check": "postSubmissions",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "check": "retried",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "retryAfterHonoured",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "humanReviewRequired",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "duplicateRiskRetry",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "backoffDelaysRequested",
+          "expected": [
+            137,
+            224
+          ],
+          "actual": [
+            137,
+            224
+          ],
+          "pass": true
+        },
+        {
+          "check": "postSubmissions<=maxAllowed",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "name": "http_500_server_error",
+      "description": "HTTP 500 -> bounded retry -> RETRY_EXHAUSTED",
+      "expected": {
+        "finalState": "RETRY_EXHAUSTED",
+        "attempts": 3,
+        "postSubmissions": 3,
+        "maxAllowedSubmissions": 3,
+        "retried": true,
+        "retryAfterHonoured": false,
+        "humanReviewRequired": true,
+        "backoffDelaysRequested": [
+          137,
+          224
+        ]
+      },
+      "actual": {
+        "finalState": "RETRY_EXHAUSTED",
+        "attempts": 3,
+        "postSubmissions": 3,
+        "retried": true,
+        "backoffDelaysRequested": [
+          137,
+          224
+        ],
+        "retryAfterHonoured": false,
+        "humanReviewRequired": true,
+        "duplicateRiskRetry": false,
+        "attemptOutcomes": [
+          {
+            "kind": "http",
+            "status": 500,
+            "errorPhase": null,
+            "serverReceived": true
+          },
+          {
+            "kind": "http",
+            "status": 500,
+            "errorPhase": null,
+            "serverReceived": true
+          },
+          {
+            "kind": "http",
+            "status": 500,
+            "errorPhase": null,
+            "serverReceived": true
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "check": "finalState",
+          "expected": "RETRY_EXHAUSTED",
+          "actual": "RETRY_EXHAUSTED",
+          "pass": true
+        },
+        {
+          "check": "attempts",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "check": "postSubmissions",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "check": "retried",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "retryAfterHonoured",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "humanReviewRequired",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "duplicateRiskRetry",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "backoffDelaysRequested",
+          "expected": [
+            137,
+            224
+          ],
+          "actual": [
+            137,
+            224
+          ],
+          "pass": true
+        },
+        {
+          "check": "postSubmissions<=maxAllowed",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "name": "http_502_bad_gateway",
+      "description": "HTTP 502 -> bounded retry -> RETRY_EXHAUSTED",
+      "expected": {
+        "finalState": "RETRY_EXHAUSTED",
+        "attempts": 3,
+        "postSubmissions": 3,
+        "maxAllowedSubmissions": 3,
+        "retried": true,
+        "retryAfterHonoured": false,
+        "humanReviewRequired": true,
+        "backoffDelaysRequested": [
+          137,
+          224
+        ]
+      },
+      "actual": {
+        "finalState": "RETRY_EXHAUSTED",
+        "attempts": 3,
+        "postSubmissions": 3,
+        "retried": true,
+        "backoffDelaysRequested": [
+          137,
+          224
+        ],
+        "retryAfterHonoured": false,
+        "humanReviewRequired": true,
+        "duplicateRiskRetry": false,
+        "attemptOutcomes": [
+          {
+            "kind": "http",
+            "status": 502,
+            "errorPhase": null,
+            "serverReceived": true
+          },
+          {
+            "kind": "http",
+            "status": 502,
+            "errorPhase": null,
+            "serverReceived": true
+          },
+          {
+            "kind": "http",
+            "status": 502,
+            "errorPhase": null,
+            "serverReceived": true
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "check": "finalState",
+          "expected": "RETRY_EXHAUSTED",
+          "actual": "RETRY_EXHAUSTED",
+          "pass": true
+        },
+        {
+          "check": "attempts",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "check": "postSubmissions",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "check": "retried",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "retryAfterHonoured",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "humanReviewRequired",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "duplicateRiskRetry",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "backoffDelaysRequested",
+          "expected": [
+            137,
+            224
+          ],
+          "actual": [
+            137,
+            224
+          ],
+          "pass": true
+        },
+        {
+          "check": "postSubmissions<=maxAllowed",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "name": "http_503_service_unavailable",
+      "description": "HTTP 503 -> bounded retry -> RETRY_EXHAUSTED",
+      "expected": {
+        "finalState": "RETRY_EXHAUSTED",
+        "attempts": 3,
+        "postSubmissions": 3,
+        "maxAllowedSubmissions": 3,
+        "retried": true,
+        "retryAfterHonoured": false,
+        "humanReviewRequired": true,
+        "backoffDelaysRequested": [
+          137,
+          224
+        ]
+      },
+      "actual": {
+        "finalState": "RETRY_EXHAUSTED",
+        "attempts": 3,
+        "postSubmissions": 3,
+        "retried": true,
+        "backoffDelaysRequested": [
+          137,
+          224
+        ],
+        "retryAfterHonoured": false,
+        "humanReviewRequired": true,
+        "duplicateRiskRetry": false,
+        "attemptOutcomes": [
+          {
+            "kind": "http",
+            "status": 503,
+            "errorPhase": null,
+            "serverReceived": true
+          },
+          {
+            "kind": "http",
+            "status": 503,
+            "errorPhase": null,
+            "serverReceived": true
+          },
+          {
+            "kind": "http",
+            "status": 503,
+            "errorPhase": null,
+            "serverReceived": true
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "check": "finalState",
+          "expected": "RETRY_EXHAUSTED",
+          "actual": "RETRY_EXHAUSTED",
+          "pass": true
+        },
+        {
+          "check": "attempts",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "check": "postSubmissions",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "check": "retried",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "retryAfterHonoured",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "humanReviewRequired",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "duplicateRiskRetry",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "backoffDelaysRequested",
+          "expected": [
+            137,
+            224
+          ],
+          "actual": [
+            137,
+            224
+          ],
+          "pass": true
+        },
+        {
+          "check": "postSubmissions<=maxAllowed",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "name": "http_504_gateway_timeout",
+      "description": "HTTP 504 -> bounded retry -> RETRY_EXHAUSTED",
+      "expected": {
+        "finalState": "RETRY_EXHAUSTED",
+        "attempts": 3,
+        "postSubmissions": 3,
+        "maxAllowedSubmissions": 3,
+        "retried": true,
+        "retryAfterHonoured": false,
+        "humanReviewRequired": true,
+        "backoffDelaysRequested": [
+          137,
+          224
+        ]
+      },
+      "actual": {
+        "finalState": "RETRY_EXHAUSTED",
+        "attempts": 3,
+        "postSubmissions": 3,
+        "retried": true,
+        "backoffDelaysRequested": [
+          137,
+          224
+        ],
+        "retryAfterHonoured": false,
+        "humanReviewRequired": true,
+        "duplicateRiskRetry": false,
+        "attemptOutcomes": [
+          {
+            "kind": "http",
+            "status": 504,
+            "errorPhase": null,
+            "serverReceived": true
+          },
+          {
+            "kind": "http",
+            "status": 504,
+            "errorPhase": null,
+            "serverReceived": true
+          },
+          {
+            "kind": "http",
+            "status": 504,
+            "errorPhase": null,
+            "serverReceived": true
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "check": "finalState",
+          "expected": "RETRY_EXHAUSTED",
+          "actual": "RETRY_EXHAUSTED",
+          "pass": true
+        },
+        {
+          "check": "attempts",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "check": "postSubmissions",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "check": "retried",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "retryAfterHonoured",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "humanReviewRequired",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "duplicateRiskRetry",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "backoffDelaysRequested",
+          "expected": [
+            137,
+            224
+          ],
+          "actual": [
+            137,
+            224
+          ],
+          "pass": true
+        },
+        {
+          "check": "postSubmissions<=maxAllowed",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "name": "connection_refused_before_submission",
+      "description": "Connection refused before submission -> retryable -> PRE_SUBMISSION_NETWORK_FAILURE",
+      "expected": {
+        "finalState": "PRE_SUBMISSION_NETWORK_FAILURE",
+        "attempts": 3,
+        "postSubmissions": 0,
+        "maxAllowedSubmissions": 0,
+        "retried": true,
+        "retryAfterHonoured": false,
+        "humanReviewRequired": true,
+        "backoffDelaysRequested": [
+          137,
+          224
+        ]
+      },
+      "actual": {
+        "finalState": "PRE_SUBMISSION_NETWORK_FAILURE",
+        "attempts": 3,
+        "postSubmissions": 0,
+        "retried": true,
+        "backoffDelaysRequested": [
+          137,
+          224
+        ],
+        "retryAfterHonoured": false,
+        "humanReviewRequired": true,
+        "duplicateRiskRetry": false,
+        "attemptOutcomes": [
+          {
+            "kind": "network-error",
+            "status": null,
+            "errorPhase": "connection-refused",
+            "serverReceived": false
+          },
+          {
+            "kind": "network-error",
+            "status": null,
+            "errorPhase": "connection-refused",
+            "serverReceived": false
+          },
+          {
+            "kind": "network-error",
+            "status": null,
+            "errorPhase": "connection-refused",
+            "serverReceived": false
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "check": "finalState",
+          "expected": "PRE_SUBMISSION_NETWORK_FAILURE",
+          "actual": "PRE_SUBMISSION_NETWORK_FAILURE",
+          "pass": true
+        },
+        {
+          "check": "attempts",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "check": "postSubmissions",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "check": "retried",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "retryAfterHonoured",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "humanReviewRequired",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "duplicateRiskRetry",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "backoffDelaysRequested",
+          "expected": [
+            137,
+            224
+          ],
+          "actual": [
+            137,
+            224
+          ],
+          "pass": true
+        },
+        {
+          "check": "postSubmissions<=maxAllowed",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "name": "connection_reset_before_confirmed_submission",
+      "description": "Connection reset before submission confirmed -> SEND_UNCERTAIN, no retry",
+      "expected": {
+        "finalState": "SEND_UNCERTAIN",
+        "attempts": 1,
+        "postSubmissions": 1,
+        "maxAllowedSubmissions": 1,
+        "retried": false,
+        "retryAfterHonoured": null,
+        "humanReviewRequired": true,
+        "backoffDelaysRequested": []
+      },
+      "actual": {
+        "finalState": "SEND_UNCERTAIN",
+        "attempts": 1,
+        "postSubmissions": 1,
+        "retried": false,
+        "backoffDelaysRequested": [],
+        "retryAfterHonoured": null,
+        "humanReviewRequired": true,
+        "duplicateRiskRetry": false,
+        "attemptOutcomes": [
+          {
+            "kind": "network-error",
+            "status": null,
+            "errorPhase": "connection-loss-before-confirmed",
+            "serverReceived": true
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "check": "finalState",
+          "expected": "SEND_UNCERTAIN",
+          "actual": "SEND_UNCERTAIN",
+          "pass": true
+        },
+        {
+          "check": "attempts",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "check": "postSubmissions",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "check": "retried",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "retryAfterHonoured",
+          "expected": null,
+          "actual": null,
+          "pass": true
+        },
+        {
+          "check": "humanReviewRequired",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "duplicateRiskRetry",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "backoffDelaysRequested",
+          "expected": [],
+          "actual": [],
+          "pass": true
+        },
+        {
+          "check": "postSubmissions<=maxAllowed",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "name": "connection_reset_after_submission",
+      "description": "Connection reset after request body submitted -> SEND_UNCERTAIN, no retry",
+      "expected": {
+        "finalState": "SEND_UNCERTAIN",
+        "attempts": 1,
+        "postSubmissions": 1,
+        "maxAllowedSubmissions": 1,
+        "retried": false,
+        "retryAfterHonoured": null,
+        "humanReviewRequired": true,
+        "backoffDelaysRequested": []
+      },
+      "actual": {
+        "finalState": "SEND_UNCERTAIN",
+        "attempts": 1,
+        "postSubmissions": 1,
+        "retried": false,
+        "backoffDelaysRequested": [],
+        "retryAfterHonoured": null,
+        "humanReviewRequired": true,
+        "duplicateRiskRetry": false,
+        "attemptOutcomes": [
+          {
+            "kind": "network-error",
+            "status": null,
+            "errorPhase": "connection-loss-after-submission",
+            "serverReceived": true
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "check": "finalState",
+          "expected": "SEND_UNCERTAIN",
+          "actual": "SEND_UNCERTAIN",
+          "pass": true
+        },
+        {
+          "check": "attempts",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "check": "postSubmissions",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "check": "retried",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "retryAfterHonoured",
+          "expected": null,
+          "actual": null,
+          "pass": true
+        },
+        {
+          "check": "humanReviewRequired",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "duplicateRiskRetry",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "backoffDelaysRequested",
+          "expected": [],
+          "actual": [],
+          "pass": true
+        },
+        {
+          "check": "postSubmissions<=maxAllowed",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "name": "failure_before_request_submission",
+      "description": "Failure proven before request submission -> retryable -> PRE_SUBMISSION_NETWORK_FAILURE",
+      "expected": {
+        "finalState": "PRE_SUBMISSION_NETWORK_FAILURE",
+        "attempts": 3,
+        "postSubmissions": 0,
+        "maxAllowedSubmissions": 0,
+        "retried": true,
+        "retryAfterHonoured": false,
+        "humanReviewRequired": true,
+        "backoffDelaysRequested": [
+          137,
+          224
+        ]
+      },
+      "actual": {
+        "finalState": "PRE_SUBMISSION_NETWORK_FAILURE",
+        "attempts": 3,
+        "postSubmissions": 0,
+        "retried": true,
+        "backoffDelaysRequested": [
+          137,
+          224
+        ],
+        "retryAfterHonoured": false,
+        "humanReviewRequired": true,
+        "duplicateRiskRetry": false,
+        "attemptOutcomes": [
+          {
+            "kind": "network-error",
+            "status": null,
+            "errorPhase": "pre-submission",
+            "serverReceived": false
+          },
+          {
+            "kind": "network-error",
+            "status": null,
+            "errorPhase": "pre-submission",
+            "serverReceived": false
+          },
+          {
+            "kind": "network-error",
+            "status": null,
+            "errorPhase": "pre-submission",
+            "serverReceived": false
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "check": "finalState",
+          "expected": "PRE_SUBMISSION_NETWORK_FAILURE",
+          "actual": "PRE_SUBMISSION_NETWORK_FAILURE",
+          "pass": true
+        },
+        {
+          "check": "attempts",
+          "expected": 3,
+          "actual": 3,
+          "pass": true
+        },
+        {
+          "check": "postSubmissions",
+          "expected": 0,
+          "actual": 0,
+          "pass": true
+        },
+        {
+          "check": "retried",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "retryAfterHonoured",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "humanReviewRequired",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "duplicateRiskRetry",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "backoffDelaysRequested",
+          "expected": [
+            137,
+            224
+          ],
+          "actual": [
+            137,
+            224
+          ],
+          "pass": true
+        },
+        {
+          "check": "postSubmissions<=maxAllowed",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "name": "delayed_success_within_timeout",
+      "description": "Delayed valid 2xx response within timeout -> SENT, no retry",
+      "expected": {
+        "finalState": "SENT",
+        "attempts": 1,
+        "postSubmissions": 1,
+        "maxAllowedSubmissions": 1,
+        "retried": false,
+        "retryAfterHonoured": null,
+        "humanReviewRequired": false,
+        "backoffDelaysRequested": []
+      },
+      "actual": {
+        "finalState": "SENT",
+        "attempts": 1,
+        "postSubmissions": 1,
+        "retried": false,
+        "backoffDelaysRequested": [],
+        "retryAfterHonoured": null,
+        "humanReviewRequired": false,
+        "duplicateRiskRetry": false,
+        "attemptOutcomes": [
+          {
+            "kind": "http",
+            "status": 200,
+            "errorPhase": null,
+            "serverReceived": true
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "check": "finalState",
+          "expected": "SENT",
+          "actual": "SENT",
+          "pass": true
+        },
+        {
+          "check": "attempts",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "check": "postSubmissions",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "check": "retried",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "retryAfterHonoured",
+          "expected": null,
+          "actual": null,
+          "pass": true
+        },
+        {
+          "check": "humanReviewRequired",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "duplicateRiskRetry",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "backoffDelaysRequested",
+          "expected": [],
+          "actual": [],
+          "pass": true
+        },
+        {
+          "check": "postSubmissions<=maxAllowed",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "name": "malformed_success_response",
+      "description": "Malformed 2xx response -> SEND_UNCERTAIN, no retry",
+      "expected": {
+        "finalState": "SEND_UNCERTAIN",
+        "attempts": 1,
+        "postSubmissions": 1,
+        "maxAllowedSubmissions": 1,
+        "retried": false,
+        "retryAfterHonoured": null,
+        "humanReviewRequired": true,
+        "backoffDelaysRequested": []
+      },
+      "actual": {
+        "finalState": "SEND_UNCERTAIN",
+        "attempts": 1,
+        "postSubmissions": 1,
+        "retried": false,
+        "backoffDelaysRequested": [],
+        "retryAfterHonoured": null,
+        "humanReviewRequired": true,
+        "duplicateRiskRetry": false,
+        "attemptOutcomes": [
+          {
+            "kind": "http",
+            "status": 200,
+            "errorPhase": null,
+            "serverReceived": true
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "check": "finalState",
+          "expected": "SEND_UNCERTAIN",
+          "actual": "SEND_UNCERTAIN",
+          "pass": true
+        },
+        {
+          "check": "attempts",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "check": "postSubmissions",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "check": "retried",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "retryAfterHonoured",
+          "expected": null,
+          "actual": null,
+          "pass": true
+        },
+        {
+          "check": "humanReviewRequired",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "duplicateRiskRetry",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "backoffDelaysRequested",
+          "expected": [],
+          "actual": [],
+          "pass": true
+        },
+        {
+          "check": "postSubmissions<=maxAllowed",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    },
+    {
+      "name": "timeout_after_submission",
+      "description": "Timeout waiting for response after submission -> SEND_UNCERTAIN, no retry",
+      "expected": {
+        "finalState": "SEND_UNCERTAIN",
+        "attempts": 1,
+        "postSubmissions": 1,
+        "maxAllowedSubmissions": 1,
+        "retried": false,
+        "retryAfterHonoured": null,
+        "humanReviewRequired": true,
+        "backoffDelaysRequested": []
+      },
+      "actual": {
+        "finalState": "SEND_UNCERTAIN",
+        "attempts": 1,
+        "postSubmissions": 1,
+        "retried": false,
+        "backoffDelaysRequested": [],
+        "retryAfterHonoured": null,
+        "humanReviewRequired": true,
+        "duplicateRiskRetry": false,
+        "attemptOutcomes": [
+          {
+            "kind": "network-error",
+            "status": null,
+            "errorPhase": "timeout-after-submission",
+            "serverReceived": true
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "check": "finalState",
+          "expected": "SEND_UNCERTAIN",
+          "actual": "SEND_UNCERTAIN",
+          "pass": true
+        },
+        {
+          "check": "attempts",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "check": "postSubmissions",
+          "expected": 1,
+          "actual": 1,
+          "pass": true
+        },
+        {
+          "check": "retried",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "retryAfterHonoured",
+          "expected": null,
+          "actual": null,
+          "pass": true
+        },
+        {
+          "check": "humanReviewRequired",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        },
+        {
+          "check": "duplicateRiskRetry",
+          "expected": false,
+          "actual": false,
+          "pass": true
+        },
+        {
+          "check": "backoffDelaysRequested",
+          "expected": [],
+          "actual": [],
+          "pass": true
+        },
+        {
+          "check": "postSubmissions<=maxAllowed",
+          "expected": true,
+          "actual": true,
+          "pass": true
+        }
+      ],
+      "pass": true
+    }
+  ],
+  "globalAssertions": [
+    {
+      "check": "permanent_4xx_used_one_attempt",
+      "names": [
+        "http_400_bad_request"
+      ],
+      "pass": true
+    },
+    {
+      "check": "auth_or_plan_failures_used_one_attempt",
+      "names": [
+        "http_401_unauthorized",
+        "http_402_payment_required",
+        "http_403_forbidden"
+      ],
+      "pass": true
+    },
+    {
+      "check": "invalid_reply_target_used_one_attempt",
+      "names": [
+        "http_404_invalid_reply_target"
+      ],
+      "pass": true
+    },
+    {
+      "check": "retryable_scenarios_never_exceeded_three_attempts",
+      "names": [
+        "http_429_with_retry_after",
+        "http_429_without_retry_after",
+        "http_500_server_error",
+        "http_502_bad_gateway",
+        "http_503_service_unavailable",
+        "http_504_gateway_timeout",
+        "connection_refused_before_submission",
+        "failure_before_request_submission"
+      ],
+      "pass": true
+    },
+    {
+      "check": "send_uncertain_scenarios_issued_no_second_post",
+      "names": [
+        "connection_reset_before_confirmed_submission",
+        "connection_reset_after_submission",
+        "malformed_success_response",
+        "timeout_after_submission"
+      ],
+      "pass": true
+    },
+    {
+      "check": "no_scenario_exceeded_its_max_allowed_post_submissions",
+      "names": [
+        "http_400_bad_request",
+        "http_401_unauthorized",
+        "http_402_payment_required",
+        "http_403_forbidden",
+        "http_404_invalid_reply_target",
+        "http_429_with_retry_after",
+        "http_429_without_retry_after",
+        "http_500_server_error",
+        "http_502_bad_gateway",
+        "http_503_service_unavailable",
+        "http_504_gateway_timeout",
+        "connection_refused_before_submission",
+        "connection_reset_before_confirmed_submission",
+        "connection_reset_after_submission",
+        "failure_before_request_submission",
+        "delayed_success_within_timeout",
+        "malformed_success_response",
+        "timeout_after_submission"
+      ],
+      "pass": true
+    },
+    {
+      "check": "every_required_scenario_executed",
+      "expectedCount": 18,
+      "actualCount": 18,
+      "pass": true
+    },
+    {
+      "check": "no_external_network_request_occurred",
+      "pass": true,
+      "note": "All requests target 127.0.0.1 (mock server and a closed-port probe); the pre-submission-failure scenario makes no network call at all."
+    },
+    {
+      "check": "no_duplicate_risk_retry_in_any_scenario",
+      "pass": true
+    }
+  ],
+  "summary": {
+    "totalScenarios": 18,
+    "passedScenarios": 18,
+    "failedScenarios": 0,
+    "globalAssertionsTotal": 9,
+    "globalAssertionsPassed": 9,
+    "verdict": "V5_LAYER1_VERIFIED"
+  }
+}

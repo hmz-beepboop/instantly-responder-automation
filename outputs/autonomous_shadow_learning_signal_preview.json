@@ -1,0 +1,41 @@
+{
+  "signal_type": "autonomous_shadow_learning_signal_preview",
+  "generated_at": "2026-06-24T10:51:06Z",
+  "source": "shadow_controlled_tests_phase_5f",
+  "signals": [
+    {
+      "observation": "Proof/examples request correctly shadow-logged. No permanent block. No live send.",
+      "learning": "Proof requests should remain shadow-logged, not auto-sent. Verify approved reply policy permits proof responses.",
+      "trigger": "PROOF_REQUEST at confidence 0.88 → SHADOW_LOG",
+      "action": "Monitor across real prospect traffic to see frequency",
+      "signal_id": "LS-001",
+      "case_id": "SHADOW-T06"
+    },
+    {
+      "observation": "One-campaign pilot interest correctly shadow-logged. Confidence just above threshold.",
+      "learning": "Low confidence positive interest near 0.85 threshold may warrant tighter threshold. Monitor for false positives.",
+      "trigger": "POSITIVE_INTEREST_GENERAL (pilot request) at confidence 0.87 → SHADOW_LOG",
+      "action": "Track confidence distribution across real traffic before adjusting threshold",
+      "signal_id": "LS-002",
+      "case_id": "SHADOW-T09"
+    },
+    {
+      "observation": "Ambiguous 'yes' correctly permanently blocked. Low confidence + ambiguous = hard block.",
+      "learning": "Double protection working: ambiguous intent class AND low confidence both block correctly.",
+      "trigger": "AMBIGUOUS_INTENT at confidence 0.55 → BLOCKED_PERMANENT",
+      "action": "No change needed. Confirm with real prospect data.",
+      "signal_id": "LS-003",
+      "case_id": "SHADOW-T15"
+    },
+    {
+      "observation": "Multi-intent case with one blocked additional intent correctly blocked overall.",
+      "learning": "Any blocked intent in additional_intents correctly triggers BLOCKED_PERMANENT. Additional intent guard is working.",
+      "trigger": "POSITIVE_INTEREST + additional_intents=[PRICING_REQUEST, CONTRACT_TERMS] → BLOCKED_PERMANENT",
+      "action": "No change needed.",
+      "signal_id": "LS-004",
+      "case_id": "SHADOW-T19"
+    }
+  ],
+  "production_writes_made": false,
+  "live_sends_made": false
+}

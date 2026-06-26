@@ -1,0 +1,156 @@
+# Phase 5 Final Independent Audit and Report Only
+
+## Entry gate
+
+Proceed only if:
+
+- `reports/PHASE_4_VALIDATION.md` exists
+- `reports/PHASE_5_MECHANICAL_AUDIT.md` exists
+- `verification/phase5/mechanical-audit.json` exists
+- the mechanical verdict is `PHASE_5_MECHANICAL_AUDIT_PASSED`
+
+If not, stop with `PHASE_5_BLOCKED_MECHANICAL_AUDIT`.
+
+## Objective
+
+Perform the final independent hostile audit of the six-workflow validation system.
+
+Do not build new features.
+Do not use MCP.
+Do not execute workflows.
+Do not access n8n or Instantly.
+Do not run web search.
+Do not use agents.
+Do not read the full repository.
+Do not read the original DOCX files.
+Do not modify workflow logic unless the supplied mechanical evidence proves a specific defect.
+
+## Source priority
+
+1. `docs/PHASE_5_VERIFIED_INPUT.md`
+2. `verification/phase5/mechanical-audit.json`
+3. `reports/PHASE_5_MECHANICAL_AUDIT.md`
+4. `reports/PHASE_4_VALIDATION.md`
+5. `reports/PHASE_4A_PACKAGE_AUDIT.md`
+6. `reports/PHASE_4B_PACKAGE_AUDIT.md`
+7. `reports/PHASE_3_FINAL_VERIFICATION.md`
+8. `reports/V5_LAYER1_EVIDENCE.md`
+9. `reports/V5_LAYER2_EVIDENCE.md`
+10. `docs/TEST_PLAN.md`
+11. current `reports/UNRESOLVED_ITEMS.md`
+
+Read no other files unless one exact contradiction cannot be resolved from this list.
+
+## Audit questions
+
+Determine:
+
+1. Did all six remote workflows remain inactive?
+2. Did remote workflow logic match local exports?
+3. Did actual n8n execution of the Full Test Harness complete successfully?
+4. Did actual n8n execution of the SLA Watchdog complete successfully, or is there a precise trigger limitation?
+5. Do the Phase 3, Phase 4A, Phase 4B, V5 Layer 1 and V5 Layer 2 evidence collectively cover:
+   - duplicate intake
+   - concurrent send ownership
+   - sequential rerun blocking
+   - dry-run prevention
+   - campaign allowlisting
+   - thread/reply identifiers
+   - source-campaign stop
+   - exact workspace suppression
+   - risky-category escalation
+   - template-variable safety
+   - retry classification
+   - Retry-After
+   - uncertain-send no-retry
+   - zero/one/multiple reconciliation
+   - error persistence/routing
+   - SLA warning/breach
+   - Processing vs Transmission SLO separation
+6. Did the secret/privacy scan find any real email or secret-pattern residue?
+7. What remains unproven in the actual n8n runtime?
+8. Which readiness verdict is justified?
+
+## Known validator exception
+
+Preserve the Phase 4B n8n-MCP static-validator exception exactly.
+
+Do not claim the Phase 4B workflows are `valid=true`.
+
+Do not repair code solely to satisfy that validator.
+
+## Documentation corrections
+
+Make minimal factual updates only to:
+
+- `docs/CURRENT_BUILD_STATE.md`
+- `docs/ASSUMPTIONS_AND_UNKNOWNS.md`
+- `docs/INSTANTLY_FIELD_MAP.md`
+- `docs/STATE_AND_IDEMPOTENCY.md`
+- `docs/REPLY_POLICY.md`
+- `reports/INSTANTLY_VERIFICATION_EVIDENCE.md`
+- `reports/UNRESOLVED_ITEMS.md`
+
+Required corrections:
+
+- Phase 4 is built
+- V1-V5 are verified
+- Ordinary unsubscribe is campaign-local under tested conditions
+- Exact email-level workspace block-list action is required for workspace-wide suppression
+- Zero or multiple reconciliation matches require human review and no second POST
+- Preserve the Phase 4B validator exception
+- Replace any real local n8n owner email with `<LOCAL_N8N_OWNER_EMAIL>`
+- Record the final Phase 5 verdict and remaining limitations
+
+Do not rewrite business policy, templates, historical evidence or unrelated prose.
+
+## Required reports
+
+Create:
+
+- `reports/VALIDATION_REPORT.md`
+- `reports/SECURITY_AUDIT.md`
+- `reports/FAILURE_MODE_AUDIT.md`
+
+Update:
+
+- `reports/UNRESOLVED_ITEMS.md`
+
+## Readiness verdict
+
+Use exactly one:
+
+- `NOT_READY`
+- `READY_FOR_DRY_RUN`
+- `READY_FOR_CONTROLLED_LIVE_TEST`
+
+Rules:
+
+- Never claim production readiness.
+- Use `READY_FOR_CONTROLLED_LIVE_TEST` only if every critical integration path has actual n8n runtime evidence.
+- If deterministic contracts pass but one or more integration paths remain represented only by offline/core runtime tests, use `READY_FOR_DRY_RUN`.
+
+## Limits
+
+- Maximum 11 files read.
+- Maximum 10 files written or edited.
+- No code generation.
+- No workflow JSON changes.
+- No shell commands.
+- No MCP calls.
+- No web search.
+- Final response under 300 words.
+
+Report:
+
+- evidence reviewed
+- tests passed/failed
+- defects found
+- documentation corrections
+- duplicate/suppression/uncertain-send/SLA conclusions
+- security/privacy conclusion
+- remaining blockers
+- final verdict
+- exact Phase 6 entry condition
+
+Stop after Phase 5.

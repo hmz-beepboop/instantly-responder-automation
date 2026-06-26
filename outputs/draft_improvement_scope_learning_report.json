@@ -1,0 +1,173 @@
+{
+  "script": "SL-PHASE-5N",
+  "timestamp": "2026-06-26T02:35:16Z",
+  "case_id": "case-ddb1f011",
+  "whatif_checks": [],
+  "apply_result": null,
+  "verify_html": [
+    {
+      "check": "scope select 'draft_improvement_scope' present in J code",
+      "pass": true
+    },
+    {
+      "check": "scope select option 'unsure_review_needed' present (default)",
+      "pass": true
+    },
+    {
+      "check": "scope select option 'all_ai_drafts' present",
+      "pass": true
+    },
+    {
+      "check": "scope select option 'current_micro_intent_only' present",
+      "pass": true
+    },
+    {
+      "check": "scope select option 'current_broad_category' present",
+      "pass": true
+    },
+    {
+      "check": "scope select option 'campaign_specific' present",
+      "pass": true
+    },
+    {
+      "check": "scope select option 'sender_specific' present",
+      "pass": true
+    },
+    {
+      "check": "scope label text 'apply only to this classification' present",
+      "pass": true
+    },
+    {
+      "check": "scope NOT hidden with display:none (visible on page load)",
+      "pass": true
+    },
+    {
+      "check": "'Draft improvement learning' heading present (5M)",
+      "pass": true
+    },
+    {
+      "check": "'Why did you change the draft reply?' present (5L)",
+      "pass": true
+    },
+    {
+      "check": "'What type of draft improvement was this?' present (5M)",
+      "pass": true
+    },
+    {
+      "check": "'What should the system do next time?' present (5L)",
+      "pass": true
+    },
+    {
+      "check": "Classification correction fields present (corrected_category)",
+      "pass": true
+    },
+    {
+      "check": "Approval button 'Approve and send' present",
+      "pass": true
+    }
+  ],
+  "verify_capture": [
+    {
+      "check": "L parses submit_draft_revision_reason (5L preserved)",
+      "pass": true
+    },
+    {
+      "check": "L parses submit_draft_revision_type (5L preserved)",
+      "pass": true
+    },
+    {
+      "check": "L parses submit_desired_future_behavior (5L preserved)",
+      "pass": true
+    },
+    {
+      "check": "L parses submit_draft_improvement_scope (5N)",
+      "pass": true
+    },
+    {
+      "check": "L has unsure_review_needed default for scope",
+      "pass": true
+    },
+    {
+      "check": "P1A event includes draft_revision_reason (5L preserved)",
+      "pass": true
+    },
+    {
+      "check": "P1A event includes desired_future_behavior (5L preserved)",
+      "pass": true
+    },
+    {
+      "check": "P1A event includes draft_improvement_scope (5N)",
+      "pass": true
+    },
+    {
+      "check": "P2A rule candidate includes draft_revision_reason (5L preserved)",
+      "pass": true
+    },
+    {
+      "check": "P2A rule candidate includes draft_improvement_scope (5N)",
+      "pass": true
+    },
+    {
+      "check": "P2A rule candidate includes proposed_rule_scope (5N)",
+      "pass": true
+    },
+    {
+      "check": "P2A proposed_rule_scope maps all_ai_drafts to global_draft_policy",
+      "pass": true
+    },
+    {
+      "check": "P2A candidate status proposed_shadow (5L preserved)",
+      "pass": true
+    },
+    {
+      "check": "P2A no auto-activation (no status: active)",
+      "pass": true
+    }
+  ],
+  "verify_scope": [
+    {
+      "scope_value": "current_micro_intent_only",
+      "ui_label": "Only this micro intent",
+      "proposed_scope": "micro_intent",
+      "safety_note": "Rule scoped to the specific micro_intent of this case. Does not affect other intent types.",
+      "pass": true
+    },
+    {
+      "scope_value": "current_broad_category",
+      "ui_label": "This broad category/classification",
+      "proposed_scope": "broad_category",
+      "safety_note": "Rule scoped to broad_category (e.g. POSITIVE_INTEREST). Applies to all micro-intents within that category.",
+      "pass": true
+    },
+    {
+      "scope_value": "all_ai_drafts",
+      "ui_label": "All AI-generated drafts, regardless of classification",
+      "proposed_scope": "global_draft_policy",
+      "safety_note": "BROADEST. Use only for universal principles: no invented proof, pricing, results, guarantees. Requires extra review.",
+      "pass": true
+    },
+    {
+      "scope_value": "campaign_specific",
+      "ui_label": "Only this campaign",
+      "proposed_scope": "campaign_scoped",
+      "safety_note": "Rule scoped to campaign_id of this case. Does not apply to other campaigns.",
+      "pass": true
+    },
+    {
+      "scope_value": "sender_specific",
+      "ui_label": "Only this sender",
+      "proposed_scope": "sender_scoped",
+      "safety_note": "Rule scoped to sender_email of this case. Narrow scope — future multi-sender use will require re-evaluation.",
+      "pass": true
+    },
+    {
+      "scope_value": "unsure_review_needed",
+      "ui_label": "Unsure — reviewer/rule approver should decide",
+      "proposed_scope": "requires_human_scope_decision",
+      "safety_note": "SAFE DEFAULT. Creates candidate but flags it as requiring human scope decision before any activation.",
+      "pass": true
+    }
+  ],
+  "new_version_id": null,
+  "pass": true
+}

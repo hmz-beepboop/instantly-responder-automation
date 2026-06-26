@@ -1,0 +1,62 @@
+{
+  "patch_id": "SL-PATCH-1.2",
+  "generated_at": "2026-06-20T11:14:34Z",
+  "whatif": true,
+  "backup_dir": "backups/sl-patch-20260620_111434",
+  "changed_workflows": [
+    "DecisionEngine",
+    "HumanApproval"
+  ],
+  "changed_nodes": [
+    "DecisionEngine/A. Deterministic Policy Stage/NOT_FOUND:VERSION_V8",
+    "DecisionEngine/A. Deterministic Policy Stage/NOT_FOUND:V8_HYDRATION_APPLIED",
+    "DecisionEngine/A. Deterministic Policy Stage/PATCHED:B_FLAT_BODY_FALLBACK",
+    "DecisionEngine/A. Deterministic Policy Stage/NOT_FOUND:IR_GUARD_BEFORE_UNKNOWN",
+    "HumanApproval/A. Build Review Case Record/STALE_CAMPAIGN_REPLACED_CODE"
+  ],
+  "dry_run_false_audit": {
+    "Intake": "OK:B. Configuration Gate",
+    "DecisionEngine": "OK:F. Safety Action Plan (Gated Contract, Pre-Approval)",
+    "HumanApproval": "OK:A. Build Review Case Record",
+    "Sender": "OK:A. Validate Decision Engine Output | OK:B. Re-run Send & Suppression Gates | OK:C2. Gate Rejection Terminal | OK:D. Compute Stable Send Key | OK:E2. Normalize Acquisition Result | OK:F2. Blocked Duplicate or Rerun Terminal | OK:G. Suppression Actions (Mock Adapter) | OK:H. Verify Suppression Results | OK:I2. Suppression Escalation Terminal | OK:K2. Build DRY_RUN Terminal Result | OK:N. Live Adapter Contract (Validation-Only, Unreachable) | OK:O. Live Send Gate Evaluation (14 Gates)",
+    "ErrorHandler": "OK:D. Build Notification Payload (Gated)",
+    "SLAWatchdog": "OK:G. Merge Alert Dedupe Results"
+  },
+  "live_cred_ready_audit": {
+    "Intake": "NO_CONFIG_NODE",
+    "DecisionEngine": "NO_CONFIG_NODE",
+    "HumanApproval": "NO_CONFIG_NODE",
+    "Sender": "OK:A. Validate Decision Engine Output | OK:B. Re-run Send & Suppression Gates | OK:C2. Gate Rejection Terminal | OK:D. Compute Stable Send Key | OK:E2. Normalize Acquisition Result | OK:F2. Blocked Duplicate or Rerun Terminal | OK:G. Suppression Actions (Mock Adapter) | OK:H. Verify Suppression Results | OK:I2. Suppression Escalation Terminal | OK:K2. Build DRY_RUN Terminal Result | OK:N. Live Adapter Contract (Validation-Only, Unreachable)",
+    "ErrorHandler": "NO_CONFIG_NODE",
+    "SLAWatchdog": "NO_CONFIG_NODE"
+  },
+  "campaign_allowlist_audit": {
+    "Intake": "TARGET_CAMPAIGN_PRESENT:B. Configuration Gate",
+    "DecisionEngine": "NO_CONFIG_NODE",
+    "HumanApproval": "TARGET_CAMPAIGN_PRESENT:A. Build Review Case Record",
+    "Sender": "TARGET_CAMPAIGN_PRESENT:A. Validate Decision Engine Output | TARGET_CAMPAIGN_PRESENT:B. Re-run Send & Suppression Gates | TARGET_CAMPAIGN_PRESENT:C2. Gate Rejection Terminal | TARGET_CAMPAIGN_PRESENT:D. Compute Stable Send Key | TARGET_CAMPAIGN_PRESENT:E2. Normalize Acquisition Result | TARGET_CAMPAIGN_PRESENT:F2. Blocked Duplicate or Rerun Terminal | TARGET_CAMPAIGN_PRESENT:G. Suppression Actions (Mock Adapter) | TARGET_CAMPAIGN_PRESENT:H. Verify Suppression Results | TARGET_CAMPAIGN_PRESENT:I2. Suppression Escalation Terminal | TARGET_CAMPAIGN_PRESENT:K2. Build DRY_RUN Terminal Result | TARGET_CAMPAIGN_PRESENT:N. Live Adapter Contract (Validation-Only, Unreachable) | TARGET_CAMPAIGN_PRESENT:O. Live Send Gate Evaluation (14 Gates)",
+    "ErrorHandler": "TARGET_CAMPAIGN_PRESENT:D. Build Notification Payload (Gated)",
+    "SLAWatchdog": "TARGET_CAMPAIGN_PRESENT:G. Merge Alert Dedupe Results"
+  },
+  "hydration_flat_body_audit": "NOT_FOUND: no replyText assignment anchor in 'C. Payload Validation' — manual inspection required",
+  "classifier_v8_audit": "NOT_FOUND:VERSION_V8 | NOT_FOUND:V8_HYDRATION_APPLIED | PATCHED:B_FLAT_BODY_FALLBACK | NOT_FOUND:IR_GUARD_BEFORE_UNKNOWN",
+  "result_blocker_audit": "NOT_FOUND: no results_claim blocker matched in 'E. Output Validation' — manual inspection required",
+  "stale_campaign_id_audit": "PATCHED: 1 replacement(s) of bcda01f7-21c9-4e12-9849-0a375b548467 -> 531e64ed-c225-4baf-97a9-4ec90dc34eb0",
+  "g_handoff_audit": "EMPTY_INPUT_DETECTED: G node 'G. Decision Engine Handoff' has mappingMode=defineBelow with value={}. Patch: change workflowInputs.mappingMode to 'autoMapInputData'. Not auto-applied — confirm with one live execution trace before patching. CONDITIONAL_FOLLOW_UP.",
+  "activation_summary": {
+    "Sender": "ACTIVATED",
+    "DecisionEngine": "ACTIVATED",
+    "HumanApproval": "ACTIVATED",
+    "ErrorHandler": "ACTIVATED",
+    "SLAWatchdog": "ACTIVATED",
+    "Intake": "ACTIVATED"
+  },
+  "test_harness_inactive": "CONFIRMED_INACTIVE: was already inactive before patch",
+  "warnings": [
+    "C2 hydration: NOT_FOUND: no replyText assignment anchor in 'C. Payload Validation' — manual inspection required",
+    "B classifier: UNKNOWN fallback anchor not found for IR guard injection. Manual mapping required in 'A. Deterministic Policy Stage'.",
+    "E output validator: NOT_FOUND: no results_claim blocker matched in 'E. Output Validation' — manual inspection required",
+    "G handoff: empty input detected statically. mappingMode='defineBelow', value={}. Apply fix manually: set workflowInputs.mappingMode='autoMapInputData' in node 'G. Decision Engine Handoff' after first live run confirms issue."
+  ],
+  "errors": []
+}

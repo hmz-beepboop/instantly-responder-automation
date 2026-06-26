@@ -1,0 +1,561 @@
+{
+  "phase": "SL-PHASE-5P",
+  "run_mode": "APPLY",
+  "timestamp": "2026-06-26T05:14:04Z",
+  "checks": [
+    {
+      "name": "Local versionId matches expected (23ffc9f2-a869-4313-a1cb-e032bd35e526)",
+      "pass": true,
+      "detail": "Found: 23ffc9f2-a869-4313-a1cb-e032bd35e526"
+    },
+    {
+      "name": "Node H found",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Node J found",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Node L found",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Node N found",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Node D found",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Node Q2 found",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "H: not yet patched (SL-5P)",
+      "pass": true,
+      "detail": "Idempotency guard"
+    },
+    {
+      "name": "J: not yet patched (SL-5P)",
+      "pass": true,
+      "detail": "Idempotency guard"
+    },
+    {
+      "name": "L: not yet patched (SL-5P)",
+      "pass": true,
+      "detail": "Idempotency guard"
+    },
+    {
+      "name": "N: not yet patched (SL-5P)",
+      "pass": true,
+      "detail": "Idempotency guard"
+    },
+    {
+      "name": "D: not yet patched (SL-5P)",
+      "pass": true,
+      "detail": "Idempotency guard"
+    },
+    {
+      "name": "Q2: not yet patched (SL-5P)",
+      "pass": true,
+      "detail": "Idempotency guard"
+    },
+    {
+      "name": "No Sender workflow referenced for modification",
+      "pass": true,
+      "detail": "Sender unchanged"
+    },
+    {
+      "name": "No Decision workflow referenced for modification",
+      "pass": true,
+      "detail": "Decision unchanged"
+    },
+    {
+      "name": "No autonomous mode change",
+      "pass": true,
+      "detail": "autonomous_enabled remains false"
+    },
+    {
+      "name": "DRY_RUN preserved",
+      "pass": true,
+      "detail": "dry_run flag unchanged"
+    },
+    {
+      "name": "Node H replaced",
+      "pass": true,
+      "detail": "Full jsCode replacement"
+    },
+    {
+      "name": "Node L replaced",
+      "pass": true,
+      "detail": "Full jsCode replacement"
+    },
+    {
+      "name": "Node N replaced",
+      "pass": true,
+      "detail": "Full jsCode replacement"
+    },
+    {
+      "name": "Node J: banner block inserted",
+      "pass": true,
+      "detail": "Banner and reopen state vars added"
+    },
+    {
+      "name": "Node J: textarea prefill from _5pLatestApprovedReply",
+      "pass": true,
+      "detail": "Uses latest approved reply text"
+    },
+    {
+      "name": "Node J: hidden original draft from _5pLatestApprovedReply",
+      "pass": true,
+      "detail": "Uses latest reply for change-detection"
+    },
+    {
+      "name": "Node J: approve button wrapped in if(!_5pIsSentCase)",
+      "pass": true,
+      "detail": "Pending-case approve button conditional"
+    },
+    {
+      "name": "Node J: sent-case buttons added",
+      "pass": true,
+      "detail": "Sent-case buttons present"
+    },
+    {
+      "name": "Node J: approve_and_send_followup button",
+      "pass": true,
+      "detail": "Follow-up button present"
+    },
+    {
+      "name": "Node J: corrected_category prefill from latest_corrections",
+      "pass": true,
+      "detail": "Latest correction prefilled"
+    },
+    {
+      "name": "Node J: corrected_micro_intent prefill from latest_corrections",
+      "pass": true,
+      "detail": "Latest correction prefilled"
+    },
+    {
+      "name": "Node D: expiry text inserted",
+      "pass": true,
+      "detail": "Expiry timestamp added to notification"
+    },
+    {
+      "name": "Node Q2: LEARNING_REVISION_APPROVED page added",
+      "pass": true,
+      "detail": "Learning-only result page"
+    },
+    {
+      "name": "Node Q2: FOLLOWUP_SEND_PENDING_MANUAL page added",
+      "pass": true,
+      "detail": "Follow-up pending page"
+    },
+    {
+      "name": "Node Q2: else-if chain preserved",
+      "pass": true,
+      "detail": "Original handling preserved"
+    },
+    {
+      "name": "H: REOPEN_ALLOWED_STATUSES defined",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "H: RESPONSE_APPROVED allowed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "H: LEARNING_REVISION_APPROVED allowed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "H: isReopenStatus skips expiry",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "J: already-sent banner",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "J: revision counter displayed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "J: _5pLatestApprovedReply for textarea",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "J: approve_learning_only button",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "J: approve_and_send_followup button",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "J: latest_corrections prefill",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "J: draft_revision_reason still present",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "J: draft_improvement_scope still present",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "J: target_classifications still present",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "J: classification correction section present",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "L: REOPEN_ALLOWED_STATUSES defined",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "L: RESPONSE_APPROVED allowed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "L: submit_repeat_send_reason captured",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "L: draft_revision_reason still captured",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "L: target_classifications still parsed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "N: approve_learning_only action handled",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "N: approve_and_send_followup action handled",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "N: LEARNING_REVISION_APPROVED status set",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "N: FOLLOWUP_SEND_PENDING_MANUAL status set",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "N: revision_count incremented",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "N: revision_history maintained",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "N: latest_corrections stored",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "N: latest_approved_reply_text stored",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "N: approve sets revision_count=1",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "N: controlled_send_key generated for followup",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "N: sender_audit_required flag set",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "N: RESPONSE_APPROVED status still set for approve",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "N: original approve/deny logic preserved",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "D: Review link expires line",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "D: min remaining calculation",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "D: no fixed expiry fallback text",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Q2: LEARNING_REVISION_APPROVED page",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Q2: FOLLOWUP_SEND_PENDING_MANUAL page",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Q2: original BLOCKED_MISSING_VARIABLES handling preserved",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Local JSON written",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Production PUT succeeded",
+      "pass": false,
+      "detail": "Response status code does not indicate success: 400 (Bad Request)."
+    },
+    {
+      "name": "J contains already-sent banner",
+      "pass": true,
+      "detail": "Banner text present in J code"
+    },
+    {
+      "name": "J contains revision counter",
+      "pass": true,
+      "detail": "Revision counter present"
+    },
+    {
+      "name": "J contains draft_revision_reason textarea",
+      "pass": true,
+      "detail": "Always visible"
+    },
+    {
+      "name": "J contains draft_revision_type select",
+      "pass": true,
+      "detail": "Always visible"
+    },
+    {
+      "name": "J contains desired_future_behavior",
+      "pass": true,
+      "detail": "Always visible"
+    },
+    {
+      "name": "J contains draft_improvement_scope",
+      "pass": true,
+      "detail": "Always visible"
+    },
+    {
+      "name": "J contains target_classifications checkboxes",
+      "pass": true,
+      "detail": "Always visible"
+    },
+    {
+      "name": "J contains separate broad_category checkbox",
+      "pass": true,
+      "detail": "Separate option"
+    },
+    {
+      "name": "J contains separate micro_intent checkbox",
+      "pass": true,
+      "detail": "Separate option"
+    },
+    {
+      "name": "J contains separate additional_intent checkbox",
+      "pass": true,
+      "detail": "Separate option per intent"
+    },
+    {
+      "name": "J no grouped additional-intents option",
+      "pass": true,
+      "detail": "Not grouped"
+    },
+    {
+      "name": "J buttons: approve_learning_only",
+      "pass": true,
+      "detail": "Present for sent cases"
+    },
+    {
+      "name": "J buttons: approve_and_send_followup",
+      "pass": true,
+      "detail": "Present for sent cases"
+    },
+    {
+      "name": "J buttons: approve (original, for pending)",
+      "pass": false,
+      "detail": "Original button for pending cases"
+    },
+    {
+      "name": "J classification corrections section present",
+      "pass": true,
+      "detail": "Classification corrections preserved"
+    },
+    {
+      "name": "J classification reason fields present",
+      "pass": true,
+      "detail": "Reasons preserved"
+    },
+    {
+      "name": "J banner conditional on _5pIsSentCase",
+      "pass": true,
+      "detail": "Only shown for RESPONSE_APPROVED/LEARNING_REVISION_APPROVED"
+    },
+    {
+      "name": "N: denied sets NO_REPLY_REQUIRED (not sent)",
+      "pass": true,
+      "detail": "Denied case never shows sent banner"
+    },
+    {
+      "name": "D: token_expires_at used for expiry",
+      "pass": true,
+      "detail": "Expiry from case record"
+    },
+    {
+      "name": "D: minutes remaining calculated",
+      "pass": true,
+      "detail": "Time remaining shown"
+    },
+    {
+      "name": "D: fallback no-expiry text",
+      "pass": true,
+      "detail": "Fallback if no expiry set"
+    },
+    {
+      "name": "D: TTL is 60min (from CONFIG)",
+      "pass": true,
+      "detail": "CONFIG.review.review_token_ttl_minutes=60 verified in A node"
+    },
+    {
+      "name": "N: approve_learning_only sets LEARNING_REVISION_APPROVED",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "N: revision_count incremented (+1)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "N: revision_history array maintained",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "N: latest_approved_reply_text updated",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "N: latest_corrections updated",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "N: no Sender call for approve_learning_only",
+      "pass": true,
+      "detail": "Sender not called"
+    },
+    {
+      "name": "Q2: LEARNING_REVISION_APPROVED page (no send)",
+      "pass": true,
+      "detail": "Correct result page shown"
+    },
+    {
+      "name": "L: submit_repeat_send_reason captured",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "N: repeat_send_reason required for followup",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "N: controlled_send_key generated",
+      "pass": true,
+      "detail": "case_id + revision for idempotency"
+    },
+    {
+      "name": "N: sender_audit_required flag",
+      "pass": true,
+      "detail": "Documents Sender audit requirement"
+    },
+    {
+      "name": "N: FOLLOWUP_SEND_PENDING_MANUAL status",
+      "pass": true,
+      "detail": "Manual send required"
+    },
+    {
+      "name": "Q2: followup page explains no auto-send",
+      "pass": true,
+      "detail": "User informed of manual step"
+    },
+    {
+      "name": "Sender NOT patched",
+      "pass": true,
+      "detail": "Sender unchanged — SL-PHASE-5Q will add controlled routing after audit"
+    }
+  ],
+  "version_before": "23ffc9f2-a869-4313-a1cb-e032bd35e526",
+  "version_after": "",
+  "nodes_patched": [
+    "H. Validate Review Token (GET)",
+    "L. Validate & Consume Review Token (POST)",
+    "N. Process Reviewer Decision",
+    "J. Render Review Form HTML",
+    "D. Build Google Chat Notification Payload",
+    "Q2. Build Non-Send Terminal Result"
+  ],
+  "errors": [
+    "Production PUT failed: Response status code does not indicate success: 400 (Bad Request)."
+  ],
+  "pass": false
+}

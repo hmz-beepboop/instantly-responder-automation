@@ -1,0 +1,17 @@
+{
+  "_comment": "Sample autonomous alert rules — machine-readable version of AUTONOMOUS_ALERTING_SPEC.md",
+  "_version": "1.0.0",
+  "_date": "2026-06-24",
+  "alert_rules": [
+    { "id": "ALERT-001", "name": "KILL_SWITCH_ACTIVATED", "severity": "CRITICAL", "condition": "emergency_disabled changed to true", "delivery": "immediate", "channels": "escalation_channels" },
+    { "id": "ALERT-002", "name": "BLOCKED_INTENT_PROCESSED", "severity": "CRITICAL", "condition": "permanently_blocked_intent AND was_autonomous_send=true", "delivery": "immediate", "channels": "escalation_channels" },
+    { "id": "ALERT-003", "name": "DAILY_CAP_VIOLATED", "severity": "CRITICAL", "condition": "sends_today > max_autonomous_sends_per_day", "delivery": "immediate", "channels": "escalation_channels" },
+    { "id": "ALERT-004", "name": "DUPLICATE_SEND_DETECTED", "severity": "CRITICAL", "condition": "idempotency_check_failed AND send_occurred", "delivery": "immediate", "channels": "escalation_channels" },
+    { "id": "ALERT-005", "name": "BAD_RESPONSE_DETECTED", "severity": "HIGH", "condition": "post_action_review_rating IN ['bad_response','should_have_escalated']", "delivery": "within_1h", "channels": "escalation_channels" },
+    { "id": "ALERT-006", "name": "PROSPECT_NEGATIVE_REPLY", "severity": "HIGH", "condition": "autonomous_case=true AND prospect_reaction=NEGATIVE", "delivery": "within_1h", "channels": "escalation_channels" },
+    { "id": "ALERT-007", "name": "POST_ACTION_REVIEW_OVERDUE", "severity": "MEDIUM", "condition": "was_autonomous_send=true AND reviewed_at IS NULL AND age > 24h", "delivery": "within_4h", "channels": "escalation_channels" },
+    { "id": "ALERT-008", "name": "CONFIG_CHANGED", "severity": "MEDIUM", "condition": "autonomous_config modified", "delivery": "within_4h", "channels": "escalation_channels" },
+    { "id": "ALERT-009", "name": "RULE_CANDIDATES_PENDING", "severity": "LOW", "condition": "proposed_shadow_candidates older than 7 days", "delivery": "daily_digest", "channels": "digest" },
+    { "id": "ALERT-010", "name": "OUT_OF_HOURS_VOLUME_HIGH", "severity": "LOW", "condition": "out_of_hours_candidates_today > 10", "delivery": "daily_digest", "channels": "digest" }
+  ]
+}

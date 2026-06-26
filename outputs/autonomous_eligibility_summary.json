@@ -1,0 +1,32 @@
+{
+  "action_breakdown": [
+    {
+      "action": "BLOCKED_PERMANENT",
+      "count": 39
+    },
+    {
+      "action": "HUMAN_REVIEW",
+      "count": 8
+    },
+    {
+      "action": "SHADOW_LOG",
+      "count": 28
+    }
+  ],
+  "config_mode": "SAMPLE_CONFIG_SHADOW_ONLY",
+  "blocked_or_human_review": 47,
+  "production_writes": false,
+  "safety_gate_result": "PASS",
+  "top_blocked_reasons": [
+    {
+      "count": 75,
+      "reason": "autonomous_enabled=false"
+    }
+  ],
+  "total_scenarios": 75,
+  "script": "SL-PHASE-5C-autonomous-eligibility-engine.ps1",
+  "would_be_shadow_eligible": 28,
+  "hard_failures": 0,
+  "would_send_live_now": 0,
+  "generated": "2026-06-24T10:49:38Z"
+}

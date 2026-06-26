@@ -1,0 +1,78 @@
+{
+  "fixture_id": "phase3_01_positive_interest_no_scheduling",
+  "description": "Positive interest reply with no explicit scheduling intent. Should be classified T1 (POSITIVE_INTEREST) by the mock semantic classifier (no deterministic rule matches), routed to human review with a draft using T1_SCENARIO_C_UNCLEAR_INTEREST.",
+  "input": {
+    "intake_id": "phase3-fixture-01-positive-interest",
+    "event_id": "evt-phase3-001",
+    "email_id": "email-phase3-001",
+    "event_type": "reply_received",
+    "lead_email": "jordan.smith@prospectco.test",
+    "from_address_email": "jordan.smith@prospectco.test",
+    "email_account": "outbound1@hmzvalidation.test",
+    "reply_subject": "Re: Quick question about your sales pipeline",
+    "reply_text": "This sounds interesting, tell me more about how it works.",
+    "reply_text_snippet": "This sounds interesting, tell me more about how it works.",
+    "timestamp": "2026-06-08T14:32:00Z",
+    "campaign_id": "campaign-validation-001",
+    "validation_cell": "CELL_1_SAAS_SALES_HIRING",
+    "workspace": "hmz-workspace-dev",
+    "campaign_name": "US B2B Validation Sprint - Cell 1",
+    "step": 2,
+    "variant": 1,
+    "is_first": true,
+    "thread_id": "thread-phase3-001",
+    "message_id": "<msg-phase3-001@instantly.test>",
+    "unibox_url": "https://app.instantly.test/unibox/thread-phase3-001"
+  },
+  "expected": {
+    "payload_status": "COMPLETE",
+    "deterministic": {
+      "deterministic_match": false,
+      "noop_match": false,
+      "category": null,
+      "rule_id": null,
+      "media_flag": false
+    },
+    "classifier": {
+      "category": "POSITIVE_INTEREST",
+      "confidence": 0.75,
+      "interest_stage": "VALIDATION_SPRINT_INTEREST",
+      "permitted_automation_action": "AI_DRAFT",
+      "requested_action": "AWAIT_NEXT_STEPS"
+    },
+    "decision": {
+      "category": "POSITIVE_INTEREST",
+      "confidence": 0.75,
+      "confidence_overridden": false,
+      "stop_active_sequence": true,
+      "durable_dnc_intent": false,
+      "address_suppression_intent": "NONE",
+      "review_hold": false,
+      "legal_review_required": false,
+      "privacy_review_required": false,
+      "reputational_review_required": false,
+      "human_review_required": true,
+      "reply_permitted": true,
+      "reply_template_id": "T1_SCENARIO_C_UNCLEAR_INTEREST",
+      "reply_draft_status": "DRAFT_PENDING_REVIEW",
+      "external_action_status": "NOT_PERFORMED",
+      "follow_up_date": null,
+      "interest_stage": "VALIDATION_SPRINT_INTEREST",
+      "terminal_status": "REVIEW_HOLD"
+    },
+    "draft": {
+      "template_id": "T1_SCENARIO_C_UNCLEAR_INTEREST",
+      "draft_text_is_null": false,
+      "missing_variables": ["firstName", "senderName"],
+      "human_review_required": true
+    },
+    "validation_learning": {
+      "voice_of_customer_excerpt": "This sounds interesting, tell me more about how it works.",
+      "all_other_fields": "unknown_or_null_default"
+    },
+    "validation": {
+      "valid": true
+    },
+    "notes": "No det-* rule matches (no unsubscribe/legal/hostile/bounce/ooo/price/booking/referral/wrong-person language). Section B mock classifier matches positiveRx ('sounds interesting') -> POSITIVE_INTEREST conf 0.75 (>= 0.60, no override). interest_stage VALIDATION_SPRINT_INTEREST is never escalated to ALPHA_INTEREST. nes.lead_first_name is not populated by Workflow 1 Section D, so resolveFirstName always returns null and 'firstName' is always a missing_variable for templated drafts (see docs/ASSUMPTIONS_AND_UNKNOWNS.md D7)."
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "fixture_id": "phase3_13_distinct_malformed_payload",
+  "description": "A second, content-distinct malformed payload (different intake_id, lead_email, reply_text, and an explicit empty-string event_type rather than a missing one) used alongside fixture 11 to confirm reports/UNRESOLVED_ITEMS.md U3 is resolved: Workflow 1 Section E1's identifier_poor_hash scheme hashes raw_payload itself, so two different malformed payloads get DIFFERENT idempotency_key values and are each processed independently as op-malformed/REJECTED, instead of the second being misread as a duplicate of the first.",
+  "input": {
+    "intake_id": "phase3-fixture-13-distinct-malformed-payload",
+    "event_type": "",
+    "lead_email": "alex.morgan@prospectco.test",
+    "reply_text": "Just a quick note - thanks."
+  },
+  "expected": {
+    "payload_status": "MALFORMED",
+    "validation_errors": [
+      { "field": "event_type", "issue": "MISSING_OR_INVALID" }
+    ],
+    "validated": {
+      "event_id": null,
+      "email_id": null,
+      "event_type": null,
+      "lead_email": null,
+      "from_address_email": null,
+      "email_account": null,
+      "reply_subject": null,
+      "reply_text": null,
+      "timestamp": null,
+      "campaign_id": null,
+      "validation_cell": null
+    },
+    "nes": {
+      "event_type": "UNKNOWN",
+      "lead_email": "UNKNOWN",
+      "campaign_id": "UNKNOWN",
+      "campaign_context": {
+        "validation_cell": "UNKNOWN",
+        "segment": "UNKNOWN"
+      }
+    },
+    "idempotency": {
+      "proposed_state": "REJECTED",
+      "key_scheme": "identifier_poor_hash",
+      "idempotency_key": { "starts_with": "identifier_poor:instantly:payload_hash=" }
+    },
+    "prefilter": {
+      "is_malformed_payload": true,
+      "is_unsupported_event_type": true
+    },
+    "deterministic": {
+      "deterministic_match": true,
+      "noop_match": false,
+      "category": "OTHER",
+      "rule_id": "op-malformed",
+      "media_flag": false
+    },
+    "classifier": {
+      "category": "OTHER",
+      "confidence": 1,
+      "interest_stage": "UNKNOWN"
+    },
+    "decision": {
+      "category": "OTHER",
+      "confidence": 1,
+      "confidence_overridden": false,
+      "stop_active_sequence": false,
+      "durable_dnc_intent": false,
+      "address_suppression_intent": "NONE",
+      "review_hold": false,
+      "legal_review_required": false,
+      "privacy_review_required": false,
+      "reputational_review_required": false,
+      "human_review_required": true,
+      "reply_permitted": false,
+      "reply_template_id": null,
+      "reply_draft_status": "NO_DRAFT_HUMAN_ONLY",
+      "external_action_status": "NOT_PERFORMED",
+      "follow_up_date": null,
+      "interest_stage": "UNKNOWN",
+      "terminal_status": "REJECTED",
+      "reason_contains": "Payload failed validation in Workflow 1 (op-malformed)"
+    },
+    "draft": {
+      "template_id": null,
+      "draft_text_is_null": true,
+      "missing_variables": [],
+      "human_review_required": true
+    },
+    "validation": {
+      "valid": true
+    },
+    "notes": "Compared against fixture 11 (also MALFORMED, different intake_id/lead_email/reply_text and an explicit empty-string event_type instead of a missing one): the run_synthetic_tests.js main loop performs a cross-check confirming idempotency.idempotency_key for fixture 11 and fixture 13 are NOT equal (different canonicalPayloadHash(raw_payload) -> different identifier_poor_hash key), and both fixtures independently reach op-malformed/REJECTED rather than either being misread as a duplicate of the other. This resolves reports/UNRESOLVED_ITEMS.md U3."
+  }
+}

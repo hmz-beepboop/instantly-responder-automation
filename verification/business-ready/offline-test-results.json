@@ -1,0 +1,129 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-06-15T17:27:07.302Z",
+  "total": 23,
+  "passed": 23,
+  "failed": 0,
+  "overall_result": "PASS",
+  "results": [
+    {
+      "id": "workflows_parse",
+      "description": "All 7 workflow JSON files parse as valid JSON",
+      "passed": true
+    },
+    {
+      "id": "workflows_inactive",
+      "description": "All 7 workflows have active=false",
+      "passed": true
+    },
+    {
+      "id": "workflow_names_canonical",
+      "description": "Each workflow file has its expected canonical name",
+      "passed": true
+    },
+    {
+      "id": "no_credentials",
+      "description": "No node in any of the 7 workflows has a credentials field",
+      "passed": true
+    },
+    {
+      "id": "no_mock_classifier_remnants",
+      "description": "Workflow 02 contains no mock-classifier naming and uses the deterministic-heuristic-1.0 classifier",
+      "passed": true,
+      "details": {
+        "hasMockClassifier": false,
+        "hasDeterministicClassifier": true
+      }
+    },
+    {
+      "id": "non_english_reply_routes_to_t15",
+      "description": "A non-English reply is classified AMBIGUOUS via NON_ENGLISH_FALLBACK_T15, while an English reply reaches the deterministic heuristic classifier",
+      "passed": true
+    },
+    {
+      "id": "safety_action_plan_pre_approval_independent",
+      "description": "F. Safety Action Plan computes required suppression actions with a gated, unexecuted request contract, independent of the reply-approval gate",
+      "passed": true
+    },
+    {
+      "id": "live_adapter_additional_contracts",
+      "description": "The real (gated/unreachable) Instantly V2 adapter contract includes update-interest-status, remove-subsequence, add-to-blocklist, get-email, and list-emails",
+      "passed": true
+    },
+    {
+      "id": "approval_gate_blocks_without_durable_approval",
+      "description": "Without a durable approval record, the Reply Sender gates block with approval_gate_passed=false and reasons including approval_missing",
+      "passed": true
+    },
+    {
+      "id": "approval_gate_passes_via_human_approval_handoff",
+      "description": "The Human Approval handoff mapping (Q) populates approval.approved=true and the reviewer-edited draft text, and the Reply Sender gates pass (gates.passed=true)",
+      "passed": true
+    },
+    {
+      "id": "review_token_lifecycle",
+      "description": "The review token validator correctly distinguishes not-found, wrong-token, expired, already-decided, and valid one-time tokens",
+      "passed": true
+    },
+    {
+      "id": "reviewer_decision_approve_edit_identity_deny_blocked",
+      "description": "Reviewer decisions correctly handle approve (with edited text and approver identity persisted), deny (with reason), and blocked-missing-variables",
+      "passed": true
+    },
+    {
+      "id": "fixed_template_booking_link_blocks_and_human_only_editable",
+      "description": "A fixed-template booking reply with no sender mapping blocks on bookingLink, while a HUMAN_ONLY reply has no blocked variables and renders an editable draft textarea",
+      "passed": true
+    },
+    {
+      "id": "review_case_id_idempotent",
+      "description": "review_case.case_id is a deterministic, idempotent hash of (intake_id, policy_version)",
+      "passed": true
+    },
+    {
+      "id": "approval_handoff_field_mapping_and_intake_routing",
+      "description": "Workflow 07's Reply Sender handoff maps nes/decision/validation through and synthesizes approval.approved=true with the edited draft text; Intake's H node routes to the Human Approval workflow",
+      "passed": true
+    },
+    {
+      "id": "gated_google_chat_notifications",
+      "description": "Workflows 04, 05, and 07 each contain a gated Google Chat httpRequest node ($env.GOOGLE_CHAT_WEBHOOK_URL); any other HTTP target is either the internal sidecar or a gated, credentialPlaceholder-marked live-path call to api.instantly.ai introduced by build-live-path.mjs",
+      "passed": true
+    },
+    {
+      "id": "workflow07_data_table_placeholder_consistent",
+      "description": "All 5 Data Table nodes in workflow 07 reference a single patchable __PLACEHOLDER_REVIEW_CASES_DATA_TABLE_ID__",
+      "passed": true
+    },
+    {
+      "id": "embedded_code_nodes_compile",
+      "description": "Every Code node jsCode body in all 7 workflows is syntactically valid JavaScript",
+      "passed": true
+    },
+    {
+      "id": "config_safe_defaults",
+      "description": "config/business-ready.config.json keeps DRY_RUN true, LIVE_CAMPAIGNS empty, all suppression/live-credential flags false, Google Chat not configured, and records owner inputs as incomplete",
+      "passed": true
+    },
+    {
+      "id": "powershell_scripts_present_and_fail_closed",
+      "description": "All 4 business-ready PowerShell scripts (apply, local runtime acceptance, controlled-live acceptance, rollback) exist, require HMZ_N8N_API_KEY where applicable, cover all 7 workflows, patch all placeholders, and the controlled-live script performs read-only checks only",
+      "passed": true
+    },
+    {
+      "id": "regression_phase4a",
+      "description": "verification\\phase4a\\run-offline-tests.mjs regression suite reports 42/42",
+      "passed": true
+    },
+    {
+      "id": "regression_phase4b",
+      "description": "verification\\phase4b\\run-offline-tests.mjs regression suite reports 31/31",
+      "passed": true
+    },
+    {
+      "id": "regression_integration_closure",
+      "description": "verification\\integration-closure\\run-offline-tests.mjs regression suite reports 16/16",
+      "passed": true
+    }
+  ]
+}

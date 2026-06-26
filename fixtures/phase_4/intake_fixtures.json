@@ -1,0 +1,455 @@
+[
+  {
+    "id": "intake-positive-interest",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Positive interest, no booking/info ask -> T1, FIXED_TEMPLATE_APPROVAL",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "reply": { "subject": "Re: quick question", "text": "Thanks, this sounds good - happy to talk it through." }
+    },
+    "expected": {
+      "intake_outcome": "ACCEPTED",
+      "category": "T1",
+      "reply_mode": "FIXED_TEMPLATE_APPROVAL",
+      "stop_sequence": true,
+      "suppression_level": "NONE",
+      "human_review_required": true
+    }
+  },
+  {
+    "id": "intake-information-request",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Information request ('how does it work') -> T2, AI_DRAFT_APPROVAL",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "reply": { "subject": "Re: quick question", "text": "How does it work? Can you tell me more about the offer?" }
+    },
+    "expected": {
+      "intake_outcome": "ACCEPTED",
+      "category": "T2",
+      "reply_mode": "AI_DRAFT_APPROVAL",
+      "stop_sequence": true,
+      "suppression_level": "NONE",
+      "human_review_required": true
+    }
+  },
+  {
+    "id": "intake-booking-request",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Explicit scheduling ask -> T3, FIXED_TEMPLATE_APPROVAL",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "reply": { "subject": "Re: quick question", "text": "Can you send me your calendar so we can schedule a call?" }
+    },
+    "expected": {
+      "intake_outcome": "ACCEPTED",
+      "category": "T3",
+      "reply_mode": "FIXED_TEMPLATE_APPROVAL",
+      "stop_sequence": true,
+      "suppression_level": "NONE",
+      "human_review_required": true
+    }
+  },
+  {
+    "id": "intake-timing-objection",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Vague timing objection -> T4, FIXED_TEMPLATE_APPROVAL",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "reply": { "subject": "Re: quick question", "text": "Not a good time, maybe later. Try again next quarter." }
+    },
+    "expected": {
+      "intake_outcome": "ACCEPTED",
+      "category": "T4",
+      "reply_mode": "FIXED_TEMPLATE_APPROVAL",
+      "stop_sequence": true,
+      "suppression_level": "NONE",
+      "human_review_required": true
+    }
+  },
+  {
+    "id": "intake-referral",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Referral to another contact -> T5, FIXED_TEMPLATE_APPROVAL (ack only)",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "reply": { "subject": "Re: quick question", "text": "I'm not the right person for this, please contact Jane Smith on our sales team." }
+    },
+    "expected": {
+      "intake_outcome": "ACCEPTED",
+      "category": "T5",
+      "reply_mode": "FIXED_TEMPLATE_APPROVAL",
+      "stop_sequence": true,
+      "suppression_level": "NONE",
+      "human_review_required": true
+    }
+  },
+  {
+    "id": "intake-not-interested",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Genuine decline -> T6, FIXED_TEMPLATE_APPROVAL ack, NOT_INTERESTED",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "reply": { "subject": "Re: quick question", "text": "Thanks but no thanks, we're all set for now." }
+    },
+    "expected": {
+      "intake_outcome": "ACCEPTED",
+      "category": "T6",
+      "reply_mode": "FIXED_TEMPLATE_APPROVAL",
+      "stop_sequence": true,
+      "suppression_level": "NONE",
+      "human_review_required": true,
+      "interest_status_update": "NOT_INTERESTED"
+    }
+  },
+  {
+    "id": "intake-unsubscribe",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Prospect-stated opt-out -> T7, strongest verified suppression",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "reply": { "subject": "Re: quick question", "text": "Please unsubscribe me from this list, stop emailing me." }
+    },
+    "expected": {
+      "intake_outcome": "ACCEPTED",
+      "category": "T7",
+      "reply_mode": "FIXED_TEMPLATE_APPROVAL",
+      "stop_sequence": true,
+      "suppression_level": "WORKSPACE_DNC",
+      "human_review_required": false,
+      "reason_codes": ["det-unsub-001"]
+    }
+  },
+  {
+    "id": "intake-out-of-office",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Out of office auto-reply -> T8, NO_REPLY, pause",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "reply": { "subject": "Automatic reply: Out of office", "text": "I am currently out of office and will respond when I return." }
+    },
+    "expected": {
+      "intake_outcome": "ACCEPTED",
+      "category": "T8",
+      "reply_mode": "NO_REPLY",
+      "stop_sequence": false,
+      "pause_sequence": true,
+      "suppression_level": "NONE",
+      "human_review_required": false
+    }
+  },
+  {
+    "id": "intake-bounce",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Bounce with delivery-status evidence -> T9, NO_REPLY, data cleanup",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "delivery_status_evidence": true,
+      "reply": { "subject": "Mail delivery failed", "text": "Mailer-daemon: delivery failed - undeliverable mail." }
+    },
+    "expected": {
+      "intake_outcome": "ACCEPTED",
+      "category": "T9",
+      "reply_mode": "NO_REPLY",
+      "stop_sequence": true,
+      "suppression_level": "NONE",
+      "human_review_required": false,
+      "data_cleanup_required": true
+    }
+  },
+  {
+    "id": "intake-wrong-person",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Wrong person, no longer in role -> T10, FIXED_TEMPLATE_APPROVAL ack",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "reply": { "subject": "Re: quick question", "text": "Wrong person - I no longer work here and I'm not in that role anymore." }
+    },
+    "expected": {
+      "intake_outcome": "ACCEPTED",
+      "category": "T10",
+      "reply_mode": "FIXED_TEMPLATE_APPROVAL",
+      "stop_sequence": true,
+      "suppression_level": "NONE",
+      "human_review_required": true
+    }
+  },
+  {
+    "id": "intake-pricing",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Pricing/commercial intent -> T11, HUMAN_ONLY",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "reply": { "subject": "Re: quick question", "text": "Can you send me a quote and pricing details for the enterprise plan?" }
+    },
+    "expected": {
+      "intake_outcome": "ACCEPTED",
+      "category": "T11",
+      "reply_mode": "HUMAN_ONLY",
+      "stop_sequence": true,
+      "suppression_level": "NONE",
+      "human_review_required": true
+    }
+  },
+  {
+    "id": "intake-legal-privacy-complaint",
+    "group": "intake",
+    "synthetic": true,
+    "description": "GDPR / data-origin question -> T12, REVIEW_HOLD, legal+privacy review",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "reply": { "subject": "Re: quick question", "text": "Under GDPR I am requesting you delete my data - where did you get my email?" }
+    },
+    "expected": {
+      "intake_outcome": "ACCEPTED",
+      "category": "T12",
+      "reply_mode": "HUMAN_ONLY",
+      "stop_sequence": true,
+      "suppression_level": "REVIEW_HOLD",
+      "human_review_required": true,
+      "escalation_required": true,
+      "legal_review_required": true,
+      "privacy_review_required": true,
+      "reputational_review_required": false
+    }
+  },
+  {
+    "id": "intake-hostile-reputational",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Profanity-driven complaint, no legal content -> T13, reputational review only",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "reply": { "subject": "Re: quick question", "text": "You are an idiot and a fraud, I will make sure everyone knows about this." }
+    },
+    "expected": {
+      "intake_outcome": "ACCEPTED",
+      "category": "T13",
+      "reply_mode": "HUMAN_ONLY",
+      "stop_sequence": true,
+      "suppression_level": "REVIEW_HOLD",
+      "human_review_required": true,
+      "escalation_required": true,
+      "legal_review_required": false,
+      "reputational_review_required": true
+    }
+  },
+  {
+    "id": "intake-attachment-dependent",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Attachment present -> T14, HUMAN_ONLY, never claim review",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "reply": { "subject": "Re: quick question", "text": "Please see the attached proposal for review.", "has_attachments": true }
+    },
+    "expected": {
+      "intake_outcome": "ACCEPTED",
+      "category": "T14",
+      "reply_mode": "HUMAN_ONLY",
+      "stop_sequence": true,
+      "suppression_level": "NONE",
+      "human_review_required": true
+    }
+  },
+  {
+    "id": "intake-ambiguous",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Genuinely unclear reply with no deterministic match -> T15, HUMAN_ONLY",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "reply": { "subject": "Re: quick question", "text": "Hmm, not sure, maybe, who knows." }
+    },
+    "expected": {
+      "intake_outcome": "ACCEPTED",
+      "category": "T15",
+      "reply_mode": "HUMAN_ONLY",
+      "stop_sequence": true,
+      "suppression_level": "NONE",
+      "human_review_required": true,
+      "reason_codes": ["ai_classifier_fallback"]
+    }
+  },
+  {
+    "id": "intake-other",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Off-topic reply classified Other by the (mocked) AI -> T16, fail closed",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "mock_ai_category": "T16",
+      "reply": { "subject": "Re: quick question", "text": "Just wanted to say hi, no particular reason." }
+    },
+    "expected": {
+      "intake_outcome": "ACCEPTED",
+      "category": "T16",
+      "reply_mode": "HUMAN_ONLY",
+      "stop_sequence": true,
+      "suppression_level": "NONE",
+      "human_review_required": true,
+      "reason_codes": ["ai_classifier_fallback"]
+    }
+  },
+  {
+    "id": "intake-duplicate-webhook",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Same dedupe_key delivered twice -> rejected as duplicate, no reprocessing",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "duplicate_of": "instantly:campaign-123:lead@example.com:re-quick-question:123456",
+      "reply": { "subject": "Re: quick question", "text": "Thanks, interested!" }
+    },
+    "expected": {
+      "intake_outcome": "DUPLICATE_REJECTED",
+      "category": null,
+      "human_review_required": false,
+      "reason_codes": ["duplicate_dedupe_key"]
+    }
+  },
+  {
+    "id": "intake-repeated-execution",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Same intake_id reprocessed by a manual/automated rerun -> rejected, idempotent",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "duplicate_intake_id": true,
+      "reply": { "subject": "Re: quick question", "text": "Thanks, interested!" }
+    },
+    "expected": {
+      "intake_outcome": "DUPLICATE_REJECTED",
+      "category": null,
+      "human_review_required": false,
+      "reason_codes": ["repeated_execution_duplicate_intake_id"]
+    }
+  },
+  {
+    "id": "intake-self-sent-event",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Auto-reply flag set on our own sent message -> NOOP, no automated reply",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "is_auto_reply": true,
+      "reply": { "subject": "Re: quick question", "text": "This is an automated response." }
+    },
+    "expected": {
+      "intake_outcome": "SELF_SENT_NOOP",
+      "category": "NOOP",
+      "reply_mode": "NO_REPLY",
+      "stop_sequence": false,
+      "suppression_level": "NONE",
+      "human_review_required": false,
+      "reason_codes": ["self_sent_or_auto_reply"]
+    }
+  },
+  {
+    "id": "intake-unsupported-event",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Non-reply_received event type -> NOOP, never processed as a reply",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "lead_unsubscribed",
+      "reply": { "subject": "", "text": "" }
+    },
+    "expected": {
+      "intake_outcome": "UNSUPPORTED_EVENT_NOOP",
+      "category": "NOOP",
+      "reply_mode": "NO_REPLY",
+      "stop_sequence": false,
+      "suppression_level": "NONE",
+      "human_review_required": false,
+      "reason_codes": ["unsupported_event_type"]
+    }
+  },
+  {
+    "id": "intake-empty-reply",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Empty body, no attachments -> T15 escalation, never silently dropped",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "reply": { "subject": "Re: quick question", "text": "", "has_attachments": false }
+    },
+    "expected": {
+      "intake_outcome": "EMPTY_REPLY_ESCALATE",
+      "category": "T15",
+      "reply_mode": "HUMAN_ONLY",
+      "stop_sequence": true,
+      "suppression_level": "NONE",
+      "human_review_required": true,
+      "reason_codes": ["empty_reply"]
+    }
+  },
+  {
+    "id": "intake-malformed-payload",
+    "group": "intake",
+    "synthetic": true,
+    "description": "Structurally malformed webhook payload -> rejected, human review",
+    "check": "classify_intake",
+    "input": {
+      "malformed": true
+    },
+    "expected": {
+      "intake_outcome": "MALFORMED_PAYLOAD_REJECTED",
+      "category": null,
+      "human_review_required": true,
+      "reason_codes": ["malformed_payload"]
+    }
+  },
+  {
+    "id": "intake-campaign-cell-mismatch",
+    "group": "intake",
+    "synthetic": true,
+    "description": "campaign_id not found in registry -> campaign_context UNKNOWN, human review (T16)",
+    "check": "classify_intake",
+    "input": {
+      "event_type": "reply_received",
+      "campaign_known": false,
+      "reply": { "subject": "Re: quick question", "text": "Looks interesting, tell me more." }
+    },
+    "expected": {
+      "intake_outcome": "CAMPAIGN_UNKNOWN_HUMAN_REVIEW",
+      "category": "T16",
+      "reply_mode": "HUMAN_ONLY",
+      "stop_sequence": true,
+      "suppression_level": "NONE",
+      "human_review_required": true,
+      "reason_codes": ["campaign_context_unknown"]
+    }
+  }
+]

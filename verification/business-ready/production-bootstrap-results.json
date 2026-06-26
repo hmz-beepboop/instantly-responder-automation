@@ -1,0 +1,17 @@
+{
+  "timestampUtc": "2026-06-17T18:53:07.9494859+00:00",
+  "n8nBaseUrl": "https://n8n.hmzaiautomation.com",
+  "reviewerEmail": "humza@hmzaiautomation.com",
+  "tablesEmpty": true,
+  "workflowsCreated": false,
+  "workflowsApplied": true,
+  "workflowsInactive": true,
+  "credentialBindingsVerified": true,
+  "placeholderScanPassed": true,
+  "approvedSenderCount": 24,
+  "originalSenderPassthroughVerified": true,
+  "controlledLivePreflight": true,
+  "instantlyWebhookId": "019ed6ee-b628-7388-8a0f-ceb0e973ff98",
+  "instantlyWebhookStatus": 1,
+  "overallResult": "PASS"
+}

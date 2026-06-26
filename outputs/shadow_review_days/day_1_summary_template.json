@@ -1,0 +1,41 @@
+{
+  "_description": "Day 1 shadow review summary template. Export at end of Day 1 using the helper script, or fill manually.",
+  "_version": "1.0",
+  "_date_prepared": "2026-06-24",
+  "_instruction": "Run: .\\scripts\\SL-PHASE-5I-manual-shadow-review-helper.ps1 -ExportDailySummary -Day 1  OR fill in manually after completing day_1_owner_working_file.json",
+
+  "summary_date": "FILL_IN",
+  "review_day": 1,
+  "generated_at": "FILL_IN",
+  "cases_in_log": 0,
+  "correct_decisions": 0,
+  "incorrect_decisions": 0,
+  "false_positive_count": 0,
+  "false_negative_count": 0,
+  "learning_signals": [],
+  "stop_flag_raised": false,
+  "stop_reason": "",
+
+  "gate2_progress": {
+    "days_complete": 0,
+    "days_remaining": 14,
+    "cases_reviewed_total": 0,
+    "cases_required_minimum": 30,
+    "rc_shadow_001_signed": false,
+    "rc_shadow_002_signed": false,
+    "allowlist_draft_ready": false
+  },
+
+  "owner_day_assessment": "",
+  "next_day_notes": "",
+
+  "daily_decision_breakdown": {
+    "SHADOW_ELIGIBLE": 0,
+    "BLOCKED_INTENT": 0,
+    "BLOCKED_ALLOWLIST": 0,
+    "BLOCKED_PERMANENT": 0,
+    "HUMAN_REVIEW": 0,
+    "MULTI_INTENT_BLOCK": 0,
+    "ESCALATED": 0
+  }
+}

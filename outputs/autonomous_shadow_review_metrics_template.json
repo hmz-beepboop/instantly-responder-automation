@@ -1,0 +1,127 @@
+{
+  "template_type": "autonomous_shadow_review_metrics",
+  "version": "1.0.0",
+  "generated_at": "2026-06-24T11:15:00Z",
+  "phase": "5H",
+  "shadow_evaluator_workflow_id": "aHzLtQiv6G8h1bqD",
+
+  "period": {
+    "start_date": null,
+    "end_date_target": null,
+    "minimum_days": 14,
+    "minimum_candidates": 30
+  },
+
+  "daily_logs": [
+    {
+      "day": 1, "date": null, "candidates_reviewed": 0,
+      "would_send_live_now_true_incidents": 0, "critical_misses": 0,
+      "owner_agreements": 0, "owner_disagreements": 0,
+      "shadow_evaluator_deactivated_after": true, "notes": ""
+    },
+    {
+      "day": 2, "date": null, "candidates_reviewed": 0,
+      "would_send_live_now_true_incidents": 0, "critical_misses": 0,
+      "owner_agreements": 0, "owner_disagreements": 0,
+      "shadow_evaluator_deactivated_after": true, "notes": ""
+    },
+    {
+      "day": 3, "date": null, "candidates_reviewed": 0,
+      "would_send_live_now_true_incidents": 0, "critical_misses": 0,
+      "owner_agreements": 0, "owner_disagreements": 0,
+      "shadow_evaluator_deactivated_after": true, "notes": ""
+    },
+    {
+      "day": 4, "date": null, "candidates_reviewed": 0,
+      "would_send_live_now_true_incidents": 0, "critical_misses": 0,
+      "owner_agreements": 0, "owner_disagreements": 0,
+      "shadow_evaluator_deactivated_after": true, "notes": ""
+    },
+    {
+      "day": 5, "date": null, "candidates_reviewed": 0,
+      "would_send_live_now_true_incidents": 0, "critical_misses": 0,
+      "owner_agreements": 0, "owner_disagreements": 0,
+      "shadow_evaluator_deactivated_after": true, "notes": ""
+    },
+    {
+      "day": 6, "date": null, "candidates_reviewed": 0,
+      "would_send_live_now_true_incidents": 0, "critical_misses": 0,
+      "owner_agreements": 0, "owner_disagreements": 0,
+      "shadow_evaluator_deactivated_after": true, "notes": ""
+    },
+    {
+      "day": 7, "date": null, "candidates_reviewed": 0,
+      "would_send_live_now_true_incidents": 0, "critical_misses": 0,
+      "owner_agreements": 0, "owner_disagreements": 0,
+      "shadow_evaluator_deactivated_after": true, "notes": ""
+    },
+    {
+      "day": 8, "date": null, "candidates_reviewed": 0,
+      "would_send_live_now_true_incidents": 0, "critical_misses": 0,
+      "owner_agreements": 0, "owner_disagreements": 0,
+      "shadow_evaluator_deactivated_after": true, "notes": ""
+    },
+    {
+      "day": 9, "date": null, "candidates_reviewed": 0,
+      "would_send_live_now_true_incidents": 0, "critical_misses": 0,
+      "owner_agreements": 0, "owner_disagreements": 0,
+      "shadow_evaluator_deactivated_after": true, "notes": ""
+    },
+    {
+      "day": 10, "date": null, "candidates_reviewed": 0,
+      "would_send_live_now_true_incidents": 0, "critical_misses": 0,
+      "owner_agreements": 0, "owner_disagreements": 0,
+      "shadow_evaluator_deactivated_after": true, "notes": ""
+    },
+    {
+      "day": 11, "date": null, "candidates_reviewed": 0,
+      "would_send_live_now_true_incidents": 0, "critical_misses": 0,
+      "owner_agreements": 0, "owner_disagreements": 0,
+      "shadow_evaluator_deactivated_after": true, "notes": ""
+    },
+    {
+      "day": 12, "date": null, "candidates_reviewed": 0,
+      "would_send_live_now_true_incidents": 0, "critical_misses": 0,
+      "owner_agreements": 0, "owner_disagreements": 0,
+      "shadow_evaluator_deactivated_after": true, "notes": ""
+    },
+    {
+      "day": 13, "date": null, "candidates_reviewed": 0,
+      "would_send_live_now_true_incidents": 0, "critical_misses": 0,
+      "owner_agreements": 0, "owner_disagreements": 0,
+      "shadow_evaluator_deactivated_after": true, "notes": ""
+    },
+    {
+      "day": 14, "date": null, "candidates_reviewed": 0,
+      "would_send_live_now_true_incidents": 0, "critical_misses": 0,
+      "owner_agreements": 0, "owner_disagreements": 0,
+      "shadow_evaluator_deactivated_after": true, "notes": ""
+    }
+  ],
+
+  "cumulative_at_end": {
+    "total_candidates_reviewed": 0,
+    "total_would_send_live_now_true": 0,
+    "total_critical_misses": 0,
+    "total_agreements": 0,
+    "total_disagreements": 0,
+    "owner_agreement_rate_pct": null,
+    "gate2_criteria_met": false,
+    "gate2_decision": null
+  },
+
+  "gate2_checklist": {
+    "14_days_elapsed": false,
+    "30_plus_candidates": false,
+    "zero_would_send_live_now_true": true,
+    "zero_critical_misses": true,
+    "agreement_rate_90_plus": false,
+    "rc_shadow_003_complete": false,
+    "intent_types_include_scheduling": false,
+    "campaign_allowlist_populated": false,
+    "sender_allowlist_populated": false,
+    "intent_allowlist_populated": false,
+    "owner_approval_checklist_signed": false,
+    "gate2_approved": false
+  }
+}

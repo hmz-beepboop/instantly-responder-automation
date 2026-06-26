@@ -1,0 +1,31 @@
+{
+  "operating_mode": "VALIDATION",
+  "dry_run": true,
+  "live_campaigns": [],
+  "sla": {
+    "processing_warning_seconds": 180,
+    "processing_breach_seconds": 300
+  },
+  "retry": {
+    "max_total_attempts": 3,
+    "retryable_status_codes": [429, 500, 502, 503, 504],
+    "honour_retry_after_header": true,
+    "send_uncertain_blind_retry": false
+  },
+  "reconciliation": {
+    "enabled": true,
+    "match_fields": ["thread", "sender", "recipient", "exact_subject", "timestamp_window", "unique_marker"],
+    "single_match_result": "SENT_RECONCILED",
+    "zero_match_result": "HUMAN_REVIEW_ZERO_MATCHES",
+    "multiple_match_result": "HUMAN_REVIEW_MULTIPLE_MATCHES",
+    "second_post_on_zero_or_multiple_matches": false
+  },
+  "notifications": {
+    "primary_destination": "<placeholder-human-review-destination>",
+    "urgency_levels": ["routine", "urgent", "technical"]
+  },
+  "live_credential_readiness": {
+    "instantly_api_key_bound": false,
+    "ready_for_controlled_live_test": false
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "_comment": "Sample review queue — shows what typical queue entries look like.",
+  "generated_at": "2026-06-24T18:05:00Z",
+  "queue_entries": [
+    {
+      "queue_id": "rq-sample-001",
+      "case_id": "case-sample-001",
+      "correlation_id": "corr-abc001",
+      "thread_id": "thread-abc123",
+      "campaign_id": "camp-hmz-us-b2b-01",
+      "sender_email": "hmz@example.com",
+      "recipient_email": "prospect1@example.com",
+      "queue_reason": "HIGH_RISK_BLOCKED",
+      "priority": "HIGH",
+      "incoming_text_excerpt": "Please remove me from your email list.",
+      "recommended_action": "BLOCKED_PERMANENT",
+      "was_autonomous_send": false,
+      "awaiting_post_action_review": false,
+      "created_at": "2026-06-24T14:23:00Z",
+      "reviewed_at": null,
+      "review_outcome": null
+    },
+    {
+      "queue_id": "rq-sample-002",
+      "case_id": "case-sample-002",
+      "correlation_id": "corr-abc002",
+      "thread_id": "thread-def456",
+      "campaign_id": "camp-hmz-us-b2b-01",
+      "sender_email": "hmz@example.com",
+      "recipient_email": "prospect2@example.com",
+      "queue_reason": "OUT_OF_HOURS_CANDIDATE",
+      "priority": "LOW",
+      "incoming_text_excerpt": "Sounds interesting, tell me more about your approach.",
+      "recommended_action": "SHADOW_LOG",
+      "was_autonomous_send": false,
+      "awaiting_post_action_review": false,
+      "created_at": "2026-06-24T20:45:00Z",
+      "reviewed_at": null,
+      "review_outcome": null
+    }
+  ]
+}

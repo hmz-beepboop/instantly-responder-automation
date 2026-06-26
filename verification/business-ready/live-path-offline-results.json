@@ -1,0 +1,215 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-06-15T17:27:07.314Z",
+  "total": 41,
+  "passed": 41,
+  "failed": 0,
+  "overall_result": "PASS",
+  "results": [
+    {
+      "id": "live_path_workflows_parse",
+      "description": "All 7 workflow JSON files still parse as valid JSON after build-live-path.mjs",
+      "passed": true
+    },
+    {
+      "id": "live_path_workflows_inactive",
+      "description": "All 7 workflows remain active=false after build-live-path.mjs",
+      "passed": true
+    },
+    {
+      "id": "live_path_no_credentials",
+      "description": "No node in any of the 7 workflows has a credentials field; new HTTP/webhook nodes use credentialPlaceholder only",
+      "passed": true
+    },
+    {
+      "id": "sender_live_path_nodes_present",
+      "description": "Workflow 03 contains all 17 new live-send-path nodes (O through W4/X2), each present exactly once",
+      "passed": true
+    },
+    {
+      "id": "sender_live_path_wiring",
+      "description": "N -> O -> P -> {Q (true) / P2 (false)}; Q -> R -> S -> {T (true, loops to Q) / U (false)}; U -> {X->X2 (true) / U2 (false)}; U2 -> {V (true) / U3 (false)}; V -> W -> W2 -> {W3 (true, loops to V) / W4 (false)}",
+      "passed": true
+    },
+    {
+      "id": "gate_evaluation_empty_input_all_blocked",
+      "description": "O blocks (all_passed=false) on an empty input, with 14 distinct gates and at least one (no_prior_terminal_send_state) passing",
+      "passed": true
+    },
+    {
+      "id": "gate_evaluation_ideal_context_still_blocked_on_launch_profile",
+      "description": "O still blocks an otherwise-ideal item on exactly the 8 launch-profile/allowlist gates, while approval/lock/suppression/variable gates pass",
+      "passed": true
+    },
+    {
+      "id": "p2_blocked_terminal_shape",
+      "description": "P2 builds terminal.result=BLOCKED, send_state=BLOCKED, reason=LIVE_SEND_GATES_NOT_SATISFIED, with failed_gate_ids carried through",
+      "passed": true
+    },
+    {
+      "id": "q_node_real_gated_reply_adapter",
+      "description": "Q is a real httpRequest POST to https://api.instantly.ai/api/v2/emails/reply, gated via credentialPlaceholder \"hmzInstantlyApi\", neverError+fullResponse, continueRegularOutput",
+      "passed": true
+    },
+    {
+      "id": "r_classifies_permanent_failure_400",
+      "description": "R classifies HTTP 400 as terminal PERMANENT_FAILURE, non-retryable",
+      "passed": true
+    },
+    {
+      "id": "r_classifies_auth_or_plan_failure_401",
+      "description": "R classifies HTTP 401 as terminal AUTH_OR_PLAN_FAILURE, non-retryable",
+      "passed": true
+    },
+    {
+      "id": "r_classifies_invalid_reply_target_404",
+      "description": "R classifies HTTP 404 as terminal INVALID_REPLY_TARGET, non-retryable",
+      "passed": true
+    },
+    {
+      "id": "r_classifies_429_retryable_honours_retry_after",
+      "description": "R classifies HTTP 429 as retryable, honouring Retry-After (capped at 5000ms) on the first attempt",
+      "passed": true
+    },
+    {
+      "id": "r_classifies_200_valid_contract_as_sent",
+      "description": "R classifies HTTP 2xx with a valid Email object {id, message_id, thread_id} as terminal SENT",
+      "passed": true
+    },
+    {
+      "id": "r_classifies_200_invalid_contract_as_send_uncertain",
+      "description": "R classifies HTTP 2xx without a valid {status:\"sent\", messageId} body as terminal SEND_UNCERTAIN, ambiguous, never blindly retried",
+      "passed": true
+    },
+    {
+      "id": "r_exhausts_retries_at_max_attempts",
+      "description": "R sets final_state=RETRY_EXHAUSTED once a retryable outcome reaches MAX_SEND_ATTEMPTS (3)",
+      "passed": true
+    },
+    {
+      "id": "x2_builds_sent_terminal",
+      "description": "X2 builds terminal.result=SENT, send_state=SENT, sent=true, carrying id/message_id/thread_id and confirmed cross-checks",
+      "passed": true
+    },
+    {
+      "id": "u3_builds_failure_terminal",
+      "description": "U3 builds terminal.result=FAILED with send_state taken from send_classification.final_state, sent=false",
+      "passed": true
+    },
+    {
+      "id": "reconciliation_zero_then_consistent_match_reconciles",
+      "description": "W reconciles to SENT_RECONCILED only after 2 consecutive single-match polls of the same id; the first single-match poll is HUMAN_REVIEW_ZERO_MATCHES",
+      "passed": true
+    },
+    {
+      "id": "reconciliation_multiple_matches_human_review",
+      "description": "W reconciles to HUMAN_REVIEW_MULTIPLE_MATCHES when a poll returns more than one match id",
+      "passed": true
+    },
+    {
+      "id": "w4_never_performs_second_post",
+      "description": "W4 builds a terminal with second_post_performed=false for every reconciliation outcome (SENT_RECONCILED, zero matches, multiple matches)",
+      "passed": true
+    },
+    {
+      "id": "retry_and_reconciliation_loops_bounded",
+      "description": "The Q<->T retry loop is bounded by MAX_SEND_ATTEMPTS=3 (R sets retryable=false at attempt 3); the V<->W3 reconciliation loop is bounded by max_polls=2 (W2 routes to W4 once polls_taken>=2)",
+      "passed": true
+    },
+    {
+      "id": "production_webhook_present",
+      "description": "Workflow 01 has a real production Webhook node at path \"instantly-reply\" with header-auth and credentialPlaceholder hmzInstantlyWebhookToken, separate from the dev webhook",
+      "passed": true
+    },
+    {
+      "id": "entry_source_tagging",
+      "description": "A0 (dev) tags entry_source=DEV_OR_SYNTHETIC and A0 (production) tags entry_source=PRODUCTION_WEBHOOK, both feeding into A. Webhook Intake Normalization",
+      "passed": true
+    },
+    {
+      "id": "security_gate_passthrough_for_dev_entries",
+      "description": "F1 is a passthrough (checked=false, passed=true) for non-PRODUCTION_WEBHOOK entries, preserving the existing dev/synthetic/test path",
+      "passed": true
+    },
+    {
+      "id": "security_gate_fails_closed_for_production_with_empty_allowlists",
+      "description": "F1 fails closed (passed=false) for PRODUCTION_WEBHOOK entries while ALLOWLISTS is empty (the shipped default); since campaign/sender allowlisting is gated on workspace allowlisting, a missing workspace_id never allowlists campaign/sender either",
+      "passed": true
+    },
+    {
+      "id": "security_gate_rejects_prefilter_flags_for_production",
+      "description": "F1 fails closed for PRODUCTION_WEBHOOK entries when prefilter flags self-sent/unsupported/malformed/duplicate are set, regardless of allowlists",
+      "passed": true
+    },
+    {
+      "id": "security_gate_routing_f1_f2_f3",
+      "description": "F -> F1 -> F2 -> {G (true) / F3 (false)}; F3 builds terminal.result=REJECTED",
+      "passed": true
+    },
+    {
+      "id": "suppression_adapters_present_and_gated",
+      "description": "Workflow 02 has a per-action gated chain: G0 (canonical-lead retrieval), G1-G4 (gate/execute/record per suppression action), G5 (blocklist verification gate/execute/record), G6 (result aggregator); every httpRequest node carries credentialPlaceholder hmzInstantlyApi and continueRegularOutput",
+      "passed": true
+    },
+    {
+      "id": "suppression_router_passthrough_to_e_when_nothing_enabled",
+      "description": "F -> G0g, and each Gn gate routes both its true (execute) and false (skip) branches into its own record node, chaining through to G5 and G6, which always feeds E. Output Validation",
+      "passed": true
+    },
+    {
+      "id": "suppression_router_default_input_routes_false",
+      "description": "With the shipped suppression_action_enablement (all false), safety_action_plan.actions.some(enabled) evaluates false, so G routes to E",
+      "passed": true
+    },
+    {
+      "id": "g6_idempotency_key_deterministic",
+      "description": "G6 computes a deterministic idempotency_key for the same (campaign, lead_email, action set)",
+      "passed": true
+    },
+    {
+      "id": "reviewer_allowlist_check_present_and_wired",
+      "description": "M1 -> M2 -> {N (allowlisted) / M2b -> N2 (not allowlisted)} is inserted between M (true branch) and N; M(false) is unchanged; with the shipped empty REVIEWER_ALLOWLIST, M1 fails closed (configured=false, allowlisted=false) and M2 routes to M2b/N2",
+      "passed": true
+    },
+    {
+      "id": "reviewer_decision_logic_unchanged_by_m1",
+      "description": "N (Process Reviewer Decision) still receives submit_action/submit_approver_identity/submit_edited_text/review_case fields untouched by M1 (additive-only insertion)",
+      "passed": true
+    },
+    {
+      "id": "config_live_path_additions",
+      "description": "config.json declares operating_mode/launch_profile (SUPERVISED_VALIDATION, no PROVEN mode, no unattended auto-send), allowlists, reviewer_allowlist, webhook_protection.production_path=\"instantly-reply\", live_credential_readiness.instantly=false, instantly_api credential names",
+      "passed": true
+    },
+    {
+      "id": "connection_targets_exist",
+      "description": "Every connection target node name in all 7 workflows refers to a node that exists in that workflow",
+      "passed": true
+    },
+    {
+      "id": "live_path_code_nodes_compile",
+      "description": "Every Code node jsCode body in all 7 workflows (including new live-path nodes) is syntactically valid JavaScript",
+      "passed": true
+    },
+    {
+      "id": "apply_script_allows_instantly_and_webhook_credentials",
+      "description": "apply-business-ready.ps1 allows https://api.instantly.ai HTTP targets and documents credentialPlaceholder -> real credential patching for hmzInstantlyApi / hmzInstantlyWebhookToken",
+      "passed": true
+    },
+    {
+      "id": "controlled_live_acceptance_two_modes",
+      "description": "run-controlled-live-acceptance.ps1 supports -PreflightOnly (default, read-only) and -AllowOneControlledReply (requires typed RUN-ONE-CONTROLLED-REPLY confirmation, one attempt, restores DRY_RUN=true/LIVE_CAMPAIGNS=[]/inactive workflows in finally)",
+      "passed": true
+    },
+    {
+      "id": "live_path_fixtures_present",
+      "description": "fixtures/business_ready_live_path/ contains JSON fixtures for the error-routing and SLA-watchdog acceptance checks",
+      "passed": true
+    },
+    {
+      "id": "regression_business_ready",
+      "description": "verification\\business-ready\\run-offline-tests.mjs regression suite reports 23/23",
+      "passed": true
+    }
+  ]
+}

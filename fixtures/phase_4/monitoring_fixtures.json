@@ -1,0 +1,204 @@
+[
+  {
+    "id": "monitoring-warning-180s",
+    "group": "monitoring",
+    "synthetic": true,
+    "description": "Record age exactly at the 180s warning threshold -> WARNING, not BREACH",
+    "check": "watchdog_evaluation",
+    "input": {
+      "synthetic": true,
+      "now": "2026-06-14T12:00:00.000Z",
+      "unfinished": {
+        "sends": [
+          {
+            "sendKey": "f000000000000000000000000000000000000000000000000000000000000f",
+            "state": "SUBMITTING",
+            "updatedAt": "2026-06-14T11:57:00.000Z"
+          }
+        ],
+        "errors": []
+      }
+    },
+    "expected": {
+      "warning_threshold_seconds": 180,
+      "breach_threshold_seconds": 300,
+      "records.0.category": "API_RETRY",
+      "records.0.sloType": "PROCESSING",
+      "records.0.ageSeconds": 180,
+      "records.0.status": "WARNING",
+      "warnings.length": 1,
+      "breaches.length": 0,
+      "processing_slo.warnings": 1,
+      "processing_slo.breaches": 0
+    }
+  },
+  {
+    "id": "monitoring-breach-300s",
+    "group": "monitoring",
+    "synthetic": true,
+    "description": "Record age at the 300s breach threshold -> BREACH",
+    "check": "watchdog_evaluation",
+    "input": {
+      "synthetic": true,
+      "now": "2026-06-14T12:00:00.000Z",
+      "unfinished": {
+        "sends": [
+          {
+            "sendKey": "a000000000000000000000000000000000000000000000000000000000000a",
+            "state": "LOCKED",
+            "updatedAt": "2026-06-14T11:55:00.000Z"
+          }
+        ],
+        "errors": []
+      }
+    },
+    "expected": {
+      "records.0.category": "AI_CLASSIFICATION_WAIT",
+      "records.0.sloType": "PROCESSING",
+      "records.0.ageSeconds": 300,
+      "records.0.status": "BREACH",
+      "warnings.length": 0,
+      "breaches.length": 1,
+      "processing_slo.breaches": 1
+    }
+  },
+  {
+    "id": "monitoring-resolved-record-excluded",
+    "group": "monitoring",
+    "synthetic": true,
+    "description": "An error record marked resolved via /v1/error/:errorId/resolve is excluded from listUnresolvedErrors - proven against state-store.mjs directly in run-offline-tests.mjs",
+    "check": "sidecar_resolved_exclusion",
+    "input": {},
+    "expected": {}
+  },
+  {
+    "id": "monitoring-duplicate-alert-blocked",
+    "group": "monitoring",
+    "synthetic": true,
+    "description": "A repeated alertKey is recorded only once via /v1/alert/dedupe (atomic open('wx')) - proven against state-store.mjs directly in run-offline-tests.mjs",
+    "check": "sidecar_alert_dedupe",
+    "input": {},
+    "expected": {}
+  },
+  {
+    "id": "monitoring-processing-transmission-slos-distinct",
+    "group": "monitoring",
+    "synthetic": true,
+    "description": "A SEND_UNCERTAIN send (transmission) and a HUMAN_REVIEW error (processing) are counted in separate SLOs",
+    "check": "watchdog_evaluation",
+    "input": {
+      "synthetic": true,
+      "now": "2026-06-14T12:00:00.000Z",
+      "unfinished": {
+        "sends": [
+          {
+            "sendKey": "1111111111111111111111111111111111111111111111111111111111111c",
+            "state": "SEND_UNCERTAIN",
+            "updatedAt": "2026-06-14T11:56:40.000Z"
+          }
+        ],
+        "errors": [
+          {
+            "errorId": "aaaaaaaaaaaaaaaa",
+            "error_class": "UNKNOWN",
+            "operator_action": "MANUAL_REVIEW",
+            "reason": "needs_human_judgement",
+            "recordedAt": "2026-06-14T11:56:40.000Z"
+          }
+        ]
+      }
+    },
+    "expected": {
+      "records.0.category": "SEND_UNCERTAIN",
+      "records.0.sloType": "TRANSMISSION",
+      "records.0.status": "WARNING",
+      "records.1.category": "HUMAN_REVIEW",
+      "records.1.sloType": "PROCESSING",
+      "records.1.status": "WARNING",
+      "processing_slo.total": 1,
+      "processing_slo.warnings": 1,
+      "transmission_slo.total": 1,
+      "transmission_slo.warnings": 1
+    }
+  },
+  {
+    "id": "monitoring-error-record-sanitised",
+    "group": "monitoring",
+    "synthetic": true,
+    "description": "An oversized failed_node value is truncated by redactErrorRecord before persistence",
+    "check": "error_record_sanitised",
+    "input": {
+      "workflow": {
+        "id": "wf-1",
+        "name": "HMZ Test Workflow"
+      },
+      "execution": {
+        "id": "exec-1"
+      },
+      "intake_id": "intake-m006",
+      "http_status": 500,
+      "failed_node": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    },
+    "expected": {
+      "workflow_id": "wf-1",
+      "intake_id": "intake-m006",
+      "error_class": "RETRYABLE",
+      "retryable": true,
+      "operator_action": "MONITOR_RETRY",
+      "failed_node": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...<TRUNCATED>"
+    }
+  },
+  {
+    "id": "monitoring-placeholder-routing-only",
+    "group": "monitoring",
+    "synthetic": true,
+    "description": "A breach alert is routed only to the placeholder notification object - never a real notification call",
+    "check": "placeholder_routing",
+    "input": {
+      "synthetic": true,
+      "now": "2026-06-14T12:00:00.000Z",
+      "unfinished": {
+        "sends": [
+          {
+            "sendKey": "2222222222222222222222222222222222222222222222222222222222222d",
+            "state": "SUBMITTING",
+            "updatedAt": "2026-06-14T11:55:00.000Z"
+          }
+        ],
+        "errors": []
+      },
+      "dedupeResponse": {
+        "results": [
+          {
+            "deduped": false,
+            "firstSeenAt": "2026-06-14T12:00:00.000Z"
+          }
+        ]
+      }
+    },
+    "expected": {
+      "surface": "PLACEHOLDER_NOT_CONFIGURED",
+      "delivered": false,
+      "alert_count": 1,
+      "deduped_count": 0
+    }
+  },
+  {
+    "id": "monitoring-uncertain-send-never-retryable",
+    "group": "monitoring",
+    "synthetic": true,
+    "description": "A SEND_UNCERTAIN record is never marked retryable, regardless of any accompanying http_status",
+    "check": "send_uncertain_not_retryable",
+    "input": {
+      "send_state": "SEND_UNCERTAIN",
+      "http_status": 500,
+      "intake_id": "intake-m008"
+    },
+    "expected": {
+      "send_state": "SEND_UNCERTAIN",
+      "error_class": "SEND_UNCERTAIN",
+      "retryable": false,
+      "operator_action": "MANUAL_RECONCILIATION_REQUIRED"
+    }
+  }
+]

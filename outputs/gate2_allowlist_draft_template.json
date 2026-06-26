@@ -1,0 +1,98 @@
+{
+  "_description": "Gate 2 allowlist draft template — for owner review only. DO NOT populate production allowlists from this file until Gate 2 is explicitly approved.",
+  "_version": "1.0",
+  "_date": "2026-06-24",
+  "_phase": "5K",
+  "_status": "DRAFT — OWNER REVIEW ONLY",
+  "_warning": "This file is a planning template. No values here are active in n8n. Populating production allowlists requires explicit Gate 2 approval in a dedicated Claude Code session.",
+
+  "gate_2_approved": false,
+  "allowlists_populated_in_production": false,
+  "shadow_review_days_complete": 0,
+  "minimum_shadow_review_days_required": 14,
+  "minimum_shadow_review_cases_required": 30,
+
+  "campaign_allowlist": {
+    "_instruction": "Replace CAMPAIGN_ID_PLACEHOLDER with real Instantly.ai campaign IDs. Start with 1-2 campaigns maximum.",
+    "_recommended_count": "1-2",
+    "_do_not_add": "Any campaign you have not reviewed in shadow testing",
+    "draft_entries": []
+  },
+
+  "sender_allowlist": {
+    "_instruction": "Replace with real sender email addresses from your Instantly.ai workspace. Start with 1-3 senders.",
+    "_recommended_count": "1-3",
+    "_do_not_add": "Any sender domain you do not fully control",
+    "draft_entries": []
+  },
+
+  "intent_allowlist": {
+    "_instruction": "List micro-intent values the controlled pilot may act on. Start conservative.",
+    "_recommended_starting_intents": [
+      "SCHEDULING_REQUEST",
+      "INFORMATION_REQUEST"
+    ],
+    "_optional_after_7_days": [
+      "POSITIVE_INTEREST"
+    ],
+    "_blocked_forever": [
+      "PRICING",
+      "NEGOTIATION",
+      "CONTRACT_TERMS",
+      "LEGAL",
+      "COMPLIANCE",
+      "GDPR_DATA_PRIVACY",
+      "SECURITY",
+      "ANGRY_COMPLAINT",
+      "UNSUBSCRIBE",
+      "OPT_OUT",
+      "BILLING",
+      "REFUND",
+      "AMBIGUOUS",
+      "PROOF_REQUEST",
+      "OUT_OF_OFFICE",
+      "COMPETITOR_MENTION",
+      "GUARANTEE_REQUEST"
+    ],
+    "draft_entries": []
+  },
+
+  "configuration_settings": {
+    "_instruction": "These values are for Gate 2 planning only. Do not apply until Gate 2 approved.",
+    "autonomous_enabled": false,
+    "shadow_only": true,
+    "dry_run": true,
+    "emergency_disabled": true,
+    "max_autonomous_sends_per_day": 1,
+    "confidence_threshold": 0.85,
+    "require_post_action_review": true,
+    "live_pilot_requires_owner_toggle": true
+  },
+
+  "rc_shadow_decisions": {
+    "RC_SHADOW_001_proof_request_policy": {
+      "status": "PENDING",
+      "signed_form": "docs/RC_SHADOW_001_OWNER_DECISION_FORM.md",
+      "owner_decision": null,
+      "date_signed": null
+    },
+    "RC_SHADOW_002_ooo_policy": {
+      "status": "PENDING",
+      "signed_form": "docs/RC_SHADOW_002_OWNER_DECISION_FORM.md",
+      "owner_decision": null,
+      "date_signed": null
+    },
+    "RC_SHADOW_003_allowlist_wireup": {
+      "status": "COMPLETE",
+      "applied_date": "2026-06-24",
+      "version_id": "ae13bf4e-ee04-438f-9657-3c57183b90a2"
+    }
+  },
+
+  "owner_sign_off": {
+    "allowlists_ready_for_production": false,
+    "gate_2_explicitly_approved": false,
+    "owner_signature": null,
+    "date_signed": null
+  }
+}

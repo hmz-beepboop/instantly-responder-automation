@@ -1,0 +1,95 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-06-15T17:26:51.463Z",
+  "total": 17,
+  "passed": 17,
+  "failed": 0,
+  "overall_result": "PASS",
+  "results": [
+    {
+      "id": "stored_config_remains_safe",
+      "description": "config/business-ready.config.json remains operating_mode=VALIDATION, dry_run=true, live_campaigns=[], and all live_credential_readiness flags false",
+      "passed": true
+    },
+    {
+      "id": "temp_config_construction_supervised_validation",
+      "description": "New-ControlledLiveConfig sets operating_mode=SUPERVISED_VALIDATION, dry_run=false, live_campaigns=[the designated campaign], allowlists.campaign_ids=[same], launch_profile.required_operating_mode=SUPERVISED_VALIDATION, and the three live_credential_readiness flags to true, leaving other fields untouched",
+      "passed": true
+    },
+    {
+      "id": "no_synthetic_dev_webhook_post",
+      "description": "run-controlled-live-acceptance.ps1 does not POST a synthetic NES to the Intake dev webhook; the real reply is sent by the operator, and the script documents this explicitly",
+      "passed": true
+    },
+    {
+      "id": "no_post_to_instantly_reply_endpoint",
+      "description": "run-controlled-live-acceptance.ps1 never references the Instantly reply-send endpoint path (api/v2/emails/reply) and never issues a second send on SEND_UNCERTAIN",
+      "passed": true
+    },
+    {
+      "id": "real_production_reply_human_approval_required",
+      "description": "run-controlled-live-acceptance.ps1 prints the marker, designated campaign/workspace/sender/lead/subject, instructs the operator to send a real reply and approve via the production Human Approval review page, and blocks on Read-Host until the operator confirms approval",
+      "passed": true
+    },
+    {
+      "id": "runtime_activation_set_excludes_full_test_harness",
+      "description": "RuntimeWorkflowNames lists exactly the 6 runtime workflows (Intake, Decision Engine, Reply Sender, Error Handler, Human Approval, SLA Watchdog), excludes the Full Test Harness, and Set-RuntimeWorkflowsActive explicitly verifies/deactivates the Full Test Harness if active",
+      "passed": true
+    },
+    {
+      "id": "finally_restoration_present",
+      "description": "The -AllowOneControlledReply main flow wraps its work in try/catch/finally; the finally block calls Restore-SafeState, which deactivates the runtime workflows, restores or re-asserts safe config defaults, reruns apply-business-ready.ps1, verifies the restored state, and clears every secret/controlled-live environment variable",
+      "passed": true
+    },
+    {
+      "id": "blank_workspace_id_blocks_preflight",
+      "description": "Invoke-Preflight requires the designated campaign workspace_id to be non-empty, present in config.workspace_allowlist, AND exactly equal to config.allowlists.workspace_id; a blank workspace_id alone blocks regardless of the other two",
+      "passed": true
+    },
+    {
+      "id": "review_basic_auth_credential_type_http_basic_auth",
+      "description": "apply-business-ready.ps1 resolves hmzReviewBasicAuth as httpBasicAuth, separately from the Instantly credential map, and throws if a remote node carries hmzReviewBasicAuth bound to anything other than httpBasicAuth",
+      "passed": true
+    },
+    {
+      "id": "instantly_credentials_http_header_auth",
+      "description": "apply-business-ready.ps1 resolves hmzInstantlyApi and hmzInstantlyWebhookToken as httpHeaderAuth and throws if a remote node carries either bound to anything else",
+      "passed": true
+    },
+    {
+      "id": "google_chat_env_passed_to_business_live_n8n",
+      "description": "infrastructure/business-live/docker-compose.yml passes GOOGLE_CHAT_WEBHOOK_URL into the n8n container environment, and .env.example documents it as a deployment-only secret with no separate hmzGoogleChatWebhook credential required",
+      "passed": true
+    },
+    {
+      "id": "no_secrets_embedded",
+      "description": "No workflow JSON export carries a resolved \"credentials\" object, config/business-ready.config.json carries no secret values, and run-controlled-live-acceptance.ps1 references credential IDs only via $env: variables, never literals",
+      "passed": true
+    },
+    {
+      "id": "regression_release_blocker",
+      "description": "verification\\business-ready\\run-release-blocker-tests.mjs regression suite reports 34/34",
+      "passed": true
+    },
+    {
+      "id": "powershell_scripts_parse",
+      "description": "apply-business-ready.ps1, run-controlled-live-acceptance.ps1, and rollback-business-ready.ps1 are all syntactically valid PowerShell",
+      "passed": true
+    },
+    {
+      "id": "workflow_exports_remain_inactive",
+      "description": "All 7 workflow JSON exports remain active=false; this session made no workflow JSON edits",
+      "passed": true
+    },
+    {
+      "id": "rollback_handles_review_basic_auth_and_reasserts_safe_defaults",
+      "description": "rollback-business-ready.ps1 allows hmzReviewBasicAuth in credential backups and re-asserts operating_mode=VALIDATION, dry_run=true, live_campaigns=[], allowlists.campaign_ids=[], and all three live_credential_readiness flags=false on rollback",
+      "passed": true
+    },
+    {
+      "id": "owner_inputs_updated_with_controlled_live_fields",
+      "description": "BUSINESS_READY_OWNER_INPUTS.md records the new review Basic Auth / webhook-token credential rows, the public production URLs, the exact controlled-live campaign/workspace/sender/recipient fields, and the owner acknowledgement for the temporary live-mode rewrite/restore cycle - with no secret values added",
+      "passed": true
+    }
+  ]
+}

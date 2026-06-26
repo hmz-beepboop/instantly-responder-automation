@@ -1,0 +1,27 @@
+{
+  "_instructions": [
+    "1. Fill in all fields from the real inbound reply.",
+    "2. Use micro_intent from the Decision workflow output (NOT your own guess).",
+    "3. Use confidence from the Decision workflow output.",
+    "4. Leave case_id as a unique value (e.g. case_YYYYMMDD_001).",
+    "5. Set in_human_working_hours based on when the reply arrived.",
+    "6. Do NOT submit if incoming_text contains PII beyond a first name.",
+    "7. Run -ValidateManualPayload before submitting."
+  ],
+  "case_id": "case_YYYYMMDD_001",
+  "thread_id": "thread_XXXX",
+  "campaign_id": "CAMP_XXXX",
+  "sender_email": "sender@yourdomain.com",
+  "incoming_text": "[Paste reply text here — remove PII except first name]",
+  "broad_category": "[From Decision output — e.g. SCHEDULING_POSITIVE]",
+  "micro_intent": "[From Decision output — e.g. SCHEDULING_REQUEST]",
+  "confidence": 0.0,
+  "additional_intents": [],
+  "risk_flags": [],
+  "in_human_working_hours": false,
+  "review_metadata": {
+    "review_date": "2026-06-24",
+    "review_day_in_cycle": 1,
+    "owner_notes": "[Optional: any observations about this reply]"
+  }
+}

@@ -1,0 +1,1281 @@
+{
+  "updatedAt": "2026-06-18T04:09:06.099Z",
+  "createdAt": "2026-06-17T18:29:52.627Z",
+  "id": "9aPrt92jFhoYFxbs",
+  "name": "HMZ - Reply Human Approval - Validation",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "trigger_create_case",
+      "name": "When Called to Create Review Case",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "4f04155c-9c09-4133-9b8f-f98fb53614c3",
+      "name": "A. Build Review Case Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        280,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\n// Runtime configuration is injected from config/business-ready.config.json at apply time.\n// HMZ_INJECT_BEGIN:RUNTIME_CONFIG\r\nconst CONFIG = {\"config_version\":\"business-ready-1.1\",\"generated_by\":\"verification/business-ready (offline build)\",\"owner_inputs_status\":\"COMPLETE\",\"operating_mode\":\"VALIDATION\",\"launch_profile\":{\"name\":\"SUPERVISED_VALIDATION\",\"description\":\"Fixed launch profile for the live path: mandatory durable human approval for every prospect-facing reply, one exact campaign allowlist, one exact workspace allowlist, a connected-sender allowlist, English-only deterministic classification with human fallback, no unattended auto-send, no PROVEN mode. operating_mode/dry_run/live_campaigns above remain the live embedded switches; this block documents the gate-evaluation target state mirrored by workflows/03 node O (Live Send Gate Evaluation) and workflows/01 node F1 (Production Security & Allowlist Gate).\",\"required_operating_mode\":\"SUPERVISED_VALIDATION\",\"unattended_auto_send\":false,\"proven_mode\":false},\"dry_run\":true,\"live_campaigns\":[],\"workspace_allowlist\":[\"c7f84f11-4a1a-42dc-9a74-a417e44cb87e\"],\"allowlists\":{\"workspace_id\":\"c7f84f11-4a1a-42dc-9a74-a417e44cb87e\",\"campaign_ids\":[\"bcda01f7-21c9-4e12-9849-0a375b548467\"],\"connected_sender_eaccounts\":[\"hamzah@gethmzautomation.com\",\"hamzah@gethmzautomations.com\",\"hamzah@hmzautomation.com\",\"hamzah@hmzautomations.com\",\"hamzah@hubhmzautomation.com\",\"hamzah@hubhmzautomations.com\",\"hamzah@labshmzautomation.com\",\"hamzah@labshmzautomations.com\",\"hamzah@onehmzautomation.com\",\"hamzah@onehmzautomations.com\",\"hamzah@teamhmzautomation.org\",\"hamzah@teamhmzautomations.com\",\"zahid@gethmzautomation.com\",\"zahid@gethmzautomations.com\",\"zahid@hmzautomation.com\",\"zahid@hmzautomations.com\",\"zahid@hubhmzautomation.com\",\"zahid@hubhmzautomations.com\",\"zahid@labshmzautomation.com\",\"zahid@labshmzautomations.com\",\"zahid@onehmzautomation.com\",\"zahid@onehmzautomations.com\",\"zahid@teamhmzautomation.org\",\"zahid@teamhmzautomations.com\"],\"note\":\"Production allowlist contains all 24 currently active and fully set-up Instantly sender eaccounts. Reply transport must pass through the inbound nes.eaccount; no default sender is permitted.\"},\"reviewer_allowlist\":[\"humza@hmzaiautomation.com\"],\"sender_mapping\":{\"hamzah@gethmzautomation.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@gethmzautomations.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@hmzautomation.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@hmzautomations.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@hubhmzautomation.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@hubhmzautomations.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@labshmzautomation.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@labshmzautomations.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@onehmzautomation.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@onehmzautomations.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@teamhmzautomation.org\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@teamhmzautomations.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@gethmzautomation.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@gethmzautomations.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@hmzautomation.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@hmzautomations.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@hubhmzautomation.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@hubhmzautomations.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@labshmzautomation.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@labshmzautomations.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@onehmzautomation.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@onehmzautomations.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@teamhmzautomation.org\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@teamhmzautomations.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"}},\"policy_version\":\"policy-HMZ-1.2\",\"kb_version\":\"KB-1.0-DRAFT\",\"kb_approved_for_runtime\":false,\"classifier_version\":\"deterministic-heuristic-1.0\",\"template_registry_version\":\"T-REGISTRY-1.0\",\"review\":{\"destination_status\":\"CONFIGURED\",\"google_chat_credential_name\":\"ENV:GOOGLE_CHAT_WEBHOOK_URL\",\"google_chat_configured\":true,\"review_base_url\":\"https://n8n.hmzaiautomation.com/webhook/reply-review\",\"review_token_ttl_minutes\":60,\"review_token_ttl_minutes_default\":60,\"fail_closed_state\":\"REVIEW_NOTIFICATION_FAILED\",\"production_review_form_path\":\"reply-review/review\",\"production_review_submit_path\":\"reply-review/submit\",\"review_basic_auth_credential_name\":\"hmzReviewBasicAuth\"},\"live_credential_readiness\":{\"instantly_api_key_bound\":true,\"instantly_credential_name\":\"hmzInstantlyApi\",\"instantly\":true,\"n8n_api_key_bound\":true,\"n8n_api_credential_name\":\"hmzN8nApi\",\"review_basic_auth_bound\":true,\"review_basic_auth\":true,\"ready_for_controlled_live_test\":true,\"note\":\"instantly mirrors instantly_api_key_bound for the new live-send gate evaluation (workflows/03 node O, gate 'instantly_credential_ready'); both must be true, set only after the owner binds hmzInstantlyApi AND hmzInstantlyWebhookToken (both httpHeaderAuth) out of band. review_basic_auth gates binding of hmzReviewBasicAuth (httpBasicAuth) on the production review-form/submit webhooks (workflow 07) and is independent of the instantly flags; it must never be resolved via the Instantly credential map.\"},\"suppression_action_enablement\":{\"source_campaign_stop_enabled\":false,\"interest_status_update_enabled\":false,\"subsequence_removal_enabled\":false,\"exact_email_blocklist_enabled\":false,\"note\":\"Each remains false until its own separate live-safety gate is explicitly enabled by the owner. Required suppression actions (T7/T12/T13) still execute idempotently in DRY_RUN against the validation-only adapter contract; only the real HTTP call is gated by these flags.\"},\"instantly_api\":{\"base_url\":\"https://api.instantly.ai\",\"version\":\"v2\",\"reply_credential_name\":\"hmzInstantlyApi\",\"webhook_token_credential_name\":\"hmzInstantlyWebhookToken\",\"endpoints\":{\"get_email\":{\"method\":\"GET\",\"path\":\"/api/v2/emails/{id}\"},\"reply_to_email\":{\"method\":\"POST\",\"path\":\"/api/v2/emails/reply\"},\"list_emails\":{\"method\":\"GET\",\"path\":\"/api/v2/emails\"},\"update_interest_status\":{\"method\":\"POST\",\"path\":\"/api/v2/leads/update-interest-status\"},\"remove_subsequence\":{\"method\":\"POST\",\"path\":\"/api/v2/leads/subsequence/remove\"},\"get_lead\":{\"method\":\"POST\",\"path\":\"/api/v2/leads/list\"},\"add_to_blocklist\":{\"method\":\"POST\",\"path\":\"/api/v2/block-lists-entries/bulk-create\"},\"list_block_list_entries\":{\"method\":\"GET\",\"path\":\"/api/v2/block-lists-entries\"}}},\"webhook_protection\":{\"dev_path\":\"hmz-validation-reply-intake-dev\",\"production_path\":\"instantly-reply\",\"shared_secret_header_name\":\"X-HMZ-Webhook-Token\",\"shared_secret_credential_name\":\"hmzInstantlyWebhookToken\",\"rate_limit_endpoint\":\"http://hmz-send-state:5681/v1/webhook/ratelimit\",\"campaign_allowlist_required\":true,\"sender_allowlist_required\":true,\"api_side_email_id_refetch_required\":true,\"rate_limit_per_minute\":60,\"duplicate_window_seconds\":300},\"slo\":{\"processing_warning_seconds\":180,\"processing_breach_seconds\":300,\"transmission_target_seconds\":300},\"retention\":{\"review_case_retention_days\":90,\"review_case_retention_days_default\":90,\"send_state_retention_days\":90,\"send_state_retention_days_default\":90,\"error_record_retention_days\":90,\"error_record_retention_days_default\":90},\"retry\":{\"max_total_attempts\":3,\"retryable_status_codes\":[429,500,502,503,504],\"honour_retry_after_header\":true,\"send_uncertain_blind_retry\":false},\"reconciliation\":{\"enabled\":true,\"match_fields\":[\"thread\",\"sender\",\"recipient\",\"exact_subject\",\"timestamp_window\",\"unique_marker\"],\"single_match_result\":\"SENT_RECONCILED\",\"zero_match_result\":\"HUMAN_REVIEW_ZERO_MATCHES\",\"multiple_match_result\":\"HUMAN_REVIEW_MULTIPLE_MATCHES\",\"second_post_on_zero_or_multiple_matches\":false},\"workflow_inventory\":{\"HMZ - Instantly Reply Intake - Validation\":\"01_reply_intake_validation.json\",\"HMZ - Reply Decision Engine - Validation\":\"02_reply_decision_engine_validation.json\",\"HMZ - Instantly Reply Sender - Validation\":\"03_reply_sender_validation.json\",\"HMZ - Reply Error Handler - Validation\":\"04_reply_error_handler_validation.json\",\"HMZ - Reply SLA Watchdog - Validation\":\"05_reply_sla_watchdog_validation.json\",\"HMZ - Reply Full Test Harness - Validation\":\"06_reply_full_test_harness_validation.json\",\"HMZ - Reply Human Approval - Validation\":\"07_reply_human_approval_validation.json\"}};\r\n// HMZ_INJECT_END:RUNTIME_CONFIG\n\nfunction djb2Hash(str) {\n  let hash = 5381;\n  for (let i = 0; i < str.length; i++) {\n    hash = (hash << 5) + hash + str.charCodeAt(i);\n    hash = hash & 0xffffffff;\n  }\n  return (hash >>> 0).toString(16).padStart(8, \"0\");\n}\n\nfunction randomHex(bytes) {\n  let out = \"\";\n  if (typeof globalThis.crypto !== \"undefined\" && typeof globalThis.crypto.getRandomValues === \"function\") {\n    const arr = new Uint8Array(bytes);\n    globalThis.crypto.getRandomValues(arr);\n    for (const b of arr) out += b.toString(16).padStart(2, \"0\");\n    return out;\n  }\n  for (let i = 0; i < bytes; i++) out += Math.floor(Math.random() * 256).toString(16).padStart(2, \"0\");\n  return out;\n}\n\nfunction generateReviewToken() {\n  return randomHex(16) + djb2Hash(String(Date.now()) + String(Math.random()));\n}\n\nfunction escapeHtml(value) {\n  return String(value == null ? \"\" : value)\n    .replace(/&/g, \"&amp;\")\n    .replace(/</g, \"&lt;\")\n    .replace(/>/g, \"&gt;\")\n    .replace(/\"/g, \"&quot;\")\n    .replace(/'/g, '&#39;');\n}\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const caseInput = input.case_input || {};\n  const nes = caseInput.nes || {};\n  const decision = caseInput.decision || {};\n  const draft = caseInput.draft || {};\n  const reply = nes.reply || {};\n\n  const intakeId = String(caseInput.intake_id || nes.intake_id || \"UNKNOWN_INTAKE\");\n  const policyVersion = caseInput.policy_version || nes.policy_version || CONFIG.policy_version;\n  const caseId = \"case-\" + djb2Hash(intakeId + \"|\" + policyVersion);\n\n  const ttlRaw = CONFIG.review.review_token_ttl_minutes;\n  const ttlMinutes = (typeof ttlRaw === \"number\" && ttlRaw > 0) ? ttlRaw : CONFIG.review.review_token_ttl_minutes_default;\n\n  const nowIso = new Date().toISOString();\n  const expiresIso = new Date(Date.now() + ttlMinutes * 60000).toISOString();\n  const token = generateReviewToken();\n\n  const eaccount = nes.eaccount || \"\";\n  const senderConfig = (CONFIG.sender_mapping || {})[eaccount] || null;\n  const templateVariables = {\n    firstName: caseInput.first_name || null,\n    senderName: senderConfig ? senderConfig.sender_name : null,\n    bookingLink: senderConfig ? senderConfig.booking_link : null\n  };\n\n  const templateId = decision.reply_template_id || \"\";\n  const blockedVariables = [];\n  const replyMode = decision.reply_mode || caseInput.reply_mode || \"\";\n  const sendableMode = replyMode === \"FIXED_TEMPLATE_APPROVAL\" || replyMode === \"AI_DRAFT_APPROVAL\";\n  if (sendableMode && !templateVariables.senderName) blockedVariables.push(\"senderName\");\n  if (/BOOKING|T1_SCENARIO_A|T3_/.test(templateId) && !templateVariables.bookingLink) blockedVariables.push(\"bookingLink\");\n\n  const sanitizedContext = {\n    intake_id: intakeId,\n    category: decision.category || caseInput.category || \"UNKNOWN\",\n    confidence: caseInput.confidence ?? decision.confidence ?? null,\n    urgency: caseInput.urgency || decision.priority || \"routine\",\n    risk_flags: caseInput.risk_flags || decision.risk_flags || [],\n    campaign_context: nes.campaign_context || {},\n    reply_subject: reply.subject || null,\n    reply_text: reply.text || null,\n    reply_snippet: reply.snippet || null,\n    recommended_action_plan: decision || {},\n    sender_handoff: {\n      nes: caseInput.nes || {},\n      decision: caseInput.decision || {},\n      draft: caseInput.draft || {},\n      validation: caseInput.validation || {}\n    }\n  };\n\n  const draftText = (draft && typeof draft.draft_text === \"string\") ? draft.draft_text : \"\";\n\n  return {\n    json: {\n      ...input,\n      config: CONFIG,\n      review_case: {\n        case_id: caseId,\n        intake_id: intakeId,\n        token,\n        token_expires_at: expiresIso,\n        status: \"NEW\",\n        category: sanitizedContext.category,\n        urgency: sanitizedContext.urgency,\n        reply_mode: replyMode || \"HUMAN_ONLY\",\n        draft_text: draftText,\n        template_variables: templateVariables,\n        blocked_variables: blockedVariables,\n        sanitized_context: sanitizedContext,\n        policy_version: policyVersion,\n        kb_version: caseInput.kb_version || CONFIG.kb_version,\n        notification_status: \"PENDING\",\n        approver_identity: null,\n        approved_at: null,\n        final_reply_text: null,\n        decision_payload: null,\n        created_at: nowIso,\n        updated_at: nowIso\n      }\n    }\n  };\n});"
+      }
+    },
+    {
+      "id": "6dcbfc6f-033d-49e4-8e07-214d8c07205d",
+      "name": "B. Upsert Review Case (Data Table)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        560,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "mode": "id",
+          "value": "WMTmI6UNjZZgSU3h"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "case_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.review_case.case_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "case_id": "={{ $json.review_case.case_id }}",
+            "intake_id": "={{ $json.review_case.intake_id }}",
+            "token": "={{ $json.review_case.token }}",
+            "token_expires_at": "={{ $json.review_case.token_expires_at }}",
+            "status": "={{ $json.review_case.status }}",
+            "category": "={{ $json.review_case.category }}",
+            "urgency": "={{ $json.review_case.urgency }}",
+            "reply_mode": "={{ $json.review_case.reply_mode }}",
+            "draft_text": "={{ $json.review_case.draft_text }}",
+            "template_variables": "={{ JSON.stringify($json.review_case.template_variables) }}",
+            "blocked_variables": "={{ JSON.stringify($json.review_case.blocked_variables) }}",
+            "sanitized_context": "={{ JSON.stringify($json.review_case.sanitized_context) }}",
+            "policy_version": "={{ $json.review_case.policy_version }}",
+            "kb_version": "={{ $json.review_case.kb_version }}",
+            "notification_status": "={{ $json.review_case.notification_status }}",
+            "approver_identity": "={{ $json.review_case.approver_identity }}",
+            "approved_at": "={{ $json.review_case.approved_at }}",
+            "final_reply_text": "={{ $json.review_case.final_reply_text }}",
+            "decision_payload": "={{ JSON.stringify($json.review_case.decision_payload) }}",
+            "created_at": "={{ $json.review_case.created_at }}",
+            "updated_at": "={{ $json.review_case.updated_at }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "ac150288-80ac-4bc6-8207-0bfbbe970440",
+      "name": "C. Notification Configured Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        840,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $(\"A. Build Review Case Record\").first().json.config.review.google_chat_configured === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "1c512491-f272-417b-967e-aaeb241e9dd8",
+      "name": "D. Build Google Chat Notification Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -160
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction parseJson(value, fallback) {\n  if (value === null || value === undefined || value === \"\") return fallback;\n  if (typeof value === \"object\") return value;\n  try { return JSON.parse(String(value)); } catch { return fallback; }\n}\n\nconst built = $(\"A. Build Review Case Record\").first().json || {};\nconst baseCase = built.review_case || {};\nconst config = built.config || {};\n\nreturn items.map(item => {\n  const row = item.json || {};\n  const rc = {\n    ...baseCase,\n    ...row,\n    template_variables: parseJson(row.template_variables, baseCase.template_variables || {}),\n    blocked_variables: parseJson(row.blocked_variables, baseCase.blocked_variables || []),\n    sanitized_context: parseJson(row.sanitized_context, baseCase.sanitized_context || {}),\n    decision_payload: parseJson(row.decision_payload, baseCase.decision_payload || null)\n  };\n\n  const ctx = rc.sanitized_context || {};\n  const base = String((config.review || {}).review_base_url || \"\").replace(/\\/$/, \"\");\n  const reviewUrl = base + \"/review?case=\" + encodeURIComponent(rc.case_id || \"\") + \"&token=\" + encodeURIComponent(rc.token || \"\");\n  const snippet = String(ctx.reply_snippet || ctx.reply_text || \"\").slice(0, 200);\n\n  const lines = [];\n  lines.push(\"New reply review case: \" + (rc.case_id || \"UNKNOWN_CASE\"));\n  lines.push(\"Category: \" + (ctx.category || rc.category || \"UNKNOWN\") + \" | Urgency: \" + (ctx.urgency || rc.urgency || \"routine\"));\n  lines.push(\"Reply excerpt: \" + snippet);\n  lines.push(\"Review: \" + reviewUrl);\n\n  return {\n    json: {\n      ...built,\n      review_case: rc,\n      chat_notification: {\n        payload: { text: lines.join(\"\\n\") },\n        review_url: reviewUrl\n      }\n    }\n  };\n});"
+      }
+    },
+    {
+      "id": "8dd3adb3-89e8-48db-89ad-5ba2707d3d32",
+      "name": "E. POST Google Chat Webhook (Gated)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        -160
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.GOOGLE_CHAT_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.chat_notification.payload) }}",
+        "options": {
+          "timeout": 5000
+        }
+      }
+    },
+    {
+      "id": "3b78986f-27b5-4ec1-95f4-5be73dd76736",
+      "name": "D2. Mark Review Notification Failed",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        160
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction parseJson(value, fallback) {\n  if (value === null || value === undefined || value === \"\") return fallback;\n  if (typeof value === \"object\") return value;\n  try { return JSON.parse(String(value)); } catch { return fallback; }\n}\n\nconst built = $(\"A. Build Review Case Record\").first().json || {};\nconst baseCase = built.review_case || {};\n\nreturn items.map(item => {\n  const row = item.json || {};\n  const rc = {\n    ...baseCase,\n    ...row,\n    template_variables: parseJson(row.template_variables, baseCase.template_variables || {}),\n    blocked_variables: parseJson(row.blocked_variables, baseCase.blocked_variables || []),\n    sanitized_context: parseJson(row.sanitized_context, baseCase.sanitized_context || {}),\n    decision_payload: parseJson(row.decision_payload, baseCase.decision_payload || null),\n    notification_status: \"REVIEW_NOTIFICATION_FAILED\",\n    updated_at: new Date().toISOString()\n  };\n\n  return {\n    json: {\n      ...built,\n      review_case: rc,\n      chat_notification: {\n        payload: null,\n        review_url: null,\n        skipped_reason: \"review.google_chat_configured=false\"\n      }\n    }\n  };\n});"
+      }
+    },
+    {
+      "id": "7dab1092-5ea1-4280-8a33-63ff8343f8d2",
+      "name": "F. Merge Notification Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction getBranchContext() {\n  try {\n    const item = $(\"D. Build Google Chat Notification Payload\").first();\n    if (item && item.json) return item.json;\n  } catch {}\n  try {\n    const item = $(\"D2. Mark Review Notification Failed\").first();\n    if (item && item.json) return item.json;\n  } catch {}\n  return {};\n}\n\nconst branchContext = getBranchContext();\n\nreturn items.map(item => {\n  const response = item.json || {};\n  const input = { ...branchContext, chat_delivery_response: response };\n  if (response.error) input.error = response.error;\n\n  const rc = { ...(input.review_case || {}) };\n  if (rc.notification_status === \"PENDING\") {\n    const sentOk = !!(\n      input.chat_notification &&\n      input.chat_notification.review_url &&\n      !input.chat_notification.skipped_reason &&\n      !input.error\n    );\n    rc.notification_status = sentOk ? \"SENT\" : \"REVIEW_NOTIFICATION_FAILED\";\n  }\n  rc.updated_at = new Date().toISOString();\n\n  return { json: { ...input, review_case: rc } };\n});"
+      }
+    },
+    {
+      "id": "fa756bf7-a251-4834-b4e3-30abd505b113",
+      "name": "F2. Update Case Notification Status (Data Table)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1960,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {
+          "mode": "id",
+          "value": "WMTmI6UNjZZgSU3h"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "case_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.review_case.case_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "notification_status": "={{ $json.review_case.notification_status }}",
+            "updated_at": "={{ $json.review_case.updated_at }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "c02cce86-3423-4385-b101-53761c01a2f9",
+      "name": "G. Build Create-Case Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction parseJson(value, fallback) {\n  if (value === null || value === undefined || value === \"\") return fallback;\n  if (typeof value === \"object\") return value;\n  try { return JSON.parse(String(value)); } catch { return fallback; }\n}\n\nconst prior = $(\"F. Merge Notification Result\").first().json || {};\nconst baseCase = prior.review_case || {};\n\nreturn items.map(item => {\n  const row = item.json || {};\n  const rc = {\n    ...baseCase,\n    ...row,\n    template_variables: parseJson(row.template_variables, baseCase.template_variables || {}),\n    blocked_variables: parseJson(row.blocked_variables, baseCase.blocked_variables || []),\n    sanitized_context: parseJson(row.sanitized_context, baseCase.sanitized_context || {}),\n    decision_payload: parseJson(row.decision_payload, baseCase.decision_payload || null)\n  };\n\n  return {\n    json: {\n      case_id: rc.case_id,\n      intake_id: rc.intake_id,\n      status: rc.status,\n      notification_status: rc.notification_status,\n      review_notification_failed: rc.notification_status === \"REVIEW_NOTIFICATION_FAILED\"\n    }\n  };\n});"
+      }
+    },
+    {
+      "id": "5e195eb4-449f-434b-9acf-67855b955657",
+      "name": "Webhook - Review Form (Dev)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        400
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "hmz-validation-review-form-dev",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "d9932264-2974-4841-b7dc-76a82395087d"
+    },
+    {
+      "id": "7ec62ca9-5715-457a-aaf4-4b072754531c",
+      "name": "Webhook - Review Form (Production, Gated Path)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        600
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "reply-review/review",
+        "responseMode": "responseNode",
+        "options": {},
+        "authentication": "basicAuth"
+      },
+      "webhookId": "fa2bc73e-5b8b-4ee2-9d56-2e961ed7fb74",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "HxXqs7varXTMOXbM",
+          "name": "hmzReviewBasicAuth"
+        }
+      }
+    },
+    {
+      "id": "c9996b7d-c4b5-4737-8cc0-148ae5160efa",
+      "name": "H0. Lookup Case for Form (Data Table)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        280,
+        480
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "getRows",
+        "dataTableId": {
+          "mode": "id",
+          "value": "WMTmI6UNjZZgSU3h"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "case_id",
+              "condition": "eq",
+              "keyValue": "={{ ($json.query && $json.query.case) || ($json.body && $json.body.case_id) || \"\" }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "1829d0e1-1dd1-4f0a-ad27-09ffcb8fd593",
+      "name": "H. Validate Review Token (GET)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        480
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction parseJson(value, fallback) {\n  if (value === null || value === undefined || value === \"\") return fallback;\n  if (typeof value === \"object\") return value;\n  try { return JSON.parse(String(value)); } catch { return fallback; }\n}\n\nfunction getWebhookInput() {\n  for (const name of [\"Webhook - Review Form (Production, Gated Path)\", \"Webhook - Review Form (Dev)\"]) {\n    try {\n      const item = $(name).first();\n      if (item && item.json) return item.json;\n    } catch {}\n  }\n  return {};\n}\n\nconst webhook = getWebhookInput();\nconst query = webhook.query || (webhook.webhook && webhook.webhook.query) || {};\nconst caseId = String(query.case || \"\");\nconst token = String(query.token || \"\");\n\nreturn items.map(item => {\n  const raw = item.json || {};\n  const row = raw.case_id ? {\n    ...raw,\n    template_variables: parseJson(raw.template_variables, {}),\n    blocked_variables: parseJson(raw.blocked_variables, []),\n    sanitized_context: parseJson(raw.sanitized_context, {}),\n    decision_payload: parseJson(raw.decision_payload, null)\n  } : null;\n\n  let tokenValid = true;\n  let reason = \"OK\";\n\n  if (!row) { tokenValid = false; reason = \"CASE_NOT_FOUND\"; }\n  else if (!token || row.token !== token) { tokenValid = false; reason = \"WRONG_TOKEN\"; }\n  else if (row.status !== \"NEW\" && row.status !== \"IN_REVIEW\") { tokenValid = false; reason = \"ALREADY_DECIDED\"; }\n  else if (row.token_expires_at && new Date(row.token_expires_at).getTime() < Date.now()) { tokenValid = false; reason = \"EXPIRED\"; }\n\n  return {\n    json: {\n      ...webhook,\n      case_id: caseId,\n      token,\n      token_valid: tokenValid,\n      token_invalid_reason: reason,\n      review_case: row || {}\n    }\n  };\n});"
+      }
+    },
+    {
+      "id": "e3c2d033-ad0a-4183-ba43-40754a17d52a",
+      "name": "I. Token Valid Router (GET)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        840,
+        480
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $json.token_valid === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "44a376a2-a946-4a74-af6f-52688b577225",
+      "name": "J. Render Review Form HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        360
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction escapeHtml(value) {\n  return String(value == null ? \"\" : value)\n    .replace(/&/g, \"&amp;\")\n    .replace(/</g, \"&lt;\")\n    .replace(/>/g, \"&gt;\")\n    .replace(/\"/g, \"&quot;\")\n    .replace(/'/g, '&#39;');\n}\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const rc = input.review_case || {};\n  const ctx = rc.sanitized_context || {};\n  const tv = rc.template_variables || {};\n  const blocked = rc.blocked_variables || [];\n\n  let html = \"\";\n  html += \"<!DOCTYPE html><html><head><meta charset=\\\"utf-8\\\"><title>HMZ Reply Review</title></head><body>\";\n  html += \"<h1>Reply review - \" + escapeHtml(rc.case_id) + \"</h1>\";\n  html += \"<p><strong>Category:</strong> \" + escapeHtml(ctx.category) + \" | <strong>Urgency:</strong> \" + escapeHtml(ctx.urgency) + \"</p>\";\n  html += \"<p><strong>Risk flags:</strong> \" + escapeHtml((ctx.risk_flags || []).join(\", \")) + \"</p>\";\n  html += \"<p><strong>Subject:</strong> \" + escapeHtml(ctx.reply_subject) + \"</p>\";\n  html += \"<p><strong>Incoming reply:</strong></p><pre>\" + escapeHtml(ctx.reply_text) + \"</pre>\";\n  if (blocked.length > 0) {\n    html += \"<p style=\\\"color:red\\\"><strong>Blocked variables (send disabled until resolved):</strong> \" + escapeHtml(blocked.join(\", \")) + \"</p>\";\n  }\n  html += \"<form method=\\\"POST\\\" action=\\\"submit?case=\" + encodeURIComponent(rc.case_id) + \"&token=\" + encodeURIComponent(rc.token) + \"\\\">\";\n  html += \"<input type=\\\"hidden\\\" name=\\\"case_id\\\" value=\\\"\" + escapeHtml(rc.case_id) + \"\\\">\";\n  html += \"<input type=\\\"hidden\\\" name=\\\"token\\\" value=\\\"\" + escapeHtml(rc.token) + \"\\\">\";\n  html += \"<label>Reply text (editable):<br><textarea name=\\\"edited_reply_text\\\" rows=\\\"10\\\" cols=\\\"80\\\">\" + escapeHtml(rc.draft_text) + \"</textarea></label><br>\";\n  html += \"<label>Approver name/email: <input type=\\\"text\\\" name=\\\"approver_identity\\\" required></label><br>\";\n  html += \"<label>Denial reason (if denying): <input type=\\\"text\\\" name=\\\"denial_reason\\\"></label><br>\";\n  html += \"<button type=\\\"submit\\\" name=\\\"action\\\" value=\\\"approve\\\"\" + (blocked.length > 0 ? \" disabled\" : \"\") + \">Approve and send</button> \";\n  html += \"<button type=\\\"submit\\\" name=\\\"action\\\" value=\\\"deny\\\">Deny / no reply</button>\";\n  html += \"</form></body></html>\";\n\n  return { json: { ...input, html } };\n});"
+      }
+    },
+    {
+      "id": "783bc591-8766-44fc-a05b-768dced4e289",
+      "name": "K. Respond Review Form HTML",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1400,
+        360
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.html }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "0bcff491-6ca2-47d1-9d82-4eb38dbc2674",
+      "name": "J2. Render Token Error Page",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        600
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction escapeHtml(value) {\n  return String(value == null ? \"\" : value)\n    .replace(/&/g, \"&amp;\")\n    .replace(/</g, \"&lt;\")\n    .replace(/>/g, \"&gt;\")\n    .replace(/\"/g, \"&quot;\")\n    .replace(/'/g, '&#39;');\n}\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const reason = input.token_invalid_reason || \"INVALID\";\n  const messages = {\n    CASE_NOT_FOUND: \"This review case could not be found.\",\n    WRONG_TOKEN: \"This review link is invalid.\",\n    ALREADY_DECIDED: \"This review case has already been decided.\",\n    EXPIRED: \"This review link has expired. Ask the operator to re-issue a notification.\"\n  };\n  const message = messages[reason] || \"This review link is no longer valid.\";\n  const html = \"<!DOCTYPE html><html><body><h1>Review link unavailable</h1><p>\" + escapeHtml(message) + \"</p></body></html>\";\n  return { json: { ...input, html, http_status: reason === \"CASE_NOT_FOUND\" ? 404 : 410 } };\n});"
+      }
+    },
+    {
+      "id": "be0b3da9-60f5-4680-85c5-4b9ea5ceb698",
+      "name": "K2. Respond Token Error Page",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1400,
+        600
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.html }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "f498afbe-f0c0-4f6f-bf03-09d8c5492f8b",
+      "name": "Webhook - Review Submit (Dev)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        900
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hmz-validation-review-submit-dev",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "8543400c-8cdb-4f11-a71e-2f8368a06418"
+    },
+    {
+      "id": "3553d18c-b722-4e07-97b8-55002461c73e",
+      "name": "Webhook - Review Submit (Production, Gated Path)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        1060
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reply-review/submit",
+        "responseMode": "responseNode",
+        "options": {},
+        "authentication": "basicAuth"
+      },
+      "webhookId": "fbf6bc46-987d-4395-bf9e-83457878376c",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "HxXqs7varXTMOXbM",
+          "name": "hmzReviewBasicAuth"
+        }
+      }
+    },
+    {
+      "id": "b2d05008-a6bd-48dd-bb3e-5e5b743be9f8",
+      "name": "L0. Lookup Case for Submit (Data Table)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        280,
+        980
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "getRows",
+        "dataTableId": {
+          "mode": "id",
+          "value": "WMTmI6UNjZZgSU3h"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "case_id",
+              "condition": "eq",
+              "keyValue": "={{ ($json.query && $json.query.case) || ($json.body && $json.body.case_id) || \"\" }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "c51355fd-ce17-4815-884c-da2151b3ba8b",
+      "name": "L. Validate & Consume Review Token (POST)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        980
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction parseJson(value, fallback) {\n  if (value === null || value === undefined || value === \"\") return fallback;\n  if (typeof value === \"object\") return value;\n  try { return JSON.parse(String(value)); } catch { return fallback; }\n}\n\nfunction getWebhookInput() {\n  for (const name of [\"Webhook - Review Submit (Production, Gated Path)\", \"Webhook - Review Submit (Dev)\"]) {\n    try {\n      const item = $(name).first();\n      if (item && item.json) return item.json;\n    } catch {}\n  }\n  return {};\n}\n\nconst webhook = getWebhookInput();\nconst body = webhook.body || (webhook.webhook && webhook.webhook.body) || {};\nconst query = webhook.query || (webhook.webhook && webhook.webhook.query) || {};\nconst caseId = String(body.case_id || query.case || \"\");\nconst token = String(body.token || query.token || \"\");\n\nreturn items.map(item => {\n  const raw = item.json || {};\n  const row = raw.case_id ? {\n    ...raw,\n    template_variables: parseJson(raw.template_variables, {}),\n    blocked_variables: parseJson(raw.blocked_variables, []),\n    sanitized_context: parseJson(raw.sanitized_context, {}),\n    decision_payload: parseJson(raw.decision_payload, null)\n  } : null;\n\n  const handoff = row && row.sanitized_context && row.sanitized_context.sender_handoff\n    ? row.sanitized_context.sender_handoff\n    : null;\n\n  let tokenValid = true;\n  let reason = \"OK\";\n\n  if (!row) { tokenValid = false; reason = \"CASE_NOT_FOUND\"; }\n  else if (!token || row.token !== token) { tokenValid = false; reason = \"WRONG_TOKEN\"; }\n  else if (row.status !== \"NEW\" && row.status !== \"IN_REVIEW\") { tokenValid = false; reason = \"ALREADY_DECIDED\"; }\n  else if (row.token_expires_at && new Date(row.token_expires_at).getTime() < Date.now()) { tokenValid = false; reason = \"EXPIRED\"; }\n  else if (!handoff || !handoff.nes || !handoff.decision || !handoff.validation) { tokenValid = false; reason = \"MISSING_SENDER_HANDOFF\"; }\n\n  return {\n    json: {\n      ...webhook,\n      case_id: caseId,\n      token,\n      token_valid: tokenValid,\n      token_invalid_reason: reason,\n      review_case: row || {},\n      case_input: handoff || {},\n      submit_action: String(body.action || \"\"),\n      submit_edited_text: String(body.edited_reply_text || \"\"),\n      submit_approver_identity: String(body.approver_identity || \"\"),\n      submit_denial_reason: String(body.denial_reason || \"\")\n    }\n  };\n});"
+      }
+    },
+    {
+      "id": "c7e0a283-d6b2-4609-bfec-408ad7371e2b",
+      "name": "M. Submit Token Valid Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        840,
+        980
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $json.token_valid === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b833d82f-2d95-4a70-b8b4-c940f09cd807",
+      "name": "N. Process Reviewer Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        860
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const rc = { ...(input.review_case || {}) };\n  const action = input.submit_action === \"approve\" ? \"approve\" : \"deny\";\n  const approver = input.submit_approver_identity || \"\";\n  const blocked = rc.blocked_variables || [];\n  const nowIso = new Date().toISOString();\n\n  let finalAction = action;\n  if (action === \"approve\" && blocked.length > 0) finalAction = \"blocked\";\n  if (action === \"approve\" && !approver) finalAction = \"blocked\";\n\n  if (finalAction === \"approve\") {\n    rc.status = \"RESPONSE_APPROVED\";\n    rc.approver_identity = approver;\n    rc.approved_at = nowIso;\n    rc.final_reply_text = input.submit_edited_text || rc.draft_text || \"\";\n    rc.decision_payload = { action: \"approve\", approver, decided_at: nowIso };\n  } else if (finalAction === \"blocked\") {\n    rc.status = \"BLOCKED_MISSING_VARIABLES\";\n    rc.approver_identity = approver || null;\n    rc.decision_payload = { action: \"blocked\", blocked_variables: blocked, decided_at: nowIso, attempted_by: approver || null };\n  } else {\n    rc.status = \"NO_REPLY_REQUIRED\";\n    rc.approver_identity = approver || null;\n    rc.approved_at = nowIso;\n    rc.decision_payload = { action: \"deny\", approver: approver || null, reason: input.submit_denial_reason || null, decided_at: nowIso };\n  }\n  rc.updated_at = nowIso;\n\n  return { json: { ...input, review_case: rc, final_action: finalAction } };\n});"
+      }
+    },
+    {
+      "id": "e0148ef6-fd9b-4685-b1c1-737313b8e4bf",
+      "name": "O. Persist Reviewer Decision (Data Table)",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1400,
+        860
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "dataTableId": {
+          "mode": "id",
+          "value": "WMTmI6UNjZZgSU3h"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "case_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.review_case.case_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "={{ $json.review_case.status }}",
+            "approver_identity": "={{ $json.review_case.approver_identity }}",
+            "approved_at": "={{ $json.review_case.approved_at }}",
+            "final_reply_text": "={{ $json.review_case.final_reply_text }}",
+            "decision_payload": "={{ JSON.stringify($json.review_case.decision_payload) }}",
+            "updated_at": "={{ $json.review_case.updated_at }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "493c4799-c85f-4e51-bb47-ff5fc2e21bf6",
+      "name": "P. Approval Outcome Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1680,
+        860
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $json.final_action === 'approve' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "8b55caf6-1a5f-4cf2-9967-a3bc25b8dd48",
+      "name": "Q. Reply Sender Handoff (Approved)",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1960,
+        760
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "mode": "list",
+          "value": "ePS5uBBxKxhFCYgU",
+          "cachedResultName": "HMZ - Instantly Reply Sender - Validation"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "nes": "={{ $json.case_input.nes }}",
+            "decision": "={{ $json.case_input.decision }}",
+            "draft": "={{ Object.assign({}, $json.case_input.draft, { draft_text: $json.review_case.final_reply_text }) }}",
+            "validation": "={{ $json.case_input.validation }}",
+            "approval": "={{ { approved: true, approver_identity: $json.review_case.approver_identity, approved_at: $json.review_case.approved_at, case_id: $json.review_case.case_id, policy_version: $json.review_case.policy_version } }}"
+          }
+        },
+        "mode": "each",
+        "options": {}
+      }
+    },
+    {
+      "id": "06cffa98-3d9e-4951-961e-44850df0be1d",
+      "name": "R. Build Approved Result Page",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        760
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction escapeHtml(value) {\n  return String(value == null ? \"\" : value)\n    .replace(/&/g, \"&amp;\")\n    .replace(/</g, \"&lt;\")\n    .replace(/>/g, \"&gt;\")\n    .replace(/\"/g, \"&quot;\")\n    .replace(/'/g, \"&#39;\");\n}\n\nlet approvalContext = {};\ntry { approvalContext = $(\"O1. Restore Reviewer Decision Context\").first().json || {}; } catch {}\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const rc = approvalContext.review_case || {};\n  let html = \"<!DOCTYPE html><html><body><h1>Approved</h1>\";\n  html += \"<p>Case \" + escapeHtml(rc.case_id) + \" approved by \" + escapeHtml(rc.approver_identity) + \". Handed off to the Reply Sender.</p>\";\n  const senderResult = input.sender_result || input.terminal || input;\n  html += \"<p>Sender result: \" + escapeHtml(JSON.stringify(senderResult.terminal_status || senderResult.send_state || senderResult.result || senderResult)) + \"</p>\";\n  html += \"</body></html>\";\n  return { json: { ...input, review_case: rc, html, http_status: 200 } };\n});"
+      }
+    },
+    {
+      "id": "639e7a98-9a53-4496-acee-7af39bac5f7b",
+      "name": "K3. Respond Approved Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        2520,
+        760
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.html }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "8006370d-3fbe-43e5-9160-af54929bd98d",
+      "name": "Q2. Build Non-Send Terminal Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1960,
+        1000
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction escapeHtml(value) {\n  return String(value == null ? \"\" : value)\n    .replace(/&/g, \"&amp;\")\n    .replace(/</g, \"&lt;\")\n    .replace(/>/g, \"&gt;\")\n    .replace(/\"/g, \"&quot;\")\n    .replace(/'/g, '&#39;');\n}\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const rc = input.review_case || {};\n  let html = \"<!DOCTYPE html><html><body><h1>Recorded</h1>\";\n  if (rc.status === \"BLOCKED_MISSING_VARIABLES\") {\n    html += \"<p>Approval blocked: missing required variables (\" + escapeHtml((rc.blocked_variables || []).join(\", \")) + \"). No reply was sent.</p>\";\n  } else {\n    html += \"<p>No reply will be sent for case \" + escapeHtml(rc.case_id) + \". Status: \" + escapeHtml(rc.status) + \"</p>\";\n  }\n  html += \"</body></html>\";\n  return { json: { ...input, html, http_status: 200 } };\n});"
+      }
+    },
+    {
+      "id": "c69caf4d-1464-4646-823c-b1521ea46b1d",
+      "name": "K4. Respond Non-Send Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        2240,
+        1000
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.html }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "933a5e44-0e1c-4437-a564-9ade352ced60",
+      "name": "N2. Render Submit Token Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        1100
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction escapeHtml(value) {\n  return String(value == null ? \"\" : value)\n    .replace(/&/g, \"&amp;\")\n    .replace(/</g, \"&lt;\")\n    .replace(/>/g, \"&gt;\")\n    .replace(/\"/g, \"&quot;\")\n    .replace(/'/g, '&#39;');\n}\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const reason = input.token_invalid_reason || \"INVALID\";\n  const messages = {\n    CASE_NOT_FOUND: \"This review case could not be found.\",\n    WRONG_TOKEN: \"This review link is invalid.\",\n    ALREADY_DECIDED: \"This review case has already been decided. No second submission is accepted.\",\n    EXPIRED: \"This review link has expired.\",\n    REVIEWER_NOT_ALLOWLISTED: \"This reviewer identity is not authorized to submit decisions.\"\n  };\n  const message = messages[reason] || \"This review link is no longer valid.\";\n  const html = \"<!DOCTYPE html><html><body><h1>Submission rejected</h1><p>\" + escapeHtml(message) + \"</p></body></html>\";\n  const httpStatus = reason === \"CASE_NOT_FOUND\" ? 404 : (reason === \"REVIEWER_NOT_ALLOWLISTED\" ? 403 : 409);\n  return { json: { ...input, html, http_status: httpStatus } };\n});"
+      }
+    },
+    {
+      "id": "6e90fac0-a0d5-4317-b958-6683b157ccb2",
+      "name": "K5. Respond Submit Token Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1400,
+        1100
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.html }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "node_m1",
+      "name": "M1. Reviewer Identity Allowlist Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        980,
+        860
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\n// HMZ_INJECT_BEGIN:REVIEWER_ALLOWLIST\r\nconst REVIEWER_ALLOWLIST = [\"humza@hmzaiautomation.com\"];\r\n// HMZ_INJECT_END:REVIEWER_ALLOWLIST\n\nreturn items.map((item) => {\n  const input = item.json || {};\n  const identity = input.submit_approver_identity || null;\n  const configured = REVIEWER_ALLOWLIST.length > 0;\n  // Fail-closed: an empty/unconfigured allowlist never allowlists a\n  // reviewer. M2 (the new gate below) treats this as a hard rejection,\n  // independent of and in addition to workflow 03's live-send gate 10.\n  const allowlisted = configured && !!identity && REVIEWER_ALLOWLIST.includes(identity);\n  return {\n    json: {\n      ...input,\n      reviewer_allowlist_check: {\n        configured,\n        identity,\n        allowlisted,\n      },\n    },\n  };\n});"
+      }
+    },
+    {
+      "id": "m2",
+      "name": "M2. Reviewer Allowlist Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "onError": "continueRegularOutput",
+      "position": [
+        1180,
+        860
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-m2",
+              "leftValue": "={{ $json.reviewer_allowlist_check.allowlisted === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "m2b",
+      "name": "M2b. Mark Reviewer Not Allowlisted",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "onError": "continueRegularOutput",
+      "position": [
+        1180,
+        1020
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nreturn items.map((item) => {\n  const input = item.json || {};\n  return { json: { ...input, token_invalid_reason: 'REVIEWER_NOT_ALLOWLISTED' } };\n});"
+      }
+    },
+    {
+      "id": "b7f0c79e-45ea-4a8a-a8aa-0ec862bdc8d2",
+      "name": "O1. Restore Reviewer Decision Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        860
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction parseJson(value, fallback) {\n  if (value === null || value === undefined || value === \"\") return fallback;\n  if (typeof value === \"object\") return value;\n  try { return JSON.parse(String(value)); } catch { return fallback; }\n}\n\nconst prior = $(\"N. Process Reviewer Decision\").first().json || {};\nconst baseCase = prior.review_case || {};\n\nreturn items.map(item => {\n  const row = item.json || {};\n  const rc = {\n    ...baseCase,\n    ...row,\n    template_variables: parseJson(row.template_variables, baseCase.template_variables || {}),\n    blocked_variables: parseJson(row.blocked_variables, baseCase.blocked_variables || []),\n    sanitized_context: parseJson(row.sanitized_context, baseCase.sanitized_context || {}),\n    decision_payload: parseJson(row.decision_payload, baseCase.decision_payload || null)\n  };\n\n  return { json: { ...prior, review_case: rc } };\n});"
+      }
+    }
+  ],
+  "connections": {
+    "When Called to Create Review Case": {
+      "main": [
+        [
+          {
+            "node": "A. Build Review Case Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A. Build Review Case Record": {
+      "main": [
+        [
+          {
+            "node": "B. Upsert Review Case (Data Table)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B. Upsert Review Case (Data Table)": {
+      "main": [
+        [
+          {
+            "node": "C. Notification Configured Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "C. Notification Configured Router": {
+      "main": [
+        [
+          {
+            "node": "D. Build Google Chat Notification Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "D2. Mark Review Notification Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "D. Build Google Chat Notification Payload": {
+      "main": [
+        [
+          {
+            "node": "E. POST Google Chat Webhook (Gated)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "E. POST Google Chat Webhook (Gated)": {
+      "main": [
+        [
+          {
+            "node": "F. Merge Notification Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "D2. Mark Review Notification Failed": {
+      "main": [
+        [
+          {
+            "node": "F. Merge Notification Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "F. Merge Notification Result": {
+      "main": [
+        [
+          {
+            "node": "F2. Update Case Notification Status (Data Table)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "F2. Update Case Notification Status (Data Table)": {
+      "main": [
+        [
+          {
+            "node": "G. Build Create-Case Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Review Form (Dev)": {
+      "main": [
+        [
+          {
+            "node": "H0. Lookup Case for Form (Data Table)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Review Form (Production, Gated Path)": {
+      "main": [
+        [
+          {
+            "node": "H0. Lookup Case for Form (Data Table)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "H0. Lookup Case for Form (Data Table)": {
+      "main": [
+        [
+          {
+            "node": "H. Validate Review Token (GET)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "H. Validate Review Token (GET)": {
+      "main": [
+        [
+          {
+            "node": "I. Token Valid Router (GET)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "I. Token Valid Router (GET)": {
+      "main": [
+        [
+          {
+            "node": "J. Render Review Form HTML",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "J2. Render Token Error Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "J. Render Review Form HTML": {
+      "main": [
+        [
+          {
+            "node": "K. Respond Review Form HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "J2. Render Token Error Page": {
+      "main": [
+        [
+          {
+            "node": "K2. Respond Token Error Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Review Submit (Dev)": {
+      "main": [
+        [
+          {
+            "node": "L0. Lookup Case for Submit (Data Table)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Review Submit (Production, Gated Path)": {
+      "main": [
+        [
+          {
+            "node": "L0. Lookup Case for Submit (Data Table)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "L0. Lookup Case for Submit (Data Table)": {
+      "main": [
+        [
+          {
+            "node": "L. Validate & Consume Review Token (POST)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "L. Validate & Consume Review Token (POST)": {
+      "main": [
+        [
+          {
+            "node": "M. Submit Token Valid Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "M. Submit Token Valid Router": {
+      "main": [
+        [
+          {
+            "node": "M1. Reviewer Identity Allowlist Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "N2. Render Submit Token Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "N. Process Reviewer Decision": {
+      "main": [
+        [
+          {
+            "node": "O. Persist Reviewer Decision (Data Table)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "O. Persist Reviewer Decision (Data Table)": {
+      "main": [
+        [
+          {
+            "node": "O1. Restore Reviewer Decision Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "P. Approval Outcome Router": {
+      "main": [
+        [
+          {
+            "node": "Q. Reply Sender Handoff (Approved)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Q2. Build Non-Send Terminal Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Q. Reply Sender Handoff (Approved)": {
+      "main": [
+        [
+          {
+            "node": "R. Build Approved Result Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "R. Build Approved Result Page": {
+      "main": [
+        [
+          {
+            "node": "K3. Respond Approved Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Q2. Build Non-Send Terminal Result": {
+      "main": [
+        [
+          {
+            "node": "K4. Respond Non-Send Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "N2. Render Submit Token Error": {
+      "main": [
+        [
+          {
+            "node": "K5. Respond Submit Token Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "M1. Reviewer Identity Allowlist Check": {
+      "main": [
+        [
+          {
+            "node": "M2. Reviewer Allowlist Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "M2. Reviewer Allowlist Router": {
+      "main": [
+        [
+          {
+            "node": "N. Process Reviewer Decision",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "M2b. Mark Reviewer Not Allowlisted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "M2b. Mark Reviewer Not Allowlisted": {
+      "main": [
+        [
+          {
+            "node": "N2. Render Submit Token Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "O1. Restore Reviewer Decision Context": {
+      "main": [
+        [
+          {
+            "node": "P. Approval Outcome Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "errorWorkflow": "2PR9YEkG4KyGdowa"
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": null,
+  "versionId": "f9b43654-9473-4b38-adbb-95d6b383f701",
+  "activeVersionId": null,
+  "versionCounter": 10,
+  "triggerCount": 4,
+  "sourceWorkflowId": null,
+  "shared": [
+    {
+      "updatedAt": "2026-06-17T18:29:52.628Z",
+      "createdAt": "2026-06-17T18:29:52.628Z",
+      "role": "workflow:owner",
+      "workflowId": "9aPrt92jFhoYFxbs",
+      "projectId": "wczOkcRaHDWk4Ffs",
+      "project": {
+        "updatedAt": "2026-06-17T07:02:32.299Z",
+        "createdAt": "2026-06-17T06:55:32.963Z",
+        "id": "wczOkcRaHDWk4Ffs",
+        "name": "Hamzah Zahid <hamzahzahidsales@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "c36de550-8f81-4842-a501-1a1e33f7d4b8"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": null
+}

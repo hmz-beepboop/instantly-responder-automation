@@ -1,0 +1,140 @@
+{
+  "schemaVersion": "2.0",
+  "generatedAtUtc": "2026-06-14T17:06:51.2179350+00:00",
+  "mode": "SYNTHETIC_RUNTIME_AND_READ_ONLY_REMOTE_AUDIT",
+  "externalInstantlyCallsPermitted": false,
+  "historicalOwnerEmailReplacements": 0,
+  "workflowChecks": [
+    {
+      "name": "HMZ - Instantly Reply Intake - Validation",
+      "id": "cCcpFfi6iovWS94T",
+      "active": false,
+      "nodeCountLocal": 22,
+      "nodeCountRemote": 22,
+      "localMatchesRemote": true,
+      "mismatches": [],
+      "credentialsBound": false,
+      "externalHttpTargets": []
+    },
+    {
+      "name": "HMZ - Reply Decision Engine - Validation",
+      "id": "NJcnNQoJ5nSIWYte",
+      "active": false,
+      "nodeCountLocal": 12,
+      "nodeCountRemote": 12,
+      "localMatchesRemote": true,
+      "mismatches": [],
+      "credentialsBound": false,
+      "externalHttpTargets": []
+    },
+    {
+      "name": "HMZ - Instantly Reply Sender - Validation",
+      "id": "OzYLWuCF6DoU7Iw9",
+      "active": false,
+      "nodeCountLocal": 21,
+      "nodeCountRemote": 21,
+      "localMatchesRemote": true,
+      "mismatches": [],
+      "credentialsBound": false,
+      "externalHttpTargets": []
+    },
+    {
+      "name": "HMZ - Reply Error Handler - Validation",
+      "id": "koyKIaY2ExF3yhx7",
+      "active": false,
+      "nodeCountLocal": 9,
+      "nodeCountRemote": 9,
+      "localMatchesRemote": true,
+      "mismatches": [],
+      "credentialsBound": false,
+      "externalHttpTargets": []
+    },
+    {
+      "name": "HMZ - Reply SLA Watchdog - Validation",
+      "id": "37p0OPzfDxlPvYQo",
+      "active": false,
+      "nodeCountLocal": 14,
+      "nodeCountRemote": 14,
+      "localMatchesRemote": true,
+      "mismatches": [],
+      "credentialsBound": false,
+      "externalHttpTargets": []
+    },
+    {
+      "name": "HMZ - Reply Full Test Harness - Validation",
+      "id": "gu9Ede8IM5cHGtKK",
+      "active": false,
+      "nodeCountLocal": 7,
+      "nodeCountRemote": 7,
+      "localMatchesRemote": true,
+      "mismatches": [],
+      "credentialsBound": false,
+      "externalHttpTargets": []
+    }
+  ],
+  "commands": {
+    "phase4a": {
+      "exitCode": 0,
+      "timedOut": false,
+      "passedMarker": true,
+      "outputHash": "F8F003B2159DED88A0256DF0365204EE66036510AF4B45A2EB4BA8B6726EF720",
+      "errorSnippet": ""
+    },
+    "phase4b": {
+      "exitCode": 0,
+      "timedOut": false,
+      "passedMarker": true,
+      "outputHash": "03BD426B66D22E8B021D1E599FEC48F38A3EC01A55F23C1D0C204DB6B37F2F63",
+      "errorSnippet": ""
+    },
+    "sidecarHealth": {
+      "exitCode": 0,
+      "timedOut": false,
+      "okMarker": true,
+      "outputSnippet": "{\"status\":\"ok\"}",
+      "errorSnippet": ""
+    },
+    "n8nSecurityAudit": {
+      "exitCode": 0,
+      "timedOut": false,
+      "outputHash": "CBF4FC8958D5DC7F7C56B8DE1C7E984F5C99FF3253A65D7AE2E2C2632F55AE41",
+      "outputSnippet": "{\n  \"Nodes Risk Report\": {\n    \"risk\": \"nodes\",\n    \"sections\": [\n      {\n        \"title\": \"Official risky nodes\",\n        \"description\": \"These nodes are part of n8n's official nodes and may be used to fetch and run any arbitrary code in the host system. This may lead to exploits such as remote code execution.\",\n        \"recommendation\": \"Consider reviewing the parameters in these nodes, replacing them with app nodes where possible, and not loading unneeded node types with the NODES_EXCLUDE environment variable. See: https://docs.n8n.io/hosting/configuration/environment-variables/\",\n        \"location\": [\n          {\n            \"kind\": \"node\",\n            \"workflowId\": \"NJcnNQoJ5nSIWYte\",\n            \"workflowName\": \"HMZ - Reply Decision Engine - Validation\",\n            \"nodeId\": \"section_a\",\n            \"nodeName\": \"A. Deterministic Policy Stage\",\n            \"nodeType\": \"n8n-nodes-base.code\"\n          },\n          {\n            \"kind\": \"node\",\n            \"workflowId\": \"NJcnNQoJ5nSIWYte\",\n            \"workflowName\": \"HMZ - Reply Decision Engine - Validation\",\n            \"nodeId\": \"section_b\",\n            \"nodeName\": \"B. Mock Semantic Classifier\",\n            \"nodeType\": \"n8n-nodes-base.code\"\n          },\n          {\n            \"kind\": \"node\",\n            \"workflowId\": \"NJcnNQoJ5nSIWYte\",\n            \"workflowName\": \"HMZ - Reply Decision Engine - Validation\",\n            \"nodeId\": \"section_c\",\n            \"nodeName\": \"C. Decision Policy\",\n            \"nodeType\": \"n8n-nodes-base.code\"\n          },\n          {\n            \"kind\": \"node\",\n            \"workflowId\": \"NJcnNQ...<TRUNCATED>"
+    },
+    "fullTestHarnessRuntime": {
+      "exitCode": 0,
+      "timedOut": false,
+      "passMarker": true,
+      "failedZeroMarker": true,
+      "outputHash": "52A73C37C1D9AF8ECB0FDF62E0ED4EF495355F4C869209FFEF558C9C846839FD",
+      "outputSnippet": "n8n Task Broker ready on 127.0.0.1, port 5679\nFailed to start Python task runner in internal mode. because Python 3 is missing from this system. Launching a Python runner in internal mode is intended only for debugging and is not recommended for production. Users are encouraged to deploy in external mode. See: https://docs.n8n.io/hosting/configuration/task-runners/#setting-up-external-mode\n[license SDK] Skipping renewal on init: renewOnInit is disabled in config\n[license SDK] Skipping renewal on init: autoRenewEnabled is disabled in config\n[license SDK] Skipping renewal on init: license cert is not due for renewal\nRegistered runner \"JS Task Runner\" (HIdp2q7KiF_CL-0LuPX7q) \nExecution was successful:\n====================================\n{\n  \"data\": {\n    \"version\": 1,\n    \"startData\": {},\n    \"resultData\": {\n      \"runData\": {\n        \"Manual Trigger\": [\n          {\n            \"startTime\": 1781456852264,\n            \"executionIndex\": 0,\n            \"source\": [],\n            \"hints\": [],\n            \"executionTime\": 2,\n            \"executionStatus\": \"success\",\n            \"data\": {\n              \"main\": [\n                [\n                  {\n                    \"json\": {},\n                    \"pairedItem\": {\n                      \"item\": 0\n                    }\n                  }\n                ]\n              ]\n            }\n          }\n        ],\n        \"A. Run Fixture Matr...<TRUNCATED>"
+    },
+    "watchdogRuntime": {
+      "exitCode": 0,
+      "timedOut": false,
+      "successMarker": true,
+      "outputHash": "B0230A3FB56F9D69237C87AD24BF3715EB41ED96818453337281E3872E287A12",
+      "outputSnippet": "n8n Task Broker ready on 127.0.0.1, port 5679\nFailed to start Python task runner in internal mode. because Python 3 is missing from this system. Launching a Python runner in internal mode is intended only for debugging and is not recommended for production. Users are encouraged to deploy in external mode. See: https://docs.n8n.io/hosting/configuration/task-runners/#setting-up-external-mode\n[license SDK] Skipping renewal on init: renewOnInit is disabled in config\n[license SDK] Skipping renewal on init: autoRenewEnabled is disabled in config\n[license SDK] Skipping renewal on init: license cert is not due for renewal\nRegistered runner \"JS Task Runner\" (QUp3RMvr6K5VX8yhmZ9rl) \nExecution was successful:\n====================================\n{\n  \"data\": {\n    \"version\": 1,\n    \"startData\": {},\n    \"resultData\": {\n      \"runData\": {\n        \"Schedule Trigger (Eventual)\": [\n          {\n            \"startTime\": 1781456864646,\n            \"executionIndex\": 0,\n            \"source\": [],\n            \"hints\": [],\n            \"executionTime\": 1,\n            \"executionStatus\": \"success\",\n            \"data\": {\n              \"main\": [\n                [\n                  {\n                    \"json\": {},\n                    \"pairedItem\": {\n                      \"item\": 0\n                    }\n                  }\n                ]\n              ]\n            }\n          }\n        ],\n        \"A. Cap...<TRUNCATED>"
+    }
+  },
+  "projectScan": {
+    "realEmailHitCount": 0,
+    "realEmailFiles": [],
+    "syntheticSecretPatternHitCount": 2,
+    "syntheticSecretPatternFiles": [
+      "verification\\phase4a\\run-offline-tests.mjs",
+      "verification\\phase4b\\run-offline-tests.mjs"
+    ],
+    "unexpectedSecretPatternHitCount": 0,
+    "unexpectedSecretPatternFiles": []
+  },
+  "final": {
+    "allInactive": true,
+    "allRemoteMatch": true,
+    "noCredentials": true,
+    "noExternalHttpTargets": true,
+    "harnessRuntimePassed": true,
+    "watchdogRuntimePassed": true,
+    "mechanicalPass": true,
+    "verdict": "PHASE_5_MECHANICAL_AUDIT_PASSED"
+  }
+}

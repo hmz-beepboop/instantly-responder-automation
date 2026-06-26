@@ -1,0 +1,103 @@
+{
+  "flags": "-UseSampleConfig -ValidateConfig -ExportSchema -ExportSampleConfig",
+  "checks_failed": 0,
+  "checks_passed": 15,
+  "script": "SL-PHASE-5B-autonomous-config-and-hours.ps1",
+  "checks": [
+    {
+      "value": false,
+      "note": "Live sends blocked",
+      "check": "autonomous_enabled is false",
+      "result": "PASS"
+    },
+    {
+      "value": true,
+      "note": "Shadow mode",
+      "check": "shadow_only is true",
+      "result": "PASS"
+    },
+    {
+      "value": true,
+      "note": "No real sends",
+      "check": "dry_run is true",
+      "result": "PASS"
+    },
+    {
+      "value": true,
+      "note": "Kill switch active",
+      "check": "emergency_disabled is true",
+      "result": "PASS"
+    },
+    {
+      "value": 0,
+      "note": "No campaigns approved",
+      "check": "campaign_allowlist is empty",
+      "result": "PASS"
+    },
+    {
+      "value": 0,
+      "note": "No senders approved",
+      "check": "sender_allowlist is empty",
+      "result": "PASS"
+    },
+    {
+      "value": 0,
+      "note": "No intents approved",
+      "check": "intent_allowlist is empty",
+      "result": "PASS"
+    },
+    {
+      "value": 0,
+      "note": "Zero sends allowed",
+      "check": "max_autonomous_sends_per_day is 0",
+      "result": "PASS"
+    },
+    {
+      "value": 0.85,
+      "note": "Minimum threshold",
+      "check": "confidence_threshold >= 0.85",
+      "result": "PASS"
+    },
+    {
+      "value": true,
+      "note": "Reviews required",
+      "check": "require_post_action_review is true",
+      "result": "PASS"
+    },
+    {
+      "value": true,
+      "note": "Owner approval required",
+      "check": "owner_approval_required is true",
+      "result": "PASS"
+    },
+    {
+      "value": true,
+      "note": "Toggle required",
+      "check": "live_pilot_requires_owner_toggle is true",
+      "result": "PASS"
+    },
+    {
+      "value": "09:00-18:00",
+      "note": "HH:MM format",
+      "check": "working_hours format valid",
+      "result": "PASS"
+    },
+    {
+      "value": "540 < 1080",
+      "note": "Start must precede end",
+      "check": "working_hours_start before working_hours_end",
+      "result": "PASS"
+    },
+    {
+      "value": "America/New_York",
+      "note": "Required",
+      "check": "reviewer_timezone set",
+      "result": "PASS"
+    }
+  ],
+  "production_writes": false,
+  "overall_result": "PASS",
+  "validation_run": "2026-06-24T11:08:48Z",
+  "live_autonomy_possible": false,
+  "config_source": "built-in sample"
+}

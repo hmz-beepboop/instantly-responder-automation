@@ -1,0 +1,46 @@
+[
+  {
+    "id": "error-routing-settings-error-workflow-wiring",
+    "group": "error_routing",
+    "synthetic": true,
+    "description": "Structural acceptance check: every business-ready workflow except the Error Handler itself has settings.errorWorkflow set to the real Error Handler (04) workflow ID, and 04's trigger node is a real n8n-nodes-base.errorTrigger so n8n's built-in error-workflow routing has somewhere to deliver a failed execution.",
+    "check": "settings_error_workflow_and_error_trigger_present",
+    "input": {
+      "workflows_checked": [
+        "HMZ - Instantly Reply Intake - Validation",
+        "HMZ - Reply Decision Engine - Validation",
+        "HMZ - Instantly Reply Sender - Validation",
+        "HMZ - Reply Human Approval - Validation",
+        "HMZ - Reply SLA Watchdog - Validation",
+        "HMZ - Reply Full Test Harness - Validation"
+      ],
+      "error_handler_workflow": "HMZ - Reply Error Handler - Validation"
+    },
+    "expected": {
+      "each_checked_workflow.settings.errorWorkflow": "<real Error Handler workflow ID>",
+      "error_handler_workflow.settings.errorWorkflow": null,
+      "error_handler_workflow.has_error_trigger_node": true,
+      "error_trigger_node_type": "n8n-nodes-base.errorTrigger"
+    }
+  },
+  {
+    "id": "error-routing-error-handler-direct-call-contract",
+    "group": "error_routing",
+    "synthetic": true,
+    "description": "End-to-end contract proof (already exercised by the Full Test Harness Z3 node and the local-runtime acceptance script): a forced-error payload delivered to the Error Handler workflow (04), whether via the n8n error-workflow routing path (settings.errorWorkflow + Error Trigger, structurally verified above) or via a direct synthetic Execute Workflow Trigger call with the same shape, produces an idempotent persisted error record.",
+    "check": "error_handler_record_shape",
+    "input": {
+      "forced_error": {
+        "workflow": "HMZ - Instantly Reply Sender - Validation",
+        "node": "Q. POST Reply to Instantly (Gated)",
+        "error_message": "synthetic forced error for acceptance testing"
+      }
+    },
+    "expected": {
+      "error_record.send_state": "SEND_UNCERTAIN",
+      "error_record.retryable": false,
+      "persisted_error.errorId": "<non-empty>",
+      "second_identical_call.persisted_error.errorId": "<same as first call (idempotent)>"
+    }
+  }
+]

@@ -1,0 +1,72 @@
+# Phase 4B Minimal n8n Validation Only
+
+## Entry conditions
+
+Proceed only after:
+
+- `reports/PHASE_4B_OFFLINE_BUILD.md` says `PHASE_4B_OFFLINE_READY`
+- the user has run `verification/phase4b/import-phase4b.ps1`
+- the user supplies both imported workflow IDs
+- both workflows are inactive
+
+## Objective
+
+Validate only the two imported Phase 4B workflows.
+
+Do not build, execute, activate, redesign, inspect history, access Instantly, or begin Phase 5.
+
+## Files you may read
+
+Read only:
+
+- `workflows/05_reply_sla_watchdog_validation.json`
+- `workflows/06_reply_full_test_harness_validation.json`
+- `reports/PHASE_4B_OFFLINE_BUILD.md`
+
+## MCP budget
+
+Maximum four calls:
+
+1. Validate Watchdog.
+2. Validate Test Harness.
+3. One surgical repair and revalidation for Watchdog only if a concrete error exists.
+4. One surgical repair and revalidation for Test Harness only if a concrete error exists.
+
+Do not call workflow list/search, full retrieval, node docs, templates, executions, Data Tables, or activation tools.
+
+Warnings alone do not justify editing.
+
+## Repair rules
+
+- Repair only validator errors.
+- At most one repair per workflow.
+- Keep both inactive.
+- Add no credentials.
+- Add no reachable Instantly request.
+- Mirror any repair into local JSON.
+- Stop if four calls are insufficient.
+
+## Deliverable
+
+Create or update only:
+
+- `reports/PHASE_4B_VALIDATION.md`
+
+Include:
+
+- workflow names and IDs
+- inactive state
+- validator errors/warnings
+- repairs
+- MCP calls
+- credential scan
+- external-call scan
+- verdict
+
+Use exactly one:
+
+- `PHASE_4B_VERIFIED`
+- `PHASE_4B_VALIDATION_FAILED`
+- `PHASE_4B_VALIDATION_BLOCKED`
+
+Final response under 180 words. Stop before Phase 5.

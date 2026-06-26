@@ -1,0 +1,48 @@
+{
+  "_description": "Blank 14-day shadow review summary. Filled in at end of 14-day period.",
+  "_instructions": "Complete after all 14 daily sheets are done. Used to satisfy Gate 2 evidence requirement.",
+  "_fake_test_data": false,
+  "summary_date": "FILL_IN_DATE_YYYY-MM-DD",
+  "review_period_start": "FILL_IN_DATE_YYYY-MM-DD",
+  "review_period_end": "FILL_IN_DATE_YYYY-MM-DD",
+  "review_days_completed": 0,
+  "review_days_required": 14,
+  "total_cases_reviewed": 0,
+  "minimum_cases_required": 30,
+  "reviewer": "owner",
+  "shadow_evaluator_workflow_id": "aHzLtQiv6G8h1bqD",
+  "shadow_evaluator_remained_inactive": true,
+  "totals": {
+    "shadow_eligible": 0,
+    "blocked_permanent": 0,
+    "blocked_allowlist": 0,
+    "human_review": 0,
+    "owner_agrees": 0,
+    "owner_disagrees": 0,
+    "owner_uncertain": 0
+  },
+  "safety_totals": {
+    "false_positives": 0,
+    "false_negatives": 0,
+    "live_send_flags": 0,
+    "allowlist_bypass_flags": 0,
+    "stop_events": 0
+  },
+  "gate2_pass_criteria": {
+    "days_completed_ok": false,
+    "cases_reviewed_ok": false,
+    "zero_false_positives": false,
+    "zero_unresolved_disagreements": false,
+    "zero_live_send_flags": false,
+    "owner_satisfied": false
+  },
+  "rc_shadow_001_decision": "PENDING",
+  "rc_shadow_002_decision": "PENDING",
+  "rc_shadow_003_status": "COMPLETE",
+  "allowlists_populated": false,
+  "gate2_approved": false,
+  "gate2_blockers_remaining": [],
+  "owner_notes": "",
+  "owner_signature": "",
+  "owner_signature_date": ""
+}

@@ -1,0 +1,79 @@
+{
+  "fixture_id": "phase3_03_explicit_booking_request",
+  "description": "Explicit scheduling intent (T3 / BOOKING_REQUEST). Should be matched deterministically by det-booking-001 in Section A (no pricing or attachment language present), passed through Section B at confidence 1, and routed to human review with a T1_SCENARIO_A_OPEN_TO_CALL draft.",
+  "input": {
+    "intake_id": "phase3-fixture-03-booking-request",
+    "event_id": "evt-phase3-003",
+    "email_id": "email-phase3-003",
+    "event_type": "reply_received",
+    "lead_email": "casey.nguyen@prospectco.test",
+    "from_address_email": "casey.nguyen@prospectco.test",
+    "email_account": "outbound1@hmzvalidation.test",
+    "reply_subject": "Re: Quick question about your sales pipeline",
+    "reply_text": "Sure, let's schedule a call. I'm available on Tuesday afternoon, here's my availability: Tue 2-4pm ET.",
+    "reply_text_snippet": "Sure, let's schedule a call. I'm available on Tuesday afternoon...",
+    "timestamp": "2026-06-08T16:05:00Z",
+    "campaign_id": "campaign-validation-001",
+    "validation_cell": "CELL_1_SAAS_SALES_HIRING",
+    "workspace": "hmz-workspace-dev",
+    "campaign_name": "US B2B Validation Sprint - Cell 1",
+    "step": 2,
+    "variant": 1,
+    "is_first": true,
+    "thread_id": "thread-phase3-003",
+    "message_id": "<msg-phase3-003@instantly.test>",
+    "unibox_url": "https://app.instantly.test/unibox/thread-phase3-003"
+  },
+  "expected": {
+    "payload_status": "COMPLETE",
+    "deterministic": {
+      "deterministic_match": true,
+      "noop_match": false,
+      "category": "BOOKING_REQUEST",
+      "rule_id": "det-booking-001",
+      "media_flag": false
+    },
+    "classifier": {
+      "category": "BOOKING_REQUEST",
+      "confidence": 1,
+      "interest_stage": "VALIDATION_SPRINT_INTEREST",
+      "permitted_automation_action": "TEMPLATE_DRAFT",
+      "requested_action": "SCHEDULE_CALL"
+    },
+    "decision": {
+      "category": "BOOKING_REQUEST",
+      "confidence": 1,
+      "confidence_overridden": false,
+      "stop_active_sequence": true,
+      "durable_dnc_intent": false,
+      "address_suppression_intent": "NONE",
+      "review_hold": false,
+      "legal_review_required": false,
+      "privacy_review_required": false,
+      "reputational_review_required": false,
+      "human_review_required": true,
+      "reply_permitted": true,
+      "reply_template_id": "T1_SCENARIO_A_OPEN_TO_CALL",
+      "reply_draft_status": "DRAFT_PENDING_REVIEW",
+      "external_action_status": "NOT_PERFORMED",
+      "follow_up_date": null,
+      "interest_stage": "VALIDATION_SPRINT_INTEREST",
+      "terminal_status": "REVIEW_HOLD"
+    },
+    "draft": {
+      "template_id": "T1_SCENARIO_A_OPEN_TO_CALL",
+      "draft_text_is_null": false,
+      "missing_variables": ["firstName", "senderName", "bookingLink"],
+      "human_review_required": true,
+      "booking_link_line_present": false
+    },
+    "validation_learning": {
+      "voice_of_customer_excerpt": "Sure, let's schedule a call. I'm available on Tuesday afternoon, here's my availability: Tue 2-4pm ET.",
+      "all_other_fields": "unknown_or_null_default"
+    },
+    "validation": {
+      "valid": true
+    },
+    "notes": "det-booking-001 matches \"i'm available on\" and \"schedule a call\"; det-price-001 and det-attach-001 are both false so the booking rule is not suppressed. Because Section D's TEMPLATE_REGISTRY entry for T1_SCENARIO_A_OPEN_TO_CALL has a bookingLinkLine and SENDER_CONFIG is empty, the booking-link paragraph is dropped from draft_text and 'bookingLink' is added to missing_variables alongside 'firstName' and 'senderName'."
+  }
+}

@@ -1,0 +1,279 @@
+{
+  "phase": "SL-PHASE-5O",
+  "run_mode": "APPLY",
+  "timestamp": "2026-06-26T03:18:57Z",
+  "checks": [
+    {
+      "name": "Local versionId matches expected (9e9da4f1-a405-46b6-9352-b3906075f846)",
+      "pass": true,
+      "detail": "Found: 9e9da4f1-a405-46b6-9352-b3906075f846"
+    },
+    {
+      "name": "Node J anchor found",
+      "pass": true,
+      "detail": "Looking for draft_revision_type label"
+    },
+    {
+      "name": "Node J does NOT yet have target_classifications",
+      "pass": true,
+      "detail": "Idempotency guard"
+    },
+    {
+      "name": "Node L anchor found",
+      "pass": true,
+      "detail": "Looking for submit_draft_improvement_scope"
+    },
+    {
+      "name": "Node L does NOT yet have target_classifications",
+      "pass": true,
+      "detail": "Idempotency guard"
+    },
+    {
+      "name": "SL-P1A anchor found",
+      "pass": true,
+      "detail": "Looking for draft_improvement_scope in P1A event"
+    },
+    {
+      "name": "SL-P1A does NOT yet have target_classifications",
+      "pass": true,
+      "detail": "Idempotency guard"
+    },
+    {
+      "name": "SL-P2A anchor found",
+      "pass": true,
+      "detail": "Looking for requires_human_scope_decision"
+    },
+    {
+      "name": "SL-P2A does NOT yet have target_classifications",
+      "pass": true,
+      "detail": "Idempotency guard"
+    },
+    {
+      "name": "No Sender modification",
+      "pass": true,
+      "detail": "Sender not touched"
+    },
+    {
+      "name": "No Decision modification",
+      "pass": true,
+      "detail": "Decision not touched"
+    },
+    {
+      "name": "No autonomous mode change",
+      "pass": true,
+      "detail": "Autonomous mode unchanged"
+    },
+    {
+      "name": "No live send path",
+      "pass": true,
+      "detail": "DRY_RUN=true preserved"
+    },
+    {
+      "name": "Node J patch applied (string replaced)",
+      "pass": true,
+      "detail": "Inserted target classification selector"
+    },
+    {
+      "name": "Node L patch applied (string replaced)",
+      "pass": true,
+      "detail": "Added submit_draft_improvement_target_classifications parser"
+    },
+    {
+      "name": "SL-P1A patch applied (string replaced)",
+      "pass": true,
+      "detail": "Added target_classifications to learning event"
+    },
+    {
+      "name": "SL-P2A patch applied (string replaced)",
+      "pass": true,
+      "detail": "Added target_classifications to rule candidate"
+    },
+    {
+      "name": "J contains draft_improvement_target_classifications",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "J contains Which detected classification(s)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "J contains broad_category: checkbox",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "J contains micro_intent: checkbox",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "J contains additional_intent: checkbox",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "J still contains draft_improvement_scope select",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "J still contains draft_revision_reason textarea",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "J still contains draft_revision_type select",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "L contains submit_draft_improvement_target_classifications",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "L contains Array.isArray normalization",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "P1A contains draft_improvement_target_classifications in event",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "P2A contains draft_improvement_target_classifications in candidate",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "P2A proposed_rule_scope still present",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Local JSON written",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Production PUT succeeded",
+      "pass": false,
+      "detail": "N8N_API_KEY env var not set. Set it before running."
+    },
+    {
+      "name": "HTML: Label: Which detected classification(s)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "HTML: Checkbox name=draft_improvement_target_classifications",
+      "pass": false,
+      "detail": ""
+    },
+    {
+      "name": "HTML: broad_category value prefix",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "HTML: micro_intent value prefix",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "HTML: additional_intent value prefix",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "HTML: Selector not hidden (no display:none on selector div)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "HTML: draft_improvement_scope still present",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "HTML: draft_revision_reason still present",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "HTML: Draft improvement learning header",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "Selector not hidden with display:none",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "L: submit_draft_improvement_target_classifications parsed",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "L: handles Array.isArray case",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "L: handles string case",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "L: normalizes to {type, value} objects",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "L: filters null entries",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "P1A: draft_improvement_target_classifications in event",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "P2A: draft_improvement_target_classifications in candidate",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "P2A: proposed_rule_scope still derived",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "P2A: status proposed_shadow preserved",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "P2A: requires_human_activation preserved",
+      "pass": false,
+      "detail": ""
+    }
+  ],
+  "version_before": "9e9da4f1-a405-46b6-9352-b3906075f846",
+  "version_after": "",
+  "nodes_patched": [
+    "J. Render Review Form HTML",
+    "L. Validate & Consume Review Token (POST)",
+    "SL-P1A. Build Draft Revision Event",
+    "SL-P2A. Prepare Phase 1C+2 Capture Data"
+  ],
+  "errors": [
+    "Production PUT failed: N8N_API_KEY env var not set. Set it before running."
+  ],
+  "pass": false
+}

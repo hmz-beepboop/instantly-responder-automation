@@ -1,0 +1,42 @@
+{
+  "generated": "2026-06-24T11:35:00Z",
+  "phase": "5I",
+  "rc_shadow_003_status": "APPLIED",
+  "shadow_evaluator_workflow_id": "aHzLtQiv6G8h1bqD",
+  "new_version_id": "ae13bf4e-ee04-438f-9657-3c57183b90a2",
+  "workflow_active": false,
+  "allowlist_wireup": {
+    "campaign_allowlist_checked": true,
+    "sender_allowlist_checked": true,
+    "intent_allowlist_checked": true,
+    "empty_allowlist_blocks": true,
+    "permanent_block_overrides_allowlist": true,
+    "multi_intent_blocked_component_blocks": true,
+    "would_send_live_now_hardcoded_false": true
+  },
+  "safety_properties": {
+    "gate_1_always_disabled": true,
+    "would_send_live_now_always_false": true,
+    "no_sender_node": true,
+    "no_instantly_api": true,
+    "active_false_after_apply": true
+  },
+  "test_results": {
+    "offline_allowlist_tests": "20/20 PASS",
+    "acceptance_harness": "45/45 PASS",
+    "would_send_live_now_all_false_20_tests": true
+  },
+  "remaining_before_gate2": [
+    "14-day shadow review",
+    "RC-SHADOW-001 owner decision",
+    "RC-SHADOW-002 owner decision",
+    "Populate all three allowlists with owner-approved values",
+    "Owner signs Gate 2 checklist"
+  ],
+  "allowlist_current_state": {
+    "campaign_allowlist": [],
+    "sender_allowlist": [],
+    "intent_allowlist": [],
+    "note": "All empty during shadow review — safe by design"
+  }
+}

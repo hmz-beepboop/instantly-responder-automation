@@ -1,0 +1,32 @@
+{
+  "nes": {
+    "intake_id": "intake-0002",
+    "eaccount": "sender@example.com",
+    "lead_email": "unsub@example.com",
+    "campaign_id": "campaign-456",
+    "threading": {
+      "reply_to_uuid": "22222222-2222-2222-2222-222222222222"
+    },
+    "reply": {
+      "subject": "Please remove me"
+    }
+  },
+  "decision": {
+    "reply_permitted": true,
+    "human_review_required": true,
+    "category": "UNSUBSCRIBE",
+    "reply_template_id": "template-unsub",
+    "address_suppression_intent": "ORGANISATION_DNC",
+    "durable_dnc_intent": true
+  },
+  "validation": {
+    "valid": true
+  },
+  "draft": {
+    "draft_text": "Understood, you have been removed from this campaign."
+  },
+  "approval": {
+    "approved": true
+  },
+  "random_marker": "marker-BBBB"
+}

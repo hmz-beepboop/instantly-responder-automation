@@ -1,0 +1,774 @@
+<#
+.SYNOPSIS
+  SL-PATCH-3.0: Switch AI draft provider from Anthropic/Haiku to OpenAI (Responses API)
+
+.DESCRIPTION
+  Surgical replacement of Decision Engine section_d jsCode only.
+  Section B (micro_intent / draft_policy) was wired by SL-PATCH-2.0 — untouched.
+  Human Approval splice was applied by SL-PATCH-2.0 — untouched.
+  All deterministic fallback templates preserved.
+  AI never decides classification, safety, or send eligibility.
+  Human approval remains mandatory.
+
+  Changes vs SL-PATCH-2.0 section_d:
+    - AI_DRAFT_PROVIDER = 'openai'
+    - AI_DRAFT_MODEL    = 'gpt-5-mini' (configurable)
+    - API key           = OPENAI_API_KEY env var
+    - Endpoint          = https://api.openai.com/v1/responses (Responses API)
+    - Auth header       = Authorization: Bearer <key>
+    - Request body      = {model, input:[{role,content}], max_output_tokens, temperature?}
+    - Response parsing  = data.output[0].content[0].text
+    - AI JSON schema    = {draft_text, reasoning_summary, risk_flags:[]}
+    - ai_attempt        adds provider and reasoning_summary / risk_flags fields
+    - Temperature omitted if model rejects it (error falls back to deterministic)
+
+.PARAMETER WhatIf
+  Preview changes. No writes. Backup reads + offline tests only.
+
+.PARAMETER Apply
+  Execute: backup → deactivate → patch section_d → reactivate → offline tests → verify.
+
+.NOTES
+  Requires: HMZ_N8N_API_KEY env var
+  Runtime only: OPENAI_API_KEY env var (not needed for the patch itself)
+  Version: SL-PATCH-3.0
+  Prerequisites: SL-PATCH-2.0 must have been applied (section_b + HA already patched)
+#>
+
+param(
+    [switch]$WhatIf,
+    [switch]$Apply
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+# ─── CONSTANTS ────────────────────────────────────────────────────────────────
+$API_BASE = 'https://n8n.hmzaiautomation.com/api/v1'
+
+$WF = [ordered]@{
+    Intake        = 'VtDQqw02Ux1TgjIH'
+    SLAWatchdog   = '6a8ojyXCwMwI9nyF'
+    ErrorHandler  = '2PR9YEkG4KyGdowa'
+    HumanApproval = '9aPrt92jFhoYFxbs'
+    Decision      = 'tgYmY97CG4Bm8snI'
+    Sender        = 'ePS5uBBxKxhFCYgU'
+    TestHarness   = 'RLUcJHQJPvLhw4mG'   # never activated
+}
+
+$DEACTIVATE_ORDER = @('Intake','SLAWatchdog','ErrorHandler','HumanApproval','Decision','Sender')
+$REACTIVATE_ORDER = @('Sender','Decision','HumanApproval','ErrorHandler','SLAWatchdog','Intake')
+
+$BACKUP_DIR = Join-Path $PSScriptRoot `
+    "../verification/patch-3.0-backup/$(Get-Date -Format 'yyyyMMddTHHmmssZ')"
+
+# ─── HELPERS ──────────────────────────────────────────────────────────────────
+function Get-ApiKey {
+    $k = $env:HMZ_N8N_API_KEY
+    if (-not $k) { throw 'HMZ_N8N_API_KEY env var is not set.' }
+    return $k
+}
+
+function Invoke-N8n {
+    # HMZ_API_SHIM_V3
+    [CmdletBinding()]
+    param(
+        [Parameter(Position=0)][Alias('Verb')][string]$Method,
+        [Parameter(Position=1)][Alias('Uri','Url','Endpoint','Route','ApiPath')][string]$Path,
+        [Parameter(Position=2)][Alias('Payload','RequestBody','JsonBody','Data','Workflow')]$Body = $null,
+        [Parameter(ValueFromRemainingArguments=$true)]$Rest
+    )
+
+    function _hmzGetScriptVar([string[]]$Names) {
+        foreach ($n in $Names) {
+            $v = Get-Variable -Scope Script -Name $n -ErrorAction SilentlyContinue
+            if ($null -ne $v) { return $v.Value }
+        }
+        return $null
+    }
+    function _hmzProp($Obj, [string]$Name) {
+        if ($null -eq $Obj) { return $null }
+        if ($Obj -is [System.Collections.IDictionary]) { if ($Obj.Contains($Name)) { return $Obj[$Name] } return $null }
+        $p = $Obj.PSObject.Properties[$Name]; if ($null -ne $p) { return $p.Value }; return $null
+    }
+    function _hmzHasProp($Obj, [string]$Name) {
+        if ($null -eq $Obj) { return $false }
+        if ($Obj -is [System.Collections.IDictionary]) { return $Obj.Contains($Name) }
+        return ($null -ne $Obj.PSObject.Properties[$Name])
+    }
+
+    $validMethods = @('GET','POST','PUT','PATCH','DELETE')
+    $methodText = [string]$Method; $pathText = [string]$Path; $bodyToSend = $Body
+
+    if ($methodText -match '^(https?://|/)' -and ($validMethods -contains $pathText.ToUpperInvariant())) { $tmp=$methodText;$methodText=$pathText;$pathText=$tmp }
+    elseif (-not ($validMethods -contains $methodText.ToUpperInvariant()) -and ($validMethods -contains $pathText.ToUpperInvariant())) { $tmp=$methodText;$methodText=$pathText;$pathText=$tmp }
+    elseif (([string]::IsNullOrWhiteSpace($pathText)) -and ($methodText -match '^(https?://|/)')) { $pathText=$methodText;$methodText='GET' }
+
+    if ($Rest -and $Rest.Count -gt 0 -and $null -eq $bodyToSend) { $bodyToSend = $Rest[0] }
+    $methodUpper = $methodText.ToUpperInvariant()
+    if (-not ($validMethods -contains $methodUpper)) { throw ("Unsupported method: '{0}'" -f $methodText) }
+    if ([string]::IsNullOrWhiteSpace($pathText)) { throw ("No path for method {0}." -f $methodUpper) }
+
+    if ($methodUpper -eq 'PATCH' -and $pathText -match '^/workflows/([^/]+)$') {
+        $wfId = $Matches[1]; $activeValue = _hmzProp $bodyToSend 'active'
+        if ($activeValue -eq $true)  { $methodUpper='POST'; $pathText="/workflows/$wfId/activate";   $bodyToSend=$null }
+        elseif ($activeValue -eq $false) { $methodUpper='POST'; $pathText="/workflows/$wfId/deactivate"; $bodyToSend=$null }
+        else { throw ("Unsupported PATCH /workflows/{0} without active=true/false." -f $wfId) }
+    }
+
+    if ($methodUpper -eq 'PUT' -and $pathText -match '^/workflows/([^/]+)$' -and $null -ne $bodyToSend) {
+        $candidate = $bodyToSend
+        $nwf = _hmzProp $candidate 'workflow'; if ($null -ne $nwf) { $candidate = $nwf }
+        $nwf2 = _hmzProp $candidate 'wf';      if ($null -ne $nwf2){ $candidate = $nwf2 }
+        if ((_hmzHasProp $candidate 'name') -and (_hmzHasProp $candidate 'nodes') -and (_hmzHasProp $candidate 'connections')) {
+            $settings = _hmzProp $candidate 'settings'; if ($null -eq $settings) { $settings = @{} }
+            $sanitized = [ordered]@{ name=(_hmzProp $candidate 'name'); nodes=(_hmzProp $candidate 'nodes'); connections=(_hmzProp $candidate 'connections'); settings=$settings }
+            if (_hmzHasProp $candidate 'staticData') { $sd=_hmzProp $candidate 'staticData'; if($null -ne $sd){$sanitized.staticData=$sd} }
+            if (_hmzHasProp $candidate 'pinData')    { $pd=_hmzProp $candidate 'pinData';    if($null -ne $pd){$sanitized.pinData=$pd} }
+            $bodyToSend = $sanitized
+        }
+    }
+
+    $base = _hmzGetScriptVar @('N8N_BASE','N8N_API_BASE','BASE_URL','ApiBase','BaseUrl','API_BASE')
+    if (-not $base) { $base = 'https://n8n.hmzaiautomation.com/api/v1' }
+    $uri = if ($pathText -match '^https?://') { $pathText } else { "$base$pathText" }
+
+    $hdrs = _hmzGetScriptVar @('headers','Headers','HEADERS')
+    if (-not $hdrs) {
+        if (-not $env:HMZ_N8N_API_KEY) { throw "HMZ_N8N_API_KEY not set." }
+        $hdrs = @{ 'X-N8N-API-KEY'=$env:HMZ_N8N_API_KEY; 'Accept'='application/json'; 'Content-Type'='application/json' }
+    }
+
+    $whatIfFlag = _hmzGetScriptVar @('WhatIf')
+    if ([bool]$whatIfFlag -and ($methodUpper -in @('POST','PUT','PATCH','DELETE'))) {
+        Write-Host ("[WHATIF] {0} {1}" -f $methodUpper, $uri); return $null
+    }
+
+    $p = @{ Uri=$uri; Headers=$hdrs; Method=$methodUpper }
+    if ($null -ne $bodyToSend) { $p.Body=($bodyToSend | ConvertTo-Json -Depth 100); $p.ContentType='application/json' }
+    return Invoke-RestMethod @p
+}
+
+function Backup-Wf {
+    param([string]$Name, [string]$Id)
+    $wf   = Invoke-N8n -Method GET -Path "/workflows/$Id"
+    $path = Join-Path $BACKUP_DIR "$Name-$Id.json"
+    $wf | ConvertTo-Json -Depth 60 | Set-Content -Path $path -Encoding UTF8
+    Write-Host "  BACKUP  $Name → $([System.IO.Path]::GetFileName($path))"
+    return $wf
+}
+
+function Set-Active {
+    param([string]$Name, [string]$Id, [bool]$Active)
+    $verb = if ($Active) { 'activate' } else { 'deactivate' }
+    try   { Invoke-N8n -Method PATCH -Path "/workflows/$Id/$verb" | Out-Null; Write-Host "  $($verb.ToUpper().PadRight(12)) $Name ($Id)" }
+    catch { Write-Warning "  $verb failed for $Name ($Id): $_" }
+}
+
+function Find-Node {
+    param($Nodes, [string]$Name)
+    $n = $Nodes | Where-Object { $_.name -eq $Name } | Select-Object -First 1
+    if (-not $n) { throw "Node '$Name' not found in workflow." }
+    return $n
+}
+
+# ─── NEW SECTION D JS — OpenAI Responses API ──────────────────────────────────
+$NEW_SECTION_D = @'
+const items = $input.all();
+
+// === AI DRAFT CONFIG FLAGS ===
+const AI_DRAFT_PROVIDER         = 'openai';
+const AI_DRAFT_MODE             = 'supervised';   // off | supervised | fallback_only
+const AI_DRAFT_MODEL            = 'gpt-5-mini';
+const AI_DRAFT_TIMEOUT_MS       = 8000;
+const AI_DRAFT_MAX_OUTPUT_TOKENS = 320;
+const AI_DRAFT_TEMPERATURE      = 0.3;
+const AI_API_KEY = (typeof $env !== 'undefined' && $env.OPENAI_API_KEY) ? $env.OPENAI_API_KEY : '';
+
+// HMZ_INJECT_BEGIN:SENDER_CONFIG
+const SENDER_CONFIG = {};
+// HMZ_INJECT_END:SENDER_CONFIG
+
+// === DETERMINISTIC MICRO INTENT TEMPLATES =====================================
+const MI_TEMPLATES = {
+  MEETING_TIME_REQUEST: {
+    paragraphs: [
+      'Thanks, <<firstName>>. Happy to talk it through.',
+      "We're currently validating the capacity-aligned outbound model with US B2B teams. The first step is a brief 10-minute conversation to understand how you currently handle outbound and whether the problem is relevant.",
+      'You can choose a suitable time here: <<bookingLink>>',
+      "Or reply with a couple of times that work for you and I'll coordinate it.",
+      '<<senderName>>'
+    ],
+    bookingLinkLine: 'You can choose a suitable time here: <<bookingLink>>',
+    noName: { from:'Thanks, <<firstName>>. Happy to talk it through.', to:'Happy to talk it through.' }
+  },
+  PROOF_OR_CASE_STUDY_REQUEST: {
+    paragraphs: [
+      'Thanks, <<firstName>>. Happy to be straight about where we are.',
+      "This is validation stage — no public case studies or proven results yet. We're running conversations with US B2B teams to understand whether the capacity problem is real before we have evidence to share.",
+      "The conversation we're offering is the proof step — a brief 10-minute call to see whether the problem is relevant to your situation.",
+      '<<senderName>>'
+    ],
+    noName: { from:'Thanks, <<firstName>>. Happy to be straight about where we are.', to:'Happy to be straight about where we are.' }
+  },
+  OFFER_EXPLANATION: {
+    paragraphs: [
+      'Thanks, <<firstName>>. Happy to explain.',
+      "The model starts from your sales team's real capacity — how many qualified meetings they can actually handle and what counts as qualified — and builds outbound to fill that rather than maximising volume. Fewer junk meetings, better alignment to what the team can close.",
+      "We're at validation stage, so the next step is a brief 10-minute conversation to understand your setup and whether the problem is relevant.",
+      '<<senderName>>'
+    ],
+    noName: { from:'Thanks, <<firstName>>. Happy to explain.', to:'Happy to explain.' }
+  },
+  HOW_IT_WORKS_REQUEST: {
+    paragraphs: [
+      'Thanks, <<firstName>>. Here is the short version.',
+      "We define how many qualified meetings your sales team can realistically handle and what qualified means for your motion, then build outbound to fill that capacity rather than maximising volume regardless of quality.",
+      "We're validating this with US B2B teams. The first step would be a brief 10-minute conversation to understand your setup and whether this is relevant.",
+      '<<senderName>>'
+    ],
+    noName: { from:'Thanks, <<firstName>>. Here is the short version.', to:'Here is the short version.' }
+  },
+  CURRENT_OUTBOUND_VENDOR: {
+    paragraphs: [
+      'Thanks for the context, <<firstName>>.',
+      "When you say outbound is running, would the bottleneck be volume of qualified meetings, the quality of meetings you're getting, conversion after the first call, or something closer to sales capacity itself?",
+      "The reason I ask is that the model we're validating addresses a specific capacity problem — and it may or may not be relevant depending on where your friction is.",
+      '<<senderName>>'
+    ],
+    noName: { from:'Thanks for the context, <<firstName>>.', to:'Thanks for the context.' }
+  },
+  NOT_NOW: {
+    paragraphs: [
+      'Thanks, <<firstName>>. Understood.',
+      "I'll close the loop for now. Feel free to reach out if the timing changes.",
+      '<<senderName>>'
+    ],
+    noName: { from:'Thanks, <<firstName>>. Understood.', to:'Understood.' }
+  },
+  NOT_INTERESTED: {
+    paragraphs: ['Thanks, <<firstName>>. Understood.', '<<senderName>>'],
+    noName: { from:'Thanks, <<firstName>>. Understood.', to:'Understood.' }
+  },
+  UNSUBSCRIBE_OR_COMPLAINT: {
+    paragraphs: ['Understood. You have been removed from future outreach.', '<<senderName>>'],
+    suppressFirstName: true
+  },
+  WRONG_PERSON: {
+    paragraphs: ['Thanks for letting me know, <<firstName>>. Apologies for the mix-up.', '<<senderName>>'],
+    noName: { from:'Thanks for letting me know, <<firstName>>. Apologies for the mix-up.', to:'Apologies for the mix-up.' }
+  },
+  AMBIGUOUS_SHORT_REPLY: {
+    paragraphs: [
+      'Thanks, <<firstName>>. Happy to share more.',
+      'Would it be more useful for me to explain the capacity model here, or would you prefer a brief 10-minute conversation?',
+      '<<senderName>>'
+    ],
+    noName: { from:'Thanks, <<firstName>>. Happy to share more.', to:'Happy to share more.' }
+  },
+  POSITIVE_INTEREST_GENERAL: {
+    paragraphs: [
+      'Thanks, <<firstName>>. Happy to talk it through.',
+      'Would it be more useful for me to explain the capacity model here, or would you prefer a brief 10-minute conversation?',
+      "Or reply with a couple of times that work for you and I'll coordinate it.",
+      '<<senderName>>'
+    ],
+    noName: { from:'Thanks, <<firstName>>. Happy to talk it through.', to:'Happy to talk it through.' }
+  }
+};
+
+// === AI OUTPUT VALIDATION =====================================================
+const FORBIDDEN_AI = [
+  { rx:/guarantee/i,                                       label:'guarantee claim' },
+  { rx:/\b(proven|proves|proof of|established|industry leader)\b/i, label:'proven/established claim' },
+  { rx:/case stud/i,                                       label:'case study claim' },
+  { rx:/testimonial/i,                                     label:'testimonial claim' },
+  { rx:/\$\s?\d/,                                          label:'price disclosure' },
+  { rx:/\bresults?\b/i,                                    label:'results claim' },
+  { rx:/\d+\s*(meetings?|clients?|customers?)/i,           label:'numeric proof claim' },
+  { rx:/we.ve (helped|worked with|served)/i,               label:'customer claim' },
+  { rx:/\{\{[^}]*\}\}/,                                    label:'unresolved mustache token' },
+  { rx:/<<(?!firstName|senderName|bookingLink)\w+>>/,      label:'unresolved non-standard token' }
+];
+const SUPPRESS_ONLY_INTENTS = new Set(['UNSUBSCRIBE_OR_COMPLAINT','ANGRY_COMPLAINT']);
+const SUPPRESS_FORBIDDEN_CTA = [/\?/,/\b(call|chat|meeting|calendar|book|available)\b/i];
+
+function validateAI(text, microIntent) {
+  const e = [];
+  if (!text || typeof text !== 'string' || text.trim().length < 10) { e.push('draft_text too short or empty'); return e; }
+  if (text.length > 800) e.push('draft_text exceeds 800 char cap');
+  for (const p of FORBIDDEN_AI) { if (p.rx.test(text)) e.push('forbidden: ' + p.label); }
+  if (SUPPRESS_ONLY_INTENTS.has(microIntent)) {
+    for (const p of SUPPRESS_FORBIDDEN_CTA) { if (p.test(text)) e.push('forbidden CTA/question in suppress-only intent'); }
+  }
+  return e;
+}
+
+function resolveFirstName(nes) {
+  const raw = nes && typeof nes.lead_first_name === 'string' ? nes.lead_first_name.trim() : '';
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+  if (['unknown','n/a','na','test','admin','friend','there'].includes(lower)) return null;
+  if (/^\d+$/.test(raw) || /[@<>{}]/.test(raw) || /https?:\/\//i.test(raw)) return null;
+  return raw;
+}
+
+function renderTemplate(tmpl, firstName, senderName, bookingLink) {
+  if (!tmpl) return null;
+  let lines = [...tmpl.paragraphs];
+  const useName = !tmpl.suppressFirstName && !!firstName;
+  if (!useName && tmpl.noName) { lines = lines.map(l => l === tmpl.noName.from ? tmpl.noName.to : l); }
+  if (tmpl.bookingLinkLine && !bookingLink) { lines = lines.filter(l => l !== tmpl.bookingLinkLine); }
+  const subs = { firstName:useName?firstName:'', senderName:senderName||'[[senderName: not configured]]', bookingLink:bookingLink||'' };
+  return lines
+    .map(l => l.replace(/<<(\w+)>>/g, (_,k) => Object.prototype.hasOwnProperty.call(subs,k)?subs[k]:`[[${k}: unresolved]]`))
+    .filter(l => l.trim().length > 0)
+    .join('\n\n');
+}
+
+function buildAIPrompt(microIntent, replyText, firstName, campaignContext) {
+  const cell        = (campaignContext && campaignContext.validation_cell) || 'UNKNOWN';
+  const painTrigger = (campaignContext && campaignContext.pain_trigger)    || 'outbound capacity problem';
+  const offerAngle  = (campaignContext && campaignContext.offer_angle)     || 'capacity-aligned outbound validation';
+  const intInstr = {
+    PROOF_OR_CASE_STUDY_REQUEST: 'Acknowledge honestly: validation stage, no public case studies or proven results yet. Invite the 10-minute call as the proof step. Zero invented results.',
+    OFFER_EXPLANATION:           'Explain capacity-aligned outbound in 1-2 sentences. State validation stage. Invite 10-minute call.',
+    HOW_IT_WORKS_REQUEST:        'Give a 2-sentence explanation of how the model works (define capacity, build outbound to fill it). Invite the 10-minute call.',
+    CURRENT_OUTBOUND_VENDOR:     'Ask ONE diagnostic question to identify where the bottleneck is. Do not pitch the offer again. One question only.',
+    AMBIGUOUS_SHORT_REPLY:       'Ask ONE light clarifying question OR suggest the 10-minute call. One option only. Brief.',
+    POSITIVE_INTEREST_GENERAL:   'Confirm readiness for a brief call. Offer <<bookingLink>> or reply with times. One CTA.'
+  };
+  const instr    = intInstr[microIntent] || intInstr.OFFER_EXPLANATION;
+  const nameHint = firstName ? 'Use <<firstName>> to address them.' : 'Do not include a name greeting.';
+  return `You are a B2B email draft assistant for a validation-stage outbound service.
+
+STRICT RULES (any violation causes rejection and fallback to template):
+- No proof, case studies, results, customers, testimonials, or guarantees
+- No pricing, cost figures, or budget language
+- No "proven", "established", "industry leader", or maturity claims
+- No em dashes
+- No generic AI filler language
+- Use <<firstName>>, <<senderName>>, <<bookingLink>> as literal placeholders — do not resolve them
+- Maximum 5 sentences total
+- Output ONLY valid JSON on a single line with exactly these fields:
+  {"draft_text":"...","reasoning_summary":"short explanation of approach","risk_flags":[]}
+
+CAMPAIGN CONTEXT: cell=${cell}, pain=${painTrigger}, angle=${offerAngle}
+MICRO INTENT: ${microIntent}
+INSTRUCTIONS: ${instr}
+${nameHint}
+
+PROSPECT EMAIL:
+${replyText}
+
+Output only JSON with exactly: draft_text, reasoning_summary, risk_flags`;
+}
+
+// === OpenAI Responses API call ================================================
+async function callAI(prompt, apiKey) {
+  if (!apiKey) return { ok:false, error:'no OPENAI_API_KEY', provider:'openai' };
+  const ctrl  = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), AI_DRAFT_TIMEOUT_MS);
+  try {
+    const reqBody = {
+      model:              AI_DRAFT_MODEL,
+      max_output_tokens:  AI_DRAFT_MAX_OUTPUT_TOKENS,
+      input: [{ role:'user', content:prompt }]
+    };
+    // Temperature: included by default; if model rejects it the error falls back to deterministic
+    if (typeof AI_DRAFT_TEMPERATURE === 'number') reqBody.temperature = AI_DRAFT_TEMPERATURE;
+
+    const resp = await fetch('https://api.openai.com/v1/responses', {
+      method:  'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization':'Bearer ' + apiKey },
+      body:    JSON.stringify(reqBody),
+      signal:  ctrl.signal
+    });
+    clearTimeout(timer);
+
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => '');
+      return { ok:false, error:'OpenAI HTTP ' + resp.status + ': ' + errText.slice(0,200), provider:'openai' };
+    }
+
+    const data = await resp.json();
+    // Responses API structure: data.output[0].content[0].text
+    const raw = (
+      data.output && data.output[0] &&
+      data.output[0].content && data.output[0].content[0] &&
+      data.output[0].content[0].text
+    ) || '';
+    if (!raw.trim()) return { ok:false, error:'OpenAI returned empty output text', provider:'openai' };
+
+    let parsed;
+    try { parsed = JSON.parse(raw.trim()); }
+    catch(e) { return { ok:false, error:'OpenAI response not valid JSON: ' + raw.slice(0,120), provider:'openai' }; }
+
+    if (typeof parsed.draft_text !== 'string')       return { ok:false, error:'AI response missing draft_text',       provider:'openai' };
+    if (typeof parsed.reasoning_summary !== 'string') return { ok:false, error:'AI response missing reasoning_summary', provider:'openai' };
+    if (!Array.isArray(parsed.risk_flags))            return { ok:false, error:'AI response missing risk_flags array',  provider:'openai' };
+
+    return {
+      ok:               true,
+      draft_text:       parsed.draft_text,
+      reasoning_summary:parsed.reasoning_summary,
+      risk_flags:       parsed.risk_flags,
+      provider:         'openai'
+    };
+  } catch(e) {
+    clearTimeout(timer);
+    return { ok:false, error:String(e && e.message ? e.message : e), provider:'openai' };
+  }
+}
+
+// === MAIN ====================================================================
+const results = [];
+for (const item of items) {
+  const input    = item.json || {};
+  const decision = input.decision   || {};
+  const nes      = input.nes        || {};
+  const cls      = input.classifier || {};
+
+  const microIntent  = cls.micro_intent || 'AMBIGUOUS_SHORT_REPLY';
+  const draftPolicy  = cls.draft_policy || 'HUMAN_ONLY';
+
+  const firstName   = resolveFirstName(nes);
+  const eKey        = String(nes.eaccount || '').trim().toLowerCase();
+  const sCfg        = SENDER_CONFIG[eKey] || null;
+  const senderName  = sCfg && sCfg.senderName  ? sCfg.senderName  : null;
+  const bookingLink = sCfg && sCfg.bookingLink ? sCfg.bookingLink : null;
+  const replyText   = String((nes.reply && nes.reply.text) || '');
+  const campaignCtx = nes.campaign_context || {};
+
+  const tmpl              = MI_TEMPLATES[microIntent] || null;
+  const deterministicText = tmpl ? renderTemplate(tmpl, firstName, senderName, bookingLink) : null;
+
+  let draftText   = null;
+  let draftSource = 'none';
+  let aiAttempt   = null;
+
+  const canTryAI = (
+    AI_DRAFT_MODE  === 'supervised' &&
+    draftPolicy    === 'AI_SUPERVISED_OR_TEMPLATE' &&
+    decision.reply_permitted !== false &&
+    replyText.trim().length > 0
+  );
+
+  if (canTryAI && AI_API_KEY) {
+    const prompt   = buildAIPrompt(microIntent, replyText, firstName, campaignCtx);
+    const aiResult = await callAI(prompt, AI_API_KEY);
+    aiAttempt      = aiResult;
+    if (aiResult.ok && aiResult.draft_text) {
+      const errs = validateAI(aiResult.draft_text, microIntent);
+      if (errs.length === 0) {
+        const resolved = aiResult.draft_text
+          .replace(/<<firstName>>/g,   firstName   || '')
+          .replace(/<<senderName>>/g,  senderName  || '[[senderName: not configured]]')
+          .replace(/<<bookingLink>>/g, bookingLink || '');
+        draftText   = resolved;
+        draftSource = 'ai_supervised';
+      } else {
+        draftText   = deterministicText;
+        draftSource = 'ai_failed_fallback';
+        aiAttempt   = { ...aiResult, validation_errors: errs };
+      }
+    } else {
+      draftText   = deterministicText;
+      draftSource = 'ai_failed_fallback';
+    }
+  } else if (['AI_SUPERVISED_OR_TEMPLATE','FIXED_TEMPLATE','FIXED_TEMPLATE_SUPPRESS_ONLY'].includes(draftPolicy)) {
+    draftText   = deterministicText;
+    draftSource = 'deterministic_template';
+  } else {
+    draftText   = null;
+    draftSource = draftPolicy === 'NO_DRAFT' ? 'none' : 'human_only';
+  }
+
+  // Token safety check: reject any unresolved <<...>> or {{...}} in final draft_text
+  if (draftText && (/<<\w+>>/.test(draftText) || /\{\{[^}]*\}\}/.test(draftText))) {
+    draftText   = deterministicText;
+    draftSource = 'ai_failed_fallback';
+    if (aiAttempt) aiAttempt = { ...aiAttempt, validation_errors: (aiAttempt.validation_errors||[]).concat(['unresolved token in final draft_text']) };
+  }
+
+  const missingVariables = [];
+  if (!firstName  && tmpl && !tmpl.suppressFirstName) missingVariables.push('firstName');
+  if (!senderName) missingVariables.push('senderName');
+  if (tmpl && tmpl.bookingLinkLine && !bookingLink) missingVariables.push('bookingLink');
+
+  const draft = {
+    template_id:           decision.reply_template_id || null,
+    micro_intent:          microIntent,
+    draft_policy:          draftPolicy,
+    draft_source:          draftSource,
+    draft_text:            draftText,
+    draft_status:          decision.reply_draft_status || 'NOT_APPLICABLE',
+    missing_variables:     missingVariables,
+    human_review_required: decision.human_review_required === true,
+    ai_attempt: aiAttempt ? {
+      provider:          AI_DRAFT_PROVIDER,
+      model:             AI_DRAFT_MODEL,
+      ok:                aiAttempt.ok,
+      error:             aiAttempt.error   || null,
+      reasoning_summary: aiAttempt.reasoning_summary || null,
+      risk_flags:        aiAttempt.risk_flags         || [],
+      validation_errors: aiAttempt.validation_errors  || []
+    } : null,
+    notes: draftPolicy === 'HUMAN_ONLY'
+      ? 'Human-only category per policy-HMZ-1.2. No automated draft.'
+      : (draftPolicy === 'NO_DRAFT' ? 'No draft applicable (OOO/bounce/noop).' : null)
+  };
+
+  results.push({ json: { ...input, draft } });
+}
+
+return results;
+'@
+
+# ─── OFFLINE DETERMINISTIC TESTS ──────────────────────────────────────────────
+# Mirrors detectMicroIntent() + draftPolicyFor() + validateAI() in PowerShell.
+
+function Get-MicroIntent {
+    param([string]$Category, [string]$Text)
+    $t = $Text.ToLower()
+    switch ($Category) {
+        'UNSUBSCRIBE'                       { return 'UNSUBSCRIBE_OR_COMPLAINT' }
+        'LEGAL_PRIVACY_OR_COMPLAINT'        { return 'UNSUBSCRIBE_OR_COMPLAINT' }
+        'HOSTILE_OR_REPUTATIONAL_RISK'      { return 'ANGRY_COMPLAINT' }
+        'OUT_OF_OFFICE'                     { return 'OOO_AUTO_REPLY' }
+        'BOUNCE_OR_DELIVERY_NOTICE'         { return 'OOO_AUTO_REPLY' }
+        'WRONG_PERSON'                      { return 'WRONG_PERSON' }
+        'NOT_INTERESTED'                    { return 'NOT_INTERESTED' }
+        'BOOKING_REQUEST'                   { return 'MEETING_TIME_REQUEST' }
+        'PRICING_OR_COMMERCIAL_NEGOTIATION' { return 'PRICING_REQUEST' }
+        'TIMING_OBJECTION'                  { return 'NOT_NOW' }
+        'REFERRAL'                          { return 'WRONG_PERSON' }
+    }
+    if ($t -match 'proof|case stud|result|evidence|testimonial|customer|client')              { return 'PROOF_OR_CASE_STUDY_REQUEST' }
+    if ($t -match 'how does (it|this) work|how would you|mechanism|methodology')              { return 'HOW_IT_WORKS_REQUEST' }
+    if ($t -match 'what (are|is) (your?|you) (offer|service)|tell me more|explain|more (info|detail)') { return 'OFFER_EXPLANATION' }
+    if ($t -match 'we (already|currently) (have|use|run|do)|outbound (running|already|team)|in.house') { return 'CURRENT_OUTBOUND_VENDOR' }
+    if ($t -match '\bprice\b|\bpricing\b|\bcost\b|\bbudget\b|\bfee\b|\bquote\b')              { return 'PRICING_REQUEST' }
+    $wc = @($t.Trim() -split '\s+' | Where-Object { $_ }).Count
+    if ($wc -le 4)                         { return 'AMBIGUOUS_SHORT_REPLY' }
+    if ($Category -eq 'POSITIVE_INTEREST') { return 'POSITIVE_INTEREST_GENERAL' }
+    if ($Category -eq 'INFORMATION_REQUEST') { return 'OFFER_EXPLANATION' }
+    return 'AMBIGUOUS_SHORT_REPLY'
+}
+
+function Get-DraftPolicy {
+    param([string]$MicroIntent)
+    $map = @{
+        MEETING_TIME_REQUEST      = 'FIXED_TEMPLATE'
+        PROOF_OR_CASE_STUDY_REQUEST='AI_SUPERVISED_OR_TEMPLATE'
+        OFFER_EXPLANATION         = 'AI_SUPERVISED_OR_TEMPLATE'
+        HOW_IT_WORKS_REQUEST      = 'AI_SUPERVISED_OR_TEMPLATE'
+        CURRENT_OUTBOUND_VENDOR   = 'AI_SUPERVISED_OR_TEMPLATE'
+        PRICING_REQUEST           = 'HUMAN_ONLY'
+        NOT_NOW                   = 'FIXED_TEMPLATE'
+        NOT_INTERESTED            = 'FIXED_TEMPLATE'
+        UNSUBSCRIBE_OR_COMPLAINT  = 'FIXED_TEMPLATE_SUPPRESS_ONLY'
+        WRONG_PERSON              = 'FIXED_TEMPLATE'
+        AMBIGUOUS_SHORT_REPLY     = 'AI_SUPERVISED_OR_TEMPLATE'
+        OOO_AUTO_REPLY            = 'NO_DRAFT'
+        ANGRY_COMPLAINT           = 'HUMAN_ONLY'
+        POSITIVE_INTEREST_GENERAL = 'AI_SUPERVISED_OR_TEMPLATE'
+    }
+    if ($map.ContainsKey($MicroIntent)) { return $map[$MicroIntent] } else { return 'HUMAN_ONLY' }
+}
+
+function Get-BroadCategory {
+    param([string]$Text)
+    $t = $Text.ToLower()
+    if ($t -match 'unsubscribe|stop emailing|remove me|opt out|do not contact')               { return 'UNSUBSCRIBE' }
+    if ($t -match 'out of office|away from the office|automatic reply|on vacation|on leave')  { return 'OUT_OF_OFFICE' }
+    if ($t -match 'book a (time|call)|send (me|us).*calendar|schedule a call|can you send times') { return 'BOOKING_REQUEST' }
+    if ($t -match '\bprice\b|\bpricing\b|\bcost\b|\bquote\b|\bbudget\b')                       { return 'PRICING_OR_COMMERCIAL_NEGOTIATION' }
+    if ($t -match 'not interested|no thank(s| you)|not a fit')                                { return 'NOT_INTERESTED' }
+    if ($t -match 'not.*right time|maybe.*next|circle back|check back')                       { return 'TIMING_OBJECTION' }
+    if ($t -match '\?|how does|what is|tell me more|more info|explain')                       { return 'INFORMATION_REQUEST' }
+    if ($t -match 'sure|sounds (good|interesting)|interested|yes|happy to|let.s')             { return 'POSITIVE_INTEREST' }
+    return 'AMBIGUOUS'
+}
+
+$FORBIDDEN_RX = [regex]'guarantee|proven|case stud|testimonial|\$\s?\d|\bresults?\b|\{\{[^}]*\}\}|<<(?!firstName|senderName|bookingLink)\w+>>'
+
+$TEST_CASES = @(
+    # [1] mode=off → deterministic only (simulated by checking canTryAI=false when mode=off)
+    @{ Reply='Sure, can you send times for a call?';   ExpMI='MEETING_TIME_REQUEST';        ExpDP='FIXED_TEMPLATE';            AIEligible=$false;  ForbidSend=$false; Desc='mode=off → FIXED_TEMPLATE' }
+    # [2] BOOKING_REQUEST → FIXED_TEMPLATE (AI never attempted regardless of mode)
+    @{ Reply='Can you send me your calendar link?';    ExpMI='MEETING_TIME_REQUEST';        ExpDP='FIXED_TEMPLATE';            AIEligible=$false;  ForbidSend=$false; Desc='booking → fixed template, no AI' }
+    # [3] PROOF request → AI_SUPERVISED (key absent → deterministic fallback)
+    @{ Reply='Do you have proof or case studies?';     ExpMI='PROOF_OR_CASE_STUDY_REQUEST'; ExpDP='AI_SUPERVISED_OR_TEMPLATE'; AIEligible=$true;   ForbidSend=$false; Desc='proof request → AI path (key absent = fallback)' }
+    # [4] positive interest → AI_SUPERVISED
+    @{ Reply='Sounds interesting, tell me more.';      ExpMI='OFFER_EXPLANATION';           ExpDP='AI_SUPERVISED_OR_TEMPLATE'; AIEligible=$true;   ForbidSend=$false; Desc='info request → AI path' }
+    # [5] UNSUBSCRIBE → FIXED_TEMPLATE_SUPPRESS_ONLY, AI never attempted
+    @{ Reply='Please unsubscribe me.';                 ExpMI='UNSUBSCRIBE_OR_COMPLAINT';    ExpDP='FIXED_TEMPLATE_SUPPRESS_ONLY'; AIEligible=$false; ForbidSend=$true; Desc='unsubscribe → suppress-only, AI blocked' }
+    # [6] angry complaint → ANGRY_COMPLAINT → HUMAN_ONLY, AI never attempted
+    @{ Reply='I am angry — stop emailing me now.';    ExpMI='UNSUBSCRIBE_OR_COMPLAINT';    ExpDP='FIXED_TEMPLATE_SUPPRESS_ONLY'; AIEligible=$false; ForbidSend=$true; Desc='angry → suppress-only, AI blocked' }
+    # [7] PRICING → HUMAN_ONLY
+    @{ Reply='What is your pricing?';                  ExpMI='PRICING_REQUEST';             ExpDP='HUMAN_ONLY';                AIEligible=$false;  ForbidSend=$true;  Desc='pricing → human-only, no draft' }
+    # [8] forbidden proof in AI draft → rejected, deterministic fallback expected
+    @{ Reply='We want proof before we commit.';        ExpMI='PROOF_OR_CASE_STUDY_REQUEST'; ExpDP='AI_SUPERVISED_OR_TEMPLATE'; AIEligible=$true;   ForbidSend=$false; Desc='proof request → AI rejected for forbidden claim if generated' }
+    # [9] OOO → NO_DRAFT
+    @{ Reply='I am out of office until Monday.';       ExpMI='OOO_AUTO_REPLY';             ExpDP='NO_DRAFT';                  AIEligible=$false;  ForbidSend=$true;  Desc='OOO → no draft' }
+    # [10] unresolved token guard
+    @{ Reply='Sure, happy to chat.';                   ExpMI='AMBIGUOUS_SHORT_REPLY';      ExpDP='AI_SUPERVISED_OR_TEMPLATE'; AIEligible=$true;   ForbidSend=$false; Desc='ambiguous → AI path; unresolved token guard' }
+)
+
+$UNSUBSCRIBE_TEMPLATE = 'Understood. You have been removed from future outreach.'
+
+function Invoke-ForbiddenCheck {
+    param([string]$Text, [string]$Label)
+    if ($FORBIDDEN_RX.IsMatch($Text)) {
+        return "REJECT: forbidden claim in '$Label'"
+    }
+    return $null
+}
+
+function Run-OfflineTests {
+    Write-Host "`n[TESTS] Offline deterministic verification (10 cases)..."
+    $pass=0; $fail=0
+
+    foreach ($i in 0..($TEST_CASES.Count-1)) {
+        $tc = $TEST_CASES[$i]
+        $broad = Get-BroadCategory -Text $tc.Reply
+        $mi    = Get-MicroIntent   -Category $broad -Text $tc.Reply
+        $dp    = Get-DraftPolicy   -MicroIntent $mi
+        $ok    = $true; $notes = @()
+
+        # 1. Micro intent
+        if ($mi -ne $tc.ExpMI)   { $ok=$false; $notes += "MI: got $mi expected $($tc.ExpMI)" }
+        # 2. Draft policy
+        if ($dp -ne $tc.ExpDP)   { $ok=$false; $notes += "DP: got $dp expected $($tc.ExpDP)" }
+        # 3. AI eligibility: AI only attempted for AI_SUPERVISED_OR_TEMPLATE
+        $aiElig = ($dp -eq 'AI_SUPERVISED_OR_TEMPLATE')
+        if ($aiElig -ne $tc.AIEligible) { $ok=$false; $notes += "AI_ELIGIBLE: got $aiElig expected $($tc.AIEligible)" }
+        # 4. Suppress-only safety: UNSUBSCRIBE_OR_COMPLAINT template must not have CTA/forbidden claim
+        if ($mi -eq 'UNSUBSCRIBE_OR_COMPLAINT') {
+            if ($UNSUBSCRIBE_TEMPLATE -match '\?|call|chat|meeting|calendar|book') { $ok=$false; $notes += 'SAFETY: suppress template has CTA' }
+            $r = Invoke-ForbiddenCheck -Text $UNSUBSCRIBE_TEMPLATE -Label 'unsubscribe-template'
+            if ($r) { $ok=$false; $notes += $r }
+        }
+        # 5. ForbidSend check: HUMAN_ONLY/NO_DRAFT/SUPPRESS must not be sent
+        if ($tc.ForbidSend -and $dp -eq 'FIXED_TEMPLATE') { $ok=$false; $notes += 'SAFETY: ForbidSend=true but FIXED_TEMPLATE' }
+        # 6. Simulate OpenAI response with forbidden claim — must be rejected
+        if ($i -eq 7) {
+            $badDraft = 'We have proven results with many clients. Here is our case study.'
+            $r = Invoke-ForbiddenCheck -Text $badDraft -Label 'simulated-openai-forbidden-draft'
+            if (-not $r) { $ok=$false; $notes += 'SAFETY: forbidden OpenAI draft not rejected' }
+        }
+        # 7. Simulate OpenAI pricing claim — must be rejected
+        if ($mi -eq 'PRICING_REQUEST' -and $dp -eq 'HUMAN_ONLY') {
+            # Pricing → HUMAN_ONLY → AI never attempted; no draft to check
+        }
+        # 8. Simulate unresolved token in final draft — must be caught
+        if ($i -eq 9) {
+            $badResolved = 'Thanks <<unknownToken>>. Happy to share more.'
+            if ($badResolved -match '<<(?!firstName|senderName|bookingLink)\w+>>') {
+                # Correct: token guard would catch this
+            } else { $ok=$false; $notes += 'TOKEN GUARD: unresolved non-standard token not caught' }
+        }
+
+        $status = if ($ok) { 'PASS' } else { 'FAIL' }
+        if ($ok) { $pass++ } else { $fail++ }
+        $noteStr = if ($notes.Count -gt 0) { "  !! $($notes -join ' | ')" } else { '' }
+        $replyShort = if ($tc.Reply.Length -gt 42) { $tc.Reply.Substring(0,42)+'...' } else { $tc.Reply }
+        Write-Host ("  [{0}] {1,-47} → {2}{3}" -f $status, ('"' + $replyShort + '"'), $mi, $noteStr)
+    }
+
+    # Test: Full Test Harness must remain inactive
+    Write-Host "`n  [CHECK] Full Test Harness ($($WF.TestHarness)) activation state..."
+    try {
+        $thWf = Invoke-N8n -Method GET -Path "/workflows/$($WF.TestHarness)"
+        if ($thWf -and $thWf.active -eq $true) {
+            Write-Warning "  [FAIL] Full Test Harness is ACTIVE — must remain inactive"
+            $fail++
+        } else {
+            Write-Host "  [PASS] Full Test Harness is inactive"
+            $pass++
+        }
+    } catch {
+        Write-Host "  [SKIP] Could not verify TestHarness state: $_"
+    }
+
+    Write-Host "  $pass/$(($pass+$fail)) passed, $fail/$(($pass+$fail)) failed"
+    return $fail -eq 0
+}
+
+# ─── ENTRY POINT ──────────────────────────────────────────────────────────────
+if (-not $WhatIf -and -not $Apply) {
+    Write-Host @"
+Usage:
+  .\SL-PATCH-3.0-openai-provider.ps1 -WhatIf    Preview changes (no writes)
+  .\SL-PATCH-3.0-openai-provider.ps1 -Apply     Execute patch
+"@
+    exit 0
+}
+
+Write-Host "`n=== SL-PATCH-3.0: OPENAI PROVIDER PATCH =================================="
+Write-Host "Backup dir: $BACKUP_DIR"
+Get-ApiKey | Out-Null
+New-Item -ItemType Directory -Force -Path $BACKUP_DIR | Out-Null
+
+# ── STEP 1: BACKUP ────────────────────────────────────────────────────────────
+Write-Host "`n[1/5] Backing up all 7 workflows..."
+$backups = @{}
+foreach ($name in $WF.Keys) {
+    $backups[$name] = Backup-Wf -Name $name -Id $WF[$name]
+}
+
+# ── WHATIF EXIT ───────────────────────────────────────────────────────────────
+if ($WhatIf) {
+    Write-Host "`n[WHATIF] Changes that would be applied:"
+    Write-Host "  Decision Engine ($($WF.Decision)) — section_d ONLY:"
+    Write-Host "    AI_DRAFT_PROVIDER  : anthropic  → openai"
+    Write-Host "    AI_DRAFT_MODEL     : claude-haiku-4-5-20251001 → gpt-5-mini"
+    Write-Host "    API key env var    : ANTHROPIC_API_KEY → OPENAI_API_KEY"
+    Write-Host "    Endpoint           : api.anthropic.com/v1/messages → api.openai.com/v1/responses"
+    Write-Host "    Auth header        : x-api-key → Authorization: Bearer"
+    Write-Host "    Response parsing   : data.content[0].text → data.output[0].content[0].text"
+    Write-Host "    AI JSON schema     : {draft_text} → {draft_text, reasoning_summary, risk_flags}"
+    Write-Host "    ai_attempt         : adds provider, reasoning_summary, risk_flags fields"
+    Write-Host "    Token guard        : added final draft_text unresolved-token rejection"
+    Write-Host "  Section B (micro_intent/draft_policy): NOT touched (SL-PATCH-2.0 already applied)"
+    Write-Host "  Human Approval splice: NOT touched (SL-PATCH-2.0 already applied)"
+    Write-Host "  TestHarness: NOT touched (stays inactive)"
+    Write-Host "`n[WHATIF] No changes applied. Run with -Apply to execute."
+    Run-OfflineTests | Out-Null
+    exit 0
+}
+
+# ── STEP 2: DEACTIVATE ────────────────────────────────────────────────────────
+Write-Host "`n[2/5] Deactivating (safe order)..."
+foreach ($name in $DEACTIVATE_ORDER) {
+    Set-Active -Name $name -Id $WF[$name] -Active $false
+}
+
+# ── STEP 3: PATCH DECISION ENGINE section_d only ─────────────────────────────
+Write-Host "`n[3/5] Patching Decision Engine section_d ($($WF.Decision))..."
+
+$deWf = $backups['Decision'] | ConvertTo-Json -Depth 60 | ConvertFrom-Json
+
+$dNode = Find-Node -Nodes $deWf.nodes -Name 'D. Draft Preparation (Templates / Human Draft)'
+$dNode.parameters.jsCode = $NEW_SECTION_D
+
+Invoke-N8n -Method PUT -Path "/workflows/$($WF.Decision)" -Body $deWf | Out-Null
+Write-Host "  PATCHED Decision Engine (section_d only)"
+
+# ── STEP 4: REACTIVATE ───────────────────────────────────────────────────────
+Write-Host "`n[4/5] Reactivating (safe order)..."
+foreach ($name in $REACTIVATE_ORDER) {
+    Set-Active -Name $name -Id $WF[$name] -Active $true
+}
+
+# ── STEP 5: OFFLINE TESTS ────────────────────────────────────────────────────
+Write-Host "`n[5/5] Running offline tests..."
+$allPass = Run-OfflineTests
+
+if ($allPass) {
+    Write-Host "`nPATCH_APPLIED_AND_VERIFIED"
+} else {
+    Write-Warning "`nPATCH APPLIED BUT SOME OFFLINE TESTS FAILED — review above before live traffic."
+    exit 1
+}

@@ -1,0 +1,53 @@
+# HMZ_N8N_LOCAL_DEVELOPMENT_ONLY
+#
+# Local, non-production n8n instance for Phase 2.6 (Route A MCP verification).
+# - Contains NO secrets / credentials.
+# - Bound to 127.0.0.1 only (not reachable from the network).
+# - No production data, no Instantly credentials, no business workflows.
+# - Not used by any other project.
+#
+# Usage (after Docker Desktop is installed and running):
+#   docker compose -f infrastructure/local-n8n/docker-compose.yml up -d
+#
+# Then open http://localhost:5678 and create the local n8n owner account
+# manually (see infrastructure/local-n8n/README.md). Do not paste the
+# owner password or any API key into chat or into this repository.
+
+services:
+  n8n:
+    # Pinned to the version verified running in this environment on
+    # 2026-06-11 (Phase 2.6 Phase C). Do not change to :latest or bump
+    # without an explicit, deliberate upgrade step.
+    image: docker.n8n.io/n8nio/n8n:2.25.7
+    container_name: hmz-n8n-local-dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      - GENERIC_TIMEZONE=Europe/London
+      - TZ=Europe/London
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+    volumes:
+      - hmz_n8n_local_dev_data:/home/node/.n8n
+    depends_on:
+      - hmz-send-state
+
+  # Phase 4A internal sidecar: durable atomic send-ownership + sanitised
+  # error records for the Sender and Error Handler validation workflows.
+  # No host port is published - reachable only as http://hmz-send-state:5681
+  # on this compose network. See infrastructure/send-state/README.md.
+  hmz-send-state:
+    build:
+      context: ../send-state
+    container_name: hmz-send-state
+    restart: unless-stopped
+    environment:
+      - STATE_DIR=/data
+    volumes:
+      - hmz_send_state_data:/data
+
+volumes:
+  hmz_n8n_local_dev_data:
+    name: hmz_n8n_local_dev_data
+  hmz_send_state_data:
+    name: hmz_send_state_data

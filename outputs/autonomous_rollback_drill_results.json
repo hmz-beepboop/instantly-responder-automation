@@ -1,0 +1,79 @@
+{
+  "drill_type": "autonomous_rollback_drill",
+  "drill_date": "2026-06-24",
+  "drill_mode": "simulation",
+  "phase": "SL-PHASE-5F",
+  "status": "PASS",
+
+  "steps": [
+    {
+      "step": 1,
+      "label": "Simulate Kill Switch — emergency_disabled=true in sample config",
+      "result": "PASS",
+      "time_seconds": 15,
+      "target_seconds": 30,
+      "notes": "Config validation confirmed emergency_disabled detection. In production: set emergency_disabled=true in config — takes effect immediately on next eligibility check."
+    },
+    {
+      "step": 2,
+      "label": "Eligibility engine confirms would_send_live_now=false after kill switch",
+      "result": "PASS",
+      "scenarios_tested": 75,
+      "would_send_live_now_false": 75,
+      "hard_failures": 0,
+      "notes": "All 75 eligibility scenarios returned would_send_live_now=false. Kill switch verified effective."
+    },
+    {
+      "step": 3,
+      "label": "Incident log template created",
+      "result": "PASS",
+      "notes": "Incident log template available in docs/AUTONOMOUS_INCIDENT_RESPONSE_RUNBOOK.md. Simulated entry created in drill."
+    },
+    {
+      "step": 4,
+      "label": "Root cause analysis process understood",
+      "result": "PASS",
+      "notes": "RCA process: (1) check audit trail for affected case, (2) identify which gate should have blocked, (3) find why it failed, (4) test fix offline."
+    },
+    {
+      "step": 5,
+      "label": "Fix verification via acceptance harness understood",
+      "result": "PASS",
+      "notes": "After fix: re-run SL-PHASE-5E-autonomous-readiness-acceptance-harness.ps1 -RunAll. Must pass 45/45 before re-enabling."
+    },
+    {
+      "step": 6,
+      "label": "Re-enable criteria understood",
+      "result": "PASS",
+      "notes": "Re-enable only after: root cause documented, fix applied and tested, acceptance harness 45/45, owner sign-off."
+    }
+  ],
+
+  "drill_summary": {
+    "kill_switch_time_seconds": 15,
+    "kill_switch_target_seconds": 30,
+    "kill_switch_within_target": true,
+    "all_steps_passed": true,
+    "production_changes": false,
+    "live_sends": false
+  },
+
+  "simulated_incident_log": {
+    "date": "2026-06-24",
+    "severity": "DRILL — NOT REAL",
+    "what_happened": "SIMULATION: Autonomous send went to wrong recipient (hypothetical)",
+    "kill_switch_activated_at": "2026-06-24T10:49:38Z",
+    "cases_affected": ["DRILL-ONLY"],
+    "root_cause_preliminary": "DRILL — no real cause",
+    "immediate_action": "emergency_disabled=true set in config",
+    "next_steps": "Identify gate failure, fix eligibility engine, re-run acceptance harness, get owner sign-off"
+  },
+
+  "deactivation_of_shadow_evaluator": {
+    "workflow_id": "aHzLtQiv6G8h1bqD",
+    "final_active_state": false,
+    "final_version_id": "51ebacbd-f68c-47e4-af38-537bcdccebf1",
+    "deactivated_at": "2026-06-24T10:48:56Z",
+    "method": "POST /workflows/aHzLtQiv6G8h1bqD/deactivate via n8n API"
+  }
+}

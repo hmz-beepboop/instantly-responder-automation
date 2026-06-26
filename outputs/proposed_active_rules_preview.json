@@ -1,0 +1,11 @@
+{
+  "generated_at": "2026-06-23T03:59:33Z",
+  "status": "PREVIEW_ONLY - NOT_ACTIVE",
+  "governance_note": "approved_for_activation is inactive. Phase 4D required for injection. No autonomous mode.",
+  "proposed_count": 0,
+  "conflict_blockers": 0,
+  "conflict_warnings": 0,
+  "activation_blocked": false,
+  "proposed_rules": [],
+  "conflicts": []
+}

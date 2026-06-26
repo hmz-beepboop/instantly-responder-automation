@@ -1,0 +1,82 @@
+{
+  "fixture_id": "phase3_09_ambiguous_one_word_reply",
+  "description": "Ambiguous one-word reply ('Maybe.') with non-empty text. No det-* rule matches and no mock-classifier keyword pattern matches, so the mock classifier returns AMBIGUOUS at confidence 0.5. Section C's confidence threshold (0.60) then overrides to AMBIGUOUS with confidence_overridden=true. Distinguishes the confidence-override path from the operational empty-reply path (op-empty-reply, see fixture notes).",
+  "input": {
+    "intake_id": "phase3-fixture-09-ambiguous-one-word",
+    "event_id": "evt-phase3-009",
+    "email_id": "email-phase3-009",
+    "event_type": "reply_received",
+    "lead_email": "drew.murphy@prospectco.test",
+    "from_address_email": "drew.murphy@prospectco.test",
+    "email_account": "outbound1@hmzvalidation.test",
+    "reply_subject": "Re: Quick question about your outbound pipeline",
+    "reply_text": "Maybe.",
+    "reply_text_snippet": "Maybe.",
+    "timestamp": "2026-06-09T10:30:00Z",
+    "campaign_id": "campaign-validation-002",
+    "validation_cell": "CELL_2_SAAS_EXISTING_OUTBOUND",
+    "workspace": "hmz-workspace-dev",
+    "campaign_name": "US B2B Validation Sprint - Cell 2",
+    "step": 1,
+    "variant": 2,
+    "is_first": true,
+    "thread_id": "thread-phase3-009",
+    "message_id": "<msg-phase3-009@instantly.test>",
+    "unibox_url": "https://app.instantly.test/unibox/thread-phase3-009"
+  },
+  "expected": {
+    "payload_status": "COMPLETE",
+    "deterministic": {
+      "deterministic_match": false,
+      "noop_match": false,
+      "category": null,
+      "rule_id": null,
+      "media_flag": false
+    },
+    "prefilter": {
+      "is_empty_reply": false
+    },
+    "classifier": {
+      "category": "AMBIGUOUS",
+      "confidence": 0.5,
+      "interest_stage": "UNKNOWN",
+      "permitted_automation_action": "NONE",
+      "requested_action": "CLARIFY",
+      "evidence": ["mock classifier: no deterministic or keyword match found"]
+    },
+    "decision": {
+      "category": "AMBIGUOUS",
+      "confidence": 0.5,
+      "confidence_overridden": true,
+      "stop_active_sequence": true,
+      "durable_dnc_intent": false,
+      "address_suppression_intent": "NONE",
+      "review_hold": false,
+      "legal_review_required": false,
+      "privacy_review_required": false,
+      "reputational_review_required": false,
+      "human_review_required": true,
+      "reply_permitted": false,
+      "reply_template_id": null,
+      "reply_draft_status": "NO_DRAFT_HUMAN_ONLY",
+      "external_action_status": "NOT_PERFORMED",
+      "follow_up_date": null,
+      "interest_stage": "UNKNOWN",
+      "terminal_status": "REVIEW_HOLD"
+    },
+    "draft": {
+      "template_id": null,
+      "draft_text_is_null": true,
+      "missing_variables": [],
+      "human_review_required": true
+    },
+    "validation_learning": {
+      "voice_of_customer_excerpt": "Maybe.",
+      "all_other_fields": "unknown_or_null_default"
+    },
+    "validation": {
+      "valid": true
+    },
+    "notes": "'Maybe.' has non-empty trimmed text (wordCount=1), so prefilter.is_empty_reply=false and Section A does not assign op-empty-reply. mockSemanticClassify returns AMBIGUOUS at confidence 0.5 (the 'wordCount > 0' branch, not the 0.3 empty-reply branch). Section C then sees category!==null and confidence(0.5) < 0.60, so it sets effectiveCategory=AMBIGUOUS (unchanged) and confidence_overridden=true with reason citing the 0.60 threshold. This is distinct from a genuinely empty reply, which would instead get deterministic_match=true, rule_id='op-empty-reply', confidence=1, confidence_overridden=false."
+  }
+}

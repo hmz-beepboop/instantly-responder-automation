@@ -1,0 +1,50 @@
+{
+  "_comment": "Sample autonomous template library — all templates are DRAFT status, requiring owner approval before autonomous use.",
+  "_version": "1.0.0",
+  "_date": "2026-06-24",
+  "templates": [
+    {
+      "id": "T-AUTO-001",
+      "name": "Generic Information Request",
+      "intent": "INFORMATION_REQUEST",
+      "status": "DRAFT",
+      "status_note": "Owner review required before autonomous use",
+      "eligible_for_autonomous": false,
+      "template_text": "Hi [First Name],\n\nHappy to share more. [Service brief from approved knowledge base].\n\nIf it sounds relevant, here's a link to book a quick call: [BOOKING_LINK]\n\n[Sender Name]",
+      "constraints": ["No pricing", "No case studies", "No invented results", "Brief from approved KB only"],
+      "booking_link_required": true
+    },
+    {
+      "id": "T-AUTO-002",
+      "name": "Scheduling Request",
+      "intent": "SCHEDULING_REQUEST",
+      "status": "DRAFT",
+      "status_note": "Owner review required before autonomous use",
+      "eligible_for_autonomous": false,
+      "template_text": "Hi [First Name],\n\nAbsolutely. Here's my calendar to grab a time that works: [BOOKING_LINK]\n\n[Sender Name]",
+      "constraints": ["Booking link only", "No additional content", "No pricing"],
+      "booking_link_required": true
+    },
+    {
+      "id": "T-AUTO-003",
+      "name": "Send Me More Info",
+      "intent": "INFORMATION_REQUEST",
+      "status": "DRAFT",
+      "status_note": "Owner review required before autonomous use",
+      "eligible_for_autonomous": false,
+      "template_text": "Hi [First Name],\n\nHere's a quick overview of how we work: [Service brief from approved KB].\n\nIf it seems like a fit, you can grab a time here: [BOOKING_LINK]\n\n[Sender Name]",
+      "constraints": ["Service brief from approved KB only", "No pricing", "No case studies", "Booking link once"],
+      "booking_link_required": true
+    }
+  ],
+  "permanently_blocked_template_types": [
+    "PRICING_RESPONSE",
+    "CASE_STUDY_RESPONSE",
+    "CONTRACT_RESPONSE",
+    "CUSTOM_PROPOSAL",
+    "GDPR_COMPLIANCE_RESPONSE",
+    "SOC2_RESPONSE",
+    "APOLOGY_RESPONSE",
+    "CORRECTION_RESPONSE"
+  ]
+}

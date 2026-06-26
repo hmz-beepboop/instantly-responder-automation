@@ -1,0 +1,279 @@
+{
+  "harness": "SL-PHASE-5A-autonomous-shadow-simulation",
+  "run_at": "2026-06-23T15:54:29.048Z",
+  "autonomous_mode": "DISABLED",
+  "total": 12,
+  "passed": 12,
+  "failed": 0,
+  "safety_guarantee": "would_send_autonomously is always false in this scaffold",
+  "results": [
+    {
+      "id": "AS-1",
+      "result": "PASS",
+      "checks": {
+        "shadow_action": true,
+        "no_autonomous_send": true,
+        "human_review_required": true
+      },
+      "decision": {
+        "scenario_id": "AS-1",
+        "category": "POSITIVE_INTEREST",
+        "micro_intent": "DISCOVERY_CALL_REQUEST",
+        "is_out_of_hours": true,
+        "autonomous_eligible": true,
+        "eligibility_source": "eligible",
+        "shadow_action": "SHADOW_ELIGIBLE_OUT_OF_HOURS",
+        "would_send_autonomously": false,
+        "human_review_required": true,
+        "proposed_shadow_draft_status": "SHADOW_DRAFT_PENDING_HUMAN_REVIEW",
+        "note": "Would be autonomous candidate. Shadow simulation only — no actual send.",
+        "post_autonomous_human_review": true
+      }
+    },
+    {
+      "id": "AS-2",
+      "result": "PASS",
+      "checks": {
+        "shadow_action": true,
+        "no_autonomous_send": true,
+        "human_review_required": true
+      },
+      "decision": {
+        "scenario_id": "AS-2",
+        "category": "POSITIVE_INTEREST",
+        "micro_intent": "DISCOVERY_CALL_REQUEST",
+        "is_out_of_hours": false,
+        "autonomous_eligible": true,
+        "eligibility_source": "eligible",
+        "shadow_action": "DEFER_TO_HUMAN_IN_HOURS",
+        "would_send_autonomously": false,
+        "human_review_required": true,
+        "proposed_shadow_draft_status": "DRAFT_NOT_CREATED",
+        "note": "Human is available — no autonomous action even if eligible"
+      }
+    },
+    {
+      "id": "AS-3",
+      "result": "PASS",
+      "checks": {
+        "shadow_action": true,
+        "no_autonomous_send": true,
+        "human_review_required": true
+      },
+      "decision": {
+        "scenario_id": "AS-3",
+        "category": "UNSUBSCRIBE_REQUEST",
+        "micro_intent": "OPT_OUT",
+        "is_out_of_hours": true,
+        "autonomous_eligible": false,
+        "eligibility_source": "blocked",
+        "shadow_action": "BLOCK_AUTONOMOUS_ALWAYS_HUMAN",
+        "would_send_autonomously": false,
+        "human_review_required": true,
+        "proposed_shadow_draft_status": "DRAFT_NOT_CREATED",
+        "note": "Category/intent in blocked list — autonomous action never taken"
+      }
+    },
+    {
+      "id": "AS-4",
+      "result": "PASS",
+      "checks": {
+        "shadow_action": true,
+        "no_autonomous_send": true,
+        "human_review_required": true
+      },
+      "decision": {
+        "scenario_id": "AS-4",
+        "category": "PRICING_OR_COMMERCIAL_NEGOTIATION",
+        "micro_intent": "PRICING_REQUEST",
+        "is_out_of_hours": true,
+        "autonomous_eligible": false,
+        "eligibility_source": "blocked",
+        "shadow_action": "BLOCK_AUTONOMOUS_ALWAYS_HUMAN",
+        "would_send_autonomously": false,
+        "human_review_required": true,
+        "proposed_shadow_draft_status": "DRAFT_NOT_CREATED",
+        "note": "Category/intent in blocked list — autonomous action never taken"
+      }
+    },
+    {
+      "id": "AS-5",
+      "result": "PASS",
+      "checks": {
+        "shadow_action": true,
+        "no_autonomous_send": true,
+        "human_review_required": true
+      },
+      "decision": {
+        "scenario_id": "AS-5",
+        "category": "INFORMATION_REQUEST",
+        "micro_intent": "HOW_IT_WORKS_REQUEST",
+        "is_out_of_hours": true,
+        "autonomous_eligible": true,
+        "eligibility_source": "eligible",
+        "shadow_action": "SHADOW_ELIGIBLE_OUT_OF_HOURS",
+        "would_send_autonomously": false,
+        "human_review_required": true,
+        "proposed_shadow_draft_status": "SHADOW_DRAFT_PENDING_HUMAN_REVIEW",
+        "note": "Would be autonomous candidate. Shadow simulation only — no actual send.",
+        "post_autonomous_human_review": true
+      }
+    },
+    {
+      "id": "AS-6",
+      "result": "PASS",
+      "checks": {
+        "shadow_action": true,
+        "no_autonomous_send": true,
+        "human_review_required": true
+      },
+      "decision": {
+        "scenario_id": "AS-6",
+        "category": "INFORMATION_REQUEST",
+        "micro_intent": "PROOF_OR_CASE_STUDY_REQUEST",
+        "is_out_of_hours": true,
+        "autonomous_eligible": false,
+        "eligibility_source": "blocked",
+        "shadow_action": "BLOCK_AUTONOMOUS_ALWAYS_HUMAN",
+        "would_send_autonomously": false,
+        "human_review_required": true,
+        "proposed_shadow_draft_status": "DRAFT_NOT_CREATED",
+        "note": "Category/intent in blocked list — autonomous action never taken"
+      }
+    },
+    {
+      "id": "AS-7",
+      "result": "PASS",
+      "checks": {
+        "shadow_action": true,
+        "no_autonomous_send": true,
+        "human_review_required": true
+      },
+      "decision": {
+        "scenario_id": "AS-7",
+        "category": "INFORMATION_REQUEST",
+        "micro_intent": "CONTRACT_TERMS_REQUEST",
+        "is_out_of_hours": true,
+        "autonomous_eligible": false,
+        "eligibility_source": "blocked",
+        "shadow_action": "BLOCK_AUTONOMOUS_ALWAYS_HUMAN",
+        "would_send_autonomously": false,
+        "human_review_required": true,
+        "proposed_shadow_draft_status": "DRAFT_NOT_CREATED",
+        "note": "Category/intent in blocked list — autonomous action never taken"
+      }
+    },
+    {
+      "id": "AS-8",
+      "result": "PASS",
+      "checks": {
+        "shadow_action": true,
+        "no_autonomous_send": true,
+        "human_review_required": true
+      },
+      "decision": {
+        "scenario_id": "AS-8",
+        "category": "SCHEDULING",
+        "micro_intent": "AVAILABILITY_REQUEST",
+        "is_out_of_hours": true,
+        "autonomous_eligible": true,
+        "eligibility_source": "eligible",
+        "shadow_action": "SHADOW_ELIGIBLE_OUT_OF_HOURS",
+        "would_send_autonomously": false,
+        "human_review_required": true,
+        "proposed_shadow_draft_status": "SHADOW_DRAFT_PENDING_HUMAN_REVIEW",
+        "note": "Would be autonomous candidate. Shadow simulation only — no actual send.",
+        "post_autonomous_human_review": true
+      }
+    },
+    {
+      "id": "AS-9",
+      "result": "PASS",
+      "checks": {
+        "shadow_action": true,
+        "no_autonomous_send": true,
+        "human_review_required": true
+      },
+      "decision": {
+        "scenario_id": "AS-9",
+        "category": "LEGAL_OR_COMPLIANCE",
+        "micro_intent": "DATA_SECURITY_REQUEST",
+        "is_out_of_hours": true,
+        "autonomous_eligible": false,
+        "eligibility_source": "blocked",
+        "shadow_action": "BLOCK_AUTONOMOUS_ALWAYS_HUMAN",
+        "would_send_autonomously": false,
+        "human_review_required": true,
+        "proposed_shadow_draft_status": "DRAFT_NOT_CREATED",
+        "note": "Category/intent in blocked list — autonomous action never taken"
+      }
+    },
+    {
+      "id": "AS-10",
+      "result": "PASS",
+      "checks": {
+        "shadow_action": true,
+        "no_autonomous_send": true,
+        "human_review_required": true
+      },
+      "decision": {
+        "scenario_id": "AS-10",
+        "category": "AMBIGUOUS_OR_SHORT",
+        "micro_intent": "UNKNOWN",
+        "is_out_of_hours": true,
+        "autonomous_eligible": false,
+        "eligibility_source": "blocked",
+        "shadow_action": "BLOCK_AUTONOMOUS_ALWAYS_HUMAN",
+        "would_send_autonomously": false,
+        "human_review_required": true,
+        "proposed_shadow_draft_status": "DRAFT_NOT_CREATED",
+        "note": "Category/intent in blocked list — autonomous action never taken"
+      }
+    },
+    {
+      "id": "AS-11",
+      "result": "PASS",
+      "checks": {
+        "shadow_action": true,
+        "no_autonomous_send": true,
+        "human_review_required": true
+      },
+      "decision": {
+        "scenario_id": "AS-11",
+        "category": "POSITIVE_INTEREST",
+        "micro_intent": "GENERAL_INTEREST",
+        "is_out_of_hours": true,
+        "autonomous_eligible": true,
+        "eligibility_source": "eligible",
+        "shadow_action": "SHADOW_ELIGIBLE_OUT_OF_HOURS",
+        "would_send_autonomously": false,
+        "human_review_required": true,
+        "proposed_shadow_draft_status": "SHADOW_DRAFT_PENDING_HUMAN_REVIEW",
+        "note": "Would be autonomous candidate. Shadow simulation only — no actual send.",
+        "post_autonomous_human_review": true
+      }
+    },
+    {
+      "id": "AS-12",
+      "result": "PASS",
+      "checks": {
+        "shadow_action": true,
+        "no_autonomous_send": true,
+        "human_review_required": true
+      },
+      "decision": {
+        "scenario_id": "AS-12",
+        "category": "INFORMATION_REQUEST",
+        "micro_intent": "DATA_SECURITY_REQUEST",
+        "is_out_of_hours": true,
+        "autonomous_eligible": false,
+        "eligibility_source": "blocked",
+        "shadow_action": "BLOCK_AUTONOMOUS_ALWAYS_HUMAN",
+        "would_send_autonomously": false,
+        "human_review_required": true,
+        "proposed_shadow_draft_status": "DRAFT_NOT_CREATED",
+        "note": "Category/intent in blocked list — autonomous action never taken"
+      }
+    }
+  ]
+}

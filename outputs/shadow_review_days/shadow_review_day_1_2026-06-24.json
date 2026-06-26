@@ -1,0 +1,55 @@
+{
+  "review_date": "2026-06-24",
+  "review_day_in_cycle": 1,
+  "reviewer": "owner",
+  "cases_reviewed": 0,
+  "cases_blocked_correct": 0,
+  "cases_shadow_eligible_correct": 0,
+  "cases_incorrect": 0,
+  "notes": "",
+  "checklist": [
+    {
+      "item": "Check shadow evaluator is active=false",
+      "done": false
+    },
+    {
+      "item": "Pull 1-3 real inbound replies from Instantly.ai",
+      "done": false
+    },
+    {
+      "item": "For each reply: copy Decision output fields (micro_intent, confidence, broad_category)",
+      "done": false
+    },
+    {
+      "item": "Run GeneratePayloadTemplate, fill in fields, validate each payload",
+      "done": false
+    },
+    {
+      "item": "For each payload: record what the shadow evaluator would decide",
+      "done": false
+    },
+    {
+      "item": "For each case: record your own assessment (should it have been blocked/eligible?)",
+      "done": false
+    },
+    {
+      "item": "For any disagreement: log in learning_signals array below",
+      "done": false
+    },
+    {
+      "item": "Export daily summary at end of session",
+      "done": false
+    }
+  ],
+  "cases": [],
+  "learning_signals": [],
+  "metrics": {
+    "total_shadow_eligible": 0,
+    "total_blocked_permanent": 0,
+    "total_blocked_allowlist": 0,
+    "total_human_review": 0,
+    "false_positive_count": 0,
+    "false_negative_count": 0,
+    "owner_override_count": 0
+  }
+}

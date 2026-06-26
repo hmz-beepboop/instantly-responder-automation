@@ -1,0 +1,81 @@
+{
+  "_description": "Day 1 shadow review owner working file. Fill in fields as you work through real inbound replies. All data marked FAKE_TEST is example only.",
+  "_version": "1.0",
+  "_date_prepared": "2026-06-24",
+  "_phase": "5K",
+  "_status": "READY — waiting for owner to start Day 1",
+  "_instruction": "Replace FILL_IN fields with your real values. Use Decision workflow output for broad_category, micro_intent, confidence.",
+
+  "review_date": "FILL_IN_DATE",
+  "review_day_in_cycle": 1,
+  "reviewer": "owner",
+  "shadow_evaluator_active_at_start": false,
+  "shadow_evaluator_active_at_end": false,
+
+  "pre_review_checklist": {
+    "confirmed_shadow_evaluator_active_false": false,
+    "confirmed_decision_workflow_running": false,
+    "no_pending_opt_outs_or_complaints_in_inbox": false,
+    "daily_instructions_open": false,
+    "note": "Check each box (set to true) before reviewing your first real reply"
+  },
+
+  "example_safe_case_FAKE_TEST": {
+    "_label": "FAKE_TEST — Example only. Do not use as real data.",
+    "case_id": "case_FAKE_20260624_001",
+    "thread_id": "thread_FAKE_001",
+    "campaign_id": "CAMP_FAKE_001",
+    "sender_email": "test@example.com",
+    "incoming_text": "Hi, this looks interesting. Can we get on a call next week?",
+    "broad_category": "SCHEDULING_POSITIVE",
+    "micro_intent": "SCHEDULING_REQUEST",
+    "confidence": 0.91,
+    "additional_intents": [],
+    "risk_flags": [],
+    "in_human_working_hours": true,
+    "expected_autonomous_decision": "SHADOW_ELIGIBLE",
+    "expected_because": "SCHEDULING_REQUEST, high confidence, no risk flags, in hours",
+    "owner_assessment": "AGREE — should be shadow eligible",
+    "was_correct": true,
+    "learning_signal": ""
+  },
+
+  "example_blocked_case_FAKE_TEST": {
+    "_label": "FAKE_TEST — Example only. Do not use as real data.",
+    "case_id": "case_FAKE_20260624_002",
+    "thread_id": "thread_FAKE_002",
+    "campaign_id": "CAMP_FAKE_001",
+    "sender_email": "test@example.com",
+    "incoming_text": "How much does this cost? And can you send over your pricing?",
+    "broad_category": "COMMERCIAL_INQUIRY",
+    "micro_intent": "PRICING",
+    "confidence": 0.88,
+    "additional_intents": [],
+    "risk_flags": ["PRICING_INQUIRY"],
+    "in_human_working_hours": true,
+    "expected_autonomous_decision": "BLOCKED_INTENT",
+    "expected_because": "PRICING is on the blocked-forever list",
+    "owner_assessment": "AGREE — pricing must go to human review",
+    "was_correct": true,
+    "learning_signal": ""
+  },
+
+  "real_cases": [],
+
+  "summary_metrics": {
+    "total_cases_reviewed": 0,
+    "cases_shadow_eligible": 0,
+    "cases_blocked": 0,
+    "cases_human_review": 0,
+    "owner_agrees": 0,
+    "owner_disagrees": 0,
+    "false_positives": 0,
+    "false_negatives": 0,
+    "stop_flag": false,
+    "stop_reason": ""
+  },
+
+  "learning_signals": [],
+  "day_notes": "",
+  "gate2_readiness_notes": ""
+}

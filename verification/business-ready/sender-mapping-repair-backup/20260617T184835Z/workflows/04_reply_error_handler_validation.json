@@ -1,0 +1,354 @@
+{
+  "name": "HMZ - Reply Error Handler - Validation",
+  "active": false,
+  "nodes": [
+    {
+      "id": "sticky_overview",
+      "name": "Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -420
+      ],
+      "parameters": {
+        "content": "# HMZ - Reply Error Handler - Validation (Phase 4A)\n\nWHAT: Begins with an n8n Error Trigger (any other Phase 4A workflow execution failure) and an Execute Workflow Trigger for synthetic tests. Normalises workflow/execution/failed-node/intake/send-key/send-state/HTTP-status/error-class/attempt/retryable/operator-action fields, redacts secrets/Authorization/full payloads/long PII, persists the sanitised record to the hmz-send-state sidecar, and returns a placeholder notification object only.\n\nNEVER: calls Slack, email, Sheets, or any other external service. NEVER: converts a SEND_UNCERTAIN record into a retry (retryable is forced false whenever send_state=SEND_UNCERTAIN).\n\nSIDECAR: http://hmz-send-state:5681 (internal Docker network only).\n\nINACTIVE: this workflow must remain inactive after import and after every test.",
+        "height": 400,
+        "width": 900,
+        "color": 7
+      }
+    },
+    {
+      "id": "trigger_error",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "trigger_synthetic",
+      "name": "Execute Workflow Trigger (Synthetic Test Entry)",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        220
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "node_a",
+      "name": "A. Normalize Error Event",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        100
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nconst REDACT_KEY_PATTERN = /(authoriz|api[_-]?key|secret|token|password|cookie|bearer)/i;\n\nconst MAX_STRING_LENGTH = 300;\n\nconst RETRYABLE_HTTP_STATUSES = [429,500,502,503,504];\n\nconst OPERATOR_ACTION_BY_CLASS = {\"PERMANENT_FAILURE\":\"REVIEW_PAYLOAD\",\"AUTH_OR_PLAN_FAILURE\":\"CHECK_CREDENTIALS_AND_PLAN\",\"INVALID_REPLY_TARGET\":\"INVESTIGATE_REPLY_TARGET\",\"RETRYABLE\":\"MONITOR_RETRY\",\"SEND_UNCERTAIN\":\"MANUAL_RECONCILIATION_REQUIRED\",\"UNKNOWN\":\"MANUAL_REVIEW\"};\n\nfunction redactValue(value) {\n  if (value === null || value === undefined) return value;\n  if (Array.isArray(value)) return value.slice(0, 20).map(redactValue);\n  if (typeof value === 'object') {\n    const out = {};\n    for (const key of Object.keys(value)) {\n      if (REDACT_KEY_PATTERN.test(key)) {\n        out[key] = '<REDACTED>';\n        continue;\n      }\n      out[key] = redactValue(value[key]);\n    }\n    return out;\n  }\n  if (typeof value === 'string' && value.length > MAX_STRING_LENGTH) {\n    return `${value.slice(0, MAX_STRING_LENGTH)}...<TRUNCATED>`;\n  }\n  return value;\n}\n\nfunction classifyErrorClass(item) {\n  const input = item || {};\n  if (input.error_class) return input.error_class;\n\n  // SEND_UNCERTAIN is a definitive ambiguous-outcome determination made by\n  // the Sender workflow and must take priority over any http_status-based\n  // inference, so error_class/retryable/operator_action stay consistent\n  // (never RETRYABLE/MONITOR_RETRY for a SEND_UNCERTAIN record).\n  if (input.send_state === 'SEND_UNCERTAIN') return 'SEND_UNCERTAIN';\n\n  const status = input.http_status;\n  if (status === 400) return 'PERMANENT_FAILURE';\n  if (status === 401 || status === 402 || status === 403) return 'AUTH_OR_PLAN_FAILURE';\n  if (status === 404) return 'INVALID_REPLY_TARGET';\n  if (RETRYABLE_HTTP_STATUSES.includes(status)) return 'RETRYABLE';\n  return 'UNKNOWN';\n}\n\nfunction deriveRetryable(item) {\n  const input = item || {};\n  if (input.send_state === 'SEND_UNCERTAIN') return false;\n  if (typeof input.retryable === 'boolean') return input.retryable;\n  return classifyErrorClass(input) === 'RETRYABLE';\n}\n\nfunction deriveOperatorAction(item) {\n  const input = item || {};\n  if (input.operator_action) return input.operator_action;\n  const errorClass = classifyErrorClass(input);\n  return OPERATOR_ACTION_BY_CLASS[errorClass] || 'MANUAL_REVIEW';\n}\n\nfunction normalizeErrorEvent(item) {\n  const input = item || {};\n  const execution = input.execution || {};\n  const workflowInfo = input.workflow || {};\n  const trigger = input.trigger || {};\n  const triggerError = trigger.error || {};\n\n  const failedNode =\n    input.failed_node || triggerError.node?.name || execution.lastNodeExecuted || null;\n\n  const errorClass = classifyErrorClass(input);\n\n  return {\n    ...input,\n    error_record: {\n      schema_version: '1.0',\n      workflow_id: workflowInfo.id || input.workflow_id || null,\n      workflow_name: workflowInfo.name || input.workflow_name || null,\n      execution_id: execution.id || input.execution_id || null,\n      failed_node: failedNode,\n      intake_id: input.intake_id || (input.nes && input.nes.intake_id) || null,\n      send_key:\n        input.send_key ||\n        (input.acquisition && input.acquisition.sendKey) ||\n        (input.send_identity && input.send_identity.sendKey) ||\n        null,\n      send_state: input.send_state || (input.terminal && input.terminal.send_state) || null,\n      http_status: typeof input.http_status === 'number' ? input.http_status : null,\n      error_class: errorClass,\n      attempt: typeof input.attempt === 'number' ? input.attempt : null,\n      retryable: deriveRetryable(input),\n      operator_action: deriveOperatorAction(input),\n    },\n  };\n}\n\nreturn items.map(item => ({ json: normalizeErrorEvent(item.json || {}) }));"
+      }
+    },
+    {
+      "id": "node_b",
+      "name": "B. Redact Sensitive Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        100
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nconst REDACT_KEY_PATTERN = /(authoriz|api[_-]?key|secret|token|password|cookie|bearer)/i;\n\nconst MAX_STRING_LENGTH = 300;\n\nconst RETRYABLE_HTTP_STATUSES = [429,500,502,503,504];\n\nconst OPERATOR_ACTION_BY_CLASS = {\"PERMANENT_FAILURE\":\"REVIEW_PAYLOAD\",\"AUTH_OR_PLAN_FAILURE\":\"CHECK_CREDENTIALS_AND_PLAN\",\"INVALID_REPLY_TARGET\":\"INVESTIGATE_REPLY_TARGET\",\"RETRYABLE\":\"MONITOR_RETRY\",\"SEND_UNCERTAIN\":\"MANUAL_RECONCILIATION_REQUIRED\",\"UNKNOWN\":\"MANUAL_REVIEW\"};\n\nfunction redactValue(value) {\n  if (value === null || value === undefined) return value;\n  if (Array.isArray(value)) return value.slice(0, 20).map(redactValue);\n  if (typeof value === 'object') {\n    const out = {};\n    for (const key of Object.keys(value)) {\n      if (REDACT_KEY_PATTERN.test(key)) {\n        out[key] = '<REDACTED>';\n        continue;\n      }\n      out[key] = redactValue(value[key]);\n    }\n    return out;\n  }\n  if (typeof value === 'string' && value.length > MAX_STRING_LENGTH) {\n    return `${value.slice(0, MAX_STRING_LENGTH)}...<TRUNCATED>`;\n  }\n  return value;\n}\n\nfunction classifyErrorClass(item) {\n  const input = item || {};\n  if (input.error_class) return input.error_class;\n\n  // SEND_UNCERTAIN is a definitive ambiguous-outcome determination made by\n  // the Sender workflow and must take priority over any http_status-based\n  // inference, so error_class/retryable/operator_action stay consistent\n  // (never RETRYABLE/MONITOR_RETRY for a SEND_UNCERTAIN record).\n  if (input.send_state === 'SEND_UNCERTAIN') return 'SEND_UNCERTAIN';\n\n  const status = input.http_status;\n  if (status === 400) return 'PERMANENT_FAILURE';\n  if (status === 401 || status === 402 || status === 403) return 'AUTH_OR_PLAN_FAILURE';\n  if (status === 404) return 'INVALID_REPLY_TARGET';\n  if (RETRYABLE_HTTP_STATUSES.includes(status)) return 'RETRYABLE';\n  return 'UNKNOWN';\n}\n\nfunction deriveRetryable(item) {\n  const input = item || {};\n  if (input.send_state === 'SEND_UNCERTAIN') return false;\n  if (typeof input.retryable === 'boolean') return input.retryable;\n  return classifyErrorClass(input) === 'RETRYABLE';\n}\n\nfunction deriveOperatorAction(item) {\n  const input = item || {};\n  if (input.operator_action) return input.operator_action;\n  const errorClass = classifyErrorClass(input);\n  return OPERATOR_ACTION_BY_CLASS[errorClass] || 'MANUAL_REVIEW';\n}\n\nfunction redactErrorRecord(item) {\n  const input = item || {};\n  return {\n    ...input,\n    error_record: redactValue(input.error_record || {}),\n  };\n}\n\nreturn items.map(item => ({ json: redactErrorRecord(item.json || {}) }));"
+      }
+    },
+    {
+      "id": "node_c_http",
+      "name": "C. Persist Error Record (hmz-send-state)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        100
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "http://hmz-send-state:5681/v1/error",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.error_record }}",
+        "options": {
+          "timeout": 5000
+        }
+      }
+    },
+    {
+      "id": "node_c2",
+      "name": "C2. Attach Error ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        100
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nconst priorItems = $('B. Redact Sensitive Data').all();\n\nconst REDACT_KEY_PATTERN = /(authoriz|api[_-]?key|secret|token|password|cookie|bearer)/i;\n\nconst MAX_STRING_LENGTH = 300;\n\nconst RETRYABLE_HTTP_STATUSES = [429,500,502,503,504];\n\nconst OPERATOR_ACTION_BY_CLASS = {\"PERMANENT_FAILURE\":\"REVIEW_PAYLOAD\",\"AUTH_OR_PLAN_FAILURE\":\"CHECK_CREDENTIALS_AND_PLAN\",\"INVALID_REPLY_TARGET\":\"INVESTIGATE_REPLY_TARGET\",\"RETRYABLE\":\"MONITOR_RETRY\",\"SEND_UNCERTAIN\":\"MANUAL_RECONCILIATION_REQUIRED\",\"UNKNOWN\":\"MANUAL_REVIEW\"};\n\nfunction redactValue(value) {\n  if (value === null || value === undefined) return value;\n  if (Array.isArray(value)) return value.slice(0, 20).map(redactValue);\n  if (typeof value === 'object') {\n    const out = {};\n    for (const key of Object.keys(value)) {\n      if (REDACT_KEY_PATTERN.test(key)) {\n        out[key] = '<REDACTED>';\n        continue;\n      }\n      out[key] = redactValue(value[key]);\n    }\n    return out;\n  }\n  if (typeof value === 'string' && value.length > MAX_STRING_LENGTH) {\n    return `${value.slice(0, MAX_STRING_LENGTH)}...<TRUNCATED>`;\n  }\n  return value;\n}\n\nfunction classifyErrorClass(item) {\n  const input = item || {};\n  if (input.error_class) return input.error_class;\n\n  // SEND_UNCERTAIN is a definitive ambiguous-outcome determination made by\n  // the Sender workflow and must take priority over any http_status-based\n  // inference, so error_class/retryable/operator_action stay consistent\n  // (never RETRYABLE/MONITOR_RETRY for a SEND_UNCERTAIN record).\n  if (input.send_state === 'SEND_UNCERTAIN') return 'SEND_UNCERTAIN';\n\n  const status = input.http_status;\n  if (status === 400) return 'PERMANENT_FAILURE';\n  if (status === 401 || status === 402 || status === 403) return 'AUTH_OR_PLAN_FAILURE';\n  if (status === 404) return 'INVALID_REPLY_TARGET';\n  if (RETRYABLE_HTTP_STATUSES.includes(status)) return 'RETRYABLE';\n  return 'UNKNOWN';\n}\n\nfunction deriveRetryable(item) {\n  const input = item || {};\n  if (input.send_state === 'SEND_UNCERTAIN') return false;\n  if (typeof input.retryable === 'boolean') return input.retryable;\n  return classifyErrorClass(input) === 'RETRYABLE';\n}\n\nfunction deriveOperatorAction(item) {\n  const input = item || {};\n  if (input.operator_action) return input.operator_action;\n  const errorClass = classifyErrorClass(input);\n  return OPERATOR_ACTION_BY_CLASS[errorClass] || 'MANUAL_REVIEW';\n}\n\nfunction attachErrorId(priorItem, persistResponse) {\n  const input = priorItem || {};\n  const response = persistResponse || {};\n  return {\n    ...input,\n    persisted_error: {\n      errorId: response.errorId || null,\n    },\n  };\n}\n\nreturn items.map((item, idx) => ({ json: attachErrorId((priorItems[idx] && priorItems[idx].json) || {}, item.json || {}) }));"
+      }
+    },
+    {
+      "id": "node_d",
+      "name": "D. Build Notification Payload (Gated)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        100
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nconst CONFIG = {\"config_version\":\"business-ready-1.0\",\"generated_by\":\"verification/business-ready (offline build)\",\"owner_inputs_status\":\"INCOMPLETE — see BUSINESS_READY_OWNER_INPUTS.md\",\"operating_mode\":\"VALIDATION\",\"dry_run\":true,\"live_campaigns\":[],\"workspace_allowlist\":[\"<REQUIRED_WORKSPACE_ID>\"],\"sender_mapping\":{\"<REQUIRED_SENDER_EACCOUNT_1>\":{\"sender_name\":\"<REQUIRED_SENDER_NAME_1>\",\"booking_link\":\"<REQUIRED_BOOKING_LINK_1>\"}},\"policy_version\":\"policy-HMZ-1.2\",\"kb_version\":\"KB-1.0-DRAFT\",\"kb_approved_for_runtime\":false,\"classifier_version\":\"deterministic-heuristic-1.0\",\"template_registry_version\":\"T-REGISTRY-1.0\",\"review\":{\"destination_status\":\"NOT_CONFIGURED\",\"google_chat_credential_name\":\"hmzGoogleChatWebhook\",\"google_chat_configured\":false,\"review_base_url\":\"<REQUIRED_REVIEW_BASE_URL>\",\"review_token_ttl_minutes\":\"<REQUIRED_REVIEW_TOKEN_TTL_MINUTES>\",\"review_token_ttl_minutes_default\":1440,\"fail_closed_state\":\"REVIEW_NOTIFICATION_FAILED\"},\"live_credential_readiness\":{\"instantly_api_key_bound\":false,\"instantly_credential_name\":\"hmzInstantlyApi\",\"n8n_api_key_bound\":false,\"n8n_api_credential_name\":\"hmzN8nApi\",\"ready_for_controlled_live_test\":false},\"suppression_action_enablement\":{\"source_campaign_stop_enabled\":false,\"interest_status_update_enabled\":false,\"subsequence_removal_enabled\":false,\"exact_email_blocklist_enabled\":false,\"note\":\"Each remains false until its own separate live-safety gate is explicitly enabled by the owner. Required suppression actions (T7/T12/T13) still execute idempotently in DRY_RUN against the validation-only adapter contract; only the real HTTP call is gated by these flags.\"},\"instantly_api\":{\"base_url\":\"https://api.instantly.ai\",\"version\":\"v2\",\"endpoints\":{\"get_email\":{\"method\":\"GET\",\"path\":\"/api/v2/emails/{id}\"},\"reply_to_email\":{\"method\":\"POST\",\"path\":\"/api/v2/emails/reply\"},\"update_interest_status\":{\"method\":\"POST\",\"path\":\"/api/v2/leads/update-interest-status\"},\"remove_subsequence\":{\"method\":\"POST\",\"path\":\"/api/v2/leads/subsequence/remove\"},\"add_to_blocklist\":{\"method\":\"POST\",\"path\":\"/api/v2/blocklist\"},\"list_emails\":{\"method\":\"POST\",\"path\":\"/api/v2/emails/list\"}}},\"webhook_protection\":{\"dev_path\":\"hmz-validation-reply-intake-dev\",\"production_path\":\"<REQUIRED_PRODUCTION_WEBHOOK_PATH_PLACEHOLDER>\",\"shared_secret_header_name\":\"X-HMZ-Webhook-Token\",\"shared_secret_credential_name\":\"hmzInstantlyWebhookToken\",\"campaign_allowlist_required\":true,\"sender_allowlist_required\":true,\"api_side_email_id_refetch_required\":true,\"rate_limit_per_minute\":60,\"duplicate_window_seconds\":300},\"slo\":{\"processing_warning_seconds\":180,\"processing_breach_seconds\":300,\"transmission_target_seconds\":300},\"retention\":{\"review_case_retention_days\":\"<REQUIRED_CASE_RETENTION_DAYS>\",\"review_case_retention_days_default\":90,\"send_state_retention_days\":\"<REQUIRED_SEND_STATE_RETENTION_DAYS>\",\"send_state_retention_days_default\":90,\"error_record_retention_days\":\"<REQUIRED_ERROR_RETENTION_DAYS>\",\"error_record_retention_days_default\":90},\"retry\":{\"max_total_attempts\":3,\"retryable_status_codes\":[429,500,502,503,504],\"honour_retry_after_header\":true,\"send_uncertain_blind_retry\":false},\"reconciliation\":{\"enabled\":true,\"match_fields\":[\"thread\",\"sender\",\"recipient\",\"exact_subject\",\"timestamp_window\",\"unique_marker\"],\"single_match_result\":\"SENT_RECONCILED\",\"zero_match_result\":\"HUMAN_REVIEW_ZERO_MATCHES\",\"multiple_match_result\":\"HUMAN_REVIEW_MULTIPLE_MATCHES\",\"second_post_on_zero_or_multiple_matches\":false},\"workflow_inventory\":{\"HMZ - Instantly Reply Intake - Validation\":\"01_reply_intake_validation.json\",\"HMZ - Reply Decision Engine - Validation\":\"02_reply_decision_engine_validation.json\",\"HMZ - Instantly Reply Sender - Validation\":\"03_reply_sender_validation.json\",\"HMZ - Reply Error Handler - Validation\":\"04_reply_error_handler_validation.json\",\"HMZ - Reply SLA Watchdog - Validation\":\"05_reply_sla_watchdog_validation.json\",\"HMZ - Reply Full Test Harness - Validation\":\"06_reply_full_test_harness_validation.json\",\"HMZ - Reply Human Approval - Validation\":\"07_reply_human_approval_validation.json\"}};\n\nconst REDACT_KEY_PATTERN = /(authoriz|api[_-]?key|secret|token|password|cookie|bearer)/i;\n\nconst MAX_STRING_LENGTH = 300;\n\nconst RETRYABLE_HTTP_STATUSES = [429,500,502,503,504];\n\nconst OPERATOR_ACTION_BY_CLASS = {\"PERMANENT_FAILURE\":\"REVIEW_PAYLOAD\",\"AUTH_OR_PLAN_FAILURE\":\"CHECK_CREDENTIALS_AND_PLAN\",\"INVALID_REPLY_TARGET\":\"INVESTIGATE_REPLY_TARGET\",\"RETRYABLE\":\"MONITOR_RETRY\",\"SEND_UNCERTAIN\":\"MANUAL_RECONCILIATION_REQUIRED\",\"UNKNOWN\":\"MANUAL_REVIEW\"};\n\nfunction redactValue(value) {\n  if (value === null || value === undefined) return value;\n  if (Array.isArray(value)) return value.slice(0, 20).map(redactValue);\n  if (typeof value === 'object') {\n    const out = {};\n    for (const key of Object.keys(value)) {\n      if (REDACT_KEY_PATTERN.test(key)) {\n        out[key] = '<REDACTED>';\n        continue;\n      }\n      out[key] = redactValue(value[key]);\n    }\n    return out;\n  }\n  if (typeof value === 'string' && value.length > MAX_STRING_LENGTH) {\n    return `${value.slice(0, MAX_STRING_LENGTH)}...<TRUNCATED>`;\n  }\n  return value;\n}\n\nfunction classifyErrorClass(item) {\n  const input = item || {};\n  if (input.error_class) return input.error_class;\n\n  // SEND_UNCERTAIN is a definitive ambiguous-outcome determination made by\n  // the Sender workflow and must take priority over any http_status-based\n  // inference, so error_class/retryable/operator_action stay consistent\n  // (never RETRYABLE/MONITOR_RETRY for a SEND_UNCERTAIN record).\n  if (input.send_state === 'SEND_UNCERTAIN') return 'SEND_UNCERTAIN';\n\n  const status = input.http_status;\n  if (status === 400) return 'PERMANENT_FAILURE';\n  if (status === 401 || status === 402 || status === 403) return 'AUTH_OR_PLAN_FAILURE';\n  if (status === 404) return 'INVALID_REPLY_TARGET';\n  if (RETRYABLE_HTTP_STATUSES.includes(status)) return 'RETRYABLE';\n  return 'UNKNOWN';\n}\n\nfunction deriveRetryable(item) {\n  const input = item || {};\n  if (input.send_state === 'SEND_UNCERTAIN') return false;\n  if (typeof input.retryable === 'boolean') return input.retryable;\n  return classifyErrorClass(input) === 'RETRYABLE';\n}\n\nfunction deriveOperatorAction(item) {\n  const input = item || {};\n  if (input.operator_action) return input.operator_action;\n  const errorClass = classifyErrorClass(input);\n  return OPERATOR_ACTION_BY_CLASS[errorClass] || 'MANUAL_REVIEW';\n}\n\nfunction buildNotificationPayload(item) {\n  const input = item || {};\n  const record = input.error_record || {};\n  const summary = `Error in ${record.workflow_name || 'unknown workflow'}: ${record.error_class || 'UNKNOWN'} at node ${record.failed_node || 'unknown'}`;\n  const operatorAction = record.operator_action || 'MANUAL_REVIEW';\n  const chatText = [\n    'HMZ error record: ' + (record.error_id || 'UNKNOWN_ID'),\n    summary,\n    'Operator action: ' + operatorAction,\n  ].join('\\n');\n  return {\n    ...input,\n    config: CONFIG,\n    chat_notification: { payload: { text: chatText } },\n    notification: {\n      schema_version: '1.0',\n      surface: CONFIG.review.google_chat_configured === true ? 'GOOGLE_CHAT' : 'NOT_CONFIGURED',\n      delivered: false,\n      summary,\n      operator_action: operatorAction,\n    },\n  };\n}\n\nreturn items.map(item => ({ json: buildNotificationPayload(item.json || {}) }));"
+      }
+    },
+    {
+      "id": "sticky_flow",
+      "name": "Normalise, Redact, Persist (notes)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        280,
+        340
+      ],
+      "parameters": {
+        "content": "## A-D. Error Record Pipeline\n\nA accepts either a real Error Trigger item ($json.execution / $json.workflow / $json.trigger.error) or a synthetic Execute Workflow Trigger item (flat fields: workflow_id, workflow_name, execution_id, failed_node, intake_id, send_key, send_state, http_status, attempt) and derives error_class / retryable / operator_action deterministically (400=PERMANENT_FAILURE, 401/402/403=AUTH_OR_PLAN_FAILURE, 404=INVALID_REPLY_TARGET, 429/5xx=RETRYABLE, send_state=SEND_UNCERTAIN=>SEND_UNCERTAIN with retryable forced false).\n\nB redacts any key matching authorization/api-key/secret/token/password/cookie/bearer and truncates strings over 300 chars. C persists the sanitised error_record via POST hmz-send-state /v1/error (internal network only, no credentials). D returns a placeholder notification object only - never Slack/email/Sheets.",
+        "height": 420,
+        "width": 1180,
+        "color": 5
+      }
+    },
+    {
+      "id": "37f6bed1-2e78-4cef-a829-21235efcefdc",
+      "name": "E. Notification Configured Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1720,
+        100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $json.config.review.google_chat_configured === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "8f72d15f-2899-4a90-81ce-d29ffff79d62",
+      "name": "F. POST Google Chat Webhook (Gated)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.GOOGLE_CHAT_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.chat_notification.payload) }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "9bbf7697-c295-440d-9a20-bd38f51ea09f",
+      "name": "F2. Mark Error Notification Failed (Not Configured)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  const input = item.json || {};\n  const notification = { ...(input.notification || {}) };\n  notification.delivered = false;\n  notification.fail_closed_reason = 'ERROR_NOTIFICATION_FAILED';\n  return { json: { ...input, notification } };\n});"
+      }
+    },
+    {
+      "id": "c46581e8-effe-4ca6-829d-4fe88ccd37d4",
+      "name": "G. Finalize Error Notification Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2280,
+        100
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\nreturn items.map(item => {\n  const input = item.json || {};\n  const notification = { ...(input.notification || {}) };\n  if (notification.fail_closed_reason) {\n    return { json: { ...input, notification } };\n  }\n  if (input.error) {\n    notification.delivered = false;\n    notification.fail_closed_reason = 'ERROR_NOTIFICATION_FAILED';\n  } else {\n    notification.delivered = true;\n  }\n  return { json: { ...input, notification } };\n});"
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "A. Normalize Error Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Workflow Trigger (Synthetic Test Entry)": {
+      "main": [
+        [
+          {
+            "node": "A. Normalize Error Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A. Normalize Error Event": {
+      "main": [
+        [
+          {
+            "node": "B. Redact Sensitive Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B. Redact Sensitive Data": {
+      "main": [
+        [
+          {
+            "node": "C. Persist Error Record (hmz-send-state)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "C. Persist Error Record (hmz-send-state)": {
+      "main": [
+        [
+          {
+            "node": "C2. Attach Error ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "C2. Attach Error ID": {
+      "main": [
+        [
+          {
+            "node": "D. Build Notification Payload (Gated)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "D. Build Notification Payload (Gated)": {
+      "main": [
+        [
+          {
+            "node": "E. Notification Configured Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "E. Notification Configured Router": {
+      "main": [
+        [
+          {
+            "node": "F. POST Google Chat Webhook (Gated)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "F2. Mark Error Notification Failed (Not Configured)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "F. POST Google Chat Webhook (Gated)": {
+      "main": [
+        [
+          {
+            "node": "G. Finalize Error Notification Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "F2. Mark Error Notification Failed (Not Configured)": {
+      "main": [
+        [
+          {
+            "node": "G. Finalize Error Notification Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true
+  }
+}

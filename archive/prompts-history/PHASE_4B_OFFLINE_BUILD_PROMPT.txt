@@ -1,0 +1,320 @@
+# Phase 4B Offline Build Only — No MCP, No n8n Access
+
+## Objective
+
+Create a complete local Phase 4B package for:
+
+1. `HMZ - Reply SLA Watchdog - Validation`
+2. `HMZ - Reply Full Test Harness - Validation`
+
+Do not connect to n8n.
+Do not use MCP.
+Do not import workflows.
+Do not access Instantly.
+Do not request credentials.
+Do not begin Phase 5.
+
+## Source files you may read
+
+Read only:
+
+- `docs/PHASE_4_VERIFIED_INPUT.md`
+- `docs/NORMALIZED_EVENT_SCHEMA.md`
+- `docs/HMZ_APPROVED_REPLY_RULES.md`
+- `workflows/01_reply_intake_validation.json`
+- `workflows/02_reply_decision_engine_validation.json`
+- `workflows/03_reply_sender_validation.json`
+- `workflows/04_reply_error_handler_validation.json`
+- `reports/PHASE_3_FINAL_VERIFICATION.md`
+- `reports/PHASE_4A_VALIDATION.md`
+- `reports/V5_LAYER1_EVIDENCE.md`
+- `reports/V5_LAYER2_EVIDENCE.md`
+- `infrastructure/send-state/server.mjs`
+- `infrastructure/send-state/state-store.mjs`
+- `verification/phase4a/sender-core.mjs`
+- `verification/phase4a/error-core.mjs`
+
+Do not scan the repository.
+Do not read DOCX files.
+Do not use web search.
+
+## Hard scope
+
+You may create or modify only:
+
+- `infrastructure/send-state/server.mjs`
+- `infrastructure/send-state/state-store.mjs`
+- `verification/phase4b/watchdog-core.mjs`
+- `verification/phase4b/harness-core.mjs`
+- `verification/phase4b/build-workflows.mjs`
+- `verification/phase4b/run-offline-tests.mjs`
+- `verification/phase4b/offline-test-results.json`
+- `verification/phase4b/import-phase4b.ps1`
+- `workflows/05_reply_sla_watchdog_validation.json`
+- `workflows/06_reply_full_test_harness_validation.json`
+- files under `fixtures/phase_4/`
+- `docs/TEST_PLAN.md`
+- `reports/PHASE_4B_OFFLINE_BUILD.md`
+
+Do not touch anything else.
+
+## Efficiency limits
+
+- No agents.
+- No npm installs.
+- Node.js built-ins only.
+- No Docker commands except one final `docker compose config`.
+- One initial full offline test run.
+- One repair pass only for proven defects.
+- One final full run only if repaired.
+- Do not print workflow JSON.
+- Final response under 250 words.
+
+## Fixed architecture
+
+Reuse the existing internal `hmz-send-state` sidecar.
+
+Extend it only as needed to support:
+
+1. Read-only listing of unfinished send/error records for watchdog evaluation.
+2. Atomic alert deduplication using a stable alert key.
+3. Sanitised watchdog-result persistence.
+
+Do not publish a host port.
+Do not add credentials.
+Do not store message bodies, API keys, Authorization headers, or raw webhook payloads.
+Existing Phase 4A endpoints and behaviour must remain backward-compatible.
+
+## SLA Watchdog workflow
+
+Generate an import-ready inactive n8n workflow JSON.
+
+Required entries:
+
+- Schedule Trigger for eventual operation.
+- Execute Workflow Trigger or Manual Trigger for safe synthetic testing.
+
+Required behaviour:
+
+- Obtain unfinished records only from `http://hmz-send-state:5681`.
+- Warning threshold: 180 seconds.
+- Breach threshold: 300 seconds.
+- Distinguish:
+  - AI/classification wait
+  - API retry
+  - human review
+  - send failure
+  - uncertain send
+  - suppression failure
+  - unknown state
+- Keep Processing SLO and Transmission SLO separate.
+- Never count a draft, approval, queue item, notification, or human-review item as transmitted.
+- Produce sanitised warning/breach records.
+- Deduplicate repeated alerts atomically through the sidecar.
+- Route only to a placeholder notification object.
+- Make no real notification call.
+- Hardcode validation mode and remain inactive.
+
+## Full Test Harness workflow
+
+Generate an import-ready inactive n8n workflow JSON.
+
+Required entries:
+
+- Manual Trigger or Execute Workflow Trigger.
+- Synthetic fixture loader.
+- Deterministic assertion runner.
+- Sanitised result writer.
+
+The workflow must:
+
+- Use synthetic fixtures and mock provider outcomes only.
+- Never call Instantly.
+- Never use credentials.
+- Clearly mark every fixture and result as synthetic.
+- Return a non-passing result if any required assertion fails.
+- Represent the complete Phase 4 fixture matrix.
+- Where direct sub-workflow execution cannot be made import-safe without unknown IDs, test the same deterministic core contract locally and record that integrated n8n execution remains a Phase 5 task. Do not invent workflow IDs.
+
+## Required fixture matrix
+
+Cover at minimum:
+
+### Policy and intake
+
+- positive interest
+- information request
+- booking request
+- timing objection
+- referral
+- not interested
+- unsubscribe
+- out of office
+- bounce
+- wrong person
+- pricing
+- legal/privacy/complaint
+- hostile/reputational
+- attachment-dependent
+- ambiguous
+- other
+- duplicate webhook
+- repeated execution
+- self-sent event
+- unsupported event
+- empty reply
+- malformed payload
+- campaign/cell mismatch
+
+### Sender and suppression
+
+- DRY_RUN prevention
+- missing approval
+- empty LIVE_CAMPAIGNS
+- unresolved variable
+- concurrent lock
+- sequential rerun lock
+- duplicate send attempt
+- source-campaign unsubscribe success
+- exact workspace block-list success
+- partial suppression failure
+
+### Failure policy
+
+- 400
+- 401
+- 402
+- 403
+- 404 invalid reply target
+- 429 with Retry-After
+- 429 without Retry-After
+- 500
+- 502
+- 503
+- 504
+- pre-submission network failure
+- uncertain connection reset
+- post-submission timeout
+- malformed 2xx
+- zero-match reconciliation
+- multiple-match reconciliation
+- one stable repeated match
+- no second POST after uncertainty
+
+### Monitoring and error handling
+
+- 180-second warning
+- 300-second breach
+- resolved record excluded
+- duplicate alert blocked
+- processing and transmission SLOs distinct
+- error record sanitised
+- placeholder routing only
+- uncertain send never marked retryable
+
+## Workflow generation requirements
+
+Create `build-workflows.mjs` that deterministically generates both JSON files.
+
+Both workflows must:
+
+- have exact required names
+- set `active: false`
+- contain no credentials
+- contain no reachable external URL except internal `hmz-send-state`
+- use clear node names and sticky notes
+- avoid unnecessary export metadata
+
+## Runtime-safety tests
+
+Do not only test source modules.
+
+The offline suite must:
+
+1. Parse both workflow JSON files.
+2. Extract and compile every embedded Code-node program.
+3. Execute every embedded Code node with representative synthetic input using a minimal n8n-compatible wrapper.
+4. Execute a complete synthetic Watchdog path.
+5. Execute a complete synthetic Test Harness path.
+6. Confirm no missing embedded constants or helper functions.
+7. Confirm all referenced internal paths exist.
+8. Confirm both workflows inactive and credential-free.
+9. Scan for secret-like values and uncontrolled real email addresses.
+10. Confirm no reachable Instantly URL.
+11. Confirm sidecar backward compatibility.
+12. Confirm alert dedupe blocks concurrent and sequential repeats.
+13. Confirm every required fixture exists and has an assertion.
+14. Confirm all generated results are sanitised.
+
+## Import script
+
+Create `verification/phase4b/import-phase4b.ps1`.
+
+Requirements:
+
+- PowerShell 7.
+- StrictMode-safe optional-property access.
+- Require `HMZ_N8N_API_KEY` in the current process.
+- Use `http://127.0.0.1:5678`.
+- Use official `npx -y @n8n/cli`.
+- Refuse import unless offline tests pass.
+- Refuse if JSON is active, has credentials, or contains reachable external calls.
+- Perform paginated duplicate-name preflight safely under StrictMode.
+- Refuse if either exact workflow name already exists.
+- Create each workflow once through stdin.
+- Never activate.
+- If only one create succeeds, report the exact partial state and stop.
+- Clear key-bearing in-process variables in `finally`.
+- Print created IDs and active states.
+
+Do not run the import script.
+
+## Reports
+
+Create `docs/TEST_PLAN.md` and `reports/PHASE_4B_OFFLINE_BUILD.md`.
+
+The report must include:
+
+- architecture changes
+- files created/modified
+- fixture count
+- tests passed/failed
+- embedded Code-node runtime-smoke result
+- sidecar regression result
+- secret scan
+- live-call scan
+- known limitations
+- exact import command
+- verdict
+
+Use exactly one verdict:
+
+- `PHASE_4B_OFFLINE_READY`
+- `PHASE_4B_OFFLINE_FAILED`
+- `PHASE_4B_OFFLINE_BLOCKED`
+
+## Execution order
+
+1. Run `node --version`.
+2. Read only allowlisted files.
+3. Create files.
+4. Run `node verification/phase4b/build-workflows.mjs`.
+5. Run `node verification/phase4b/run-offline-tests.mjs`.
+6. Run `docker compose -f infrastructure/local-n8n/docker-compose.yml config`.
+7. Repair once only if a check proves a defect.
+8. Do not import.
+9. Stop.
+
+Final response:
+
+- Node version
+- Files created/modified
+- fixture count
+- tests passed/failed
+- embedded Code-node smoke result
+- sidecar regression result
+- alert dedupe result
+- secret/live-call scans
+- Docker Compose result
+- verdict
+- exact next action

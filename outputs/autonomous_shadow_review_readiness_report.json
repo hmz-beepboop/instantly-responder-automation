@@ -1,0 +1,100 @@
+{
+  "live_send_possible": false,
+  "overall_result": "READY_WITH_WARNINGS",
+  "report_type": "shadow_review_readiness",
+  "phase": "5H",
+  "production_writes_made": false,
+  "checks_passed": 16,
+  "generated_at": "2026-06-24T11:16:00Z",
+  "checks_warnings": 1,
+  "checks": [
+    {
+      "check": "14-day plan doc",
+      "result": "PASS",
+      "note": "File exists"
+    },
+    {
+      "check": "Daily checklist doc",
+      "result": "PASS",
+      "note": "File exists"
+    },
+    {
+      "check": "Metrics template doc",
+      "result": "PASS",
+      "note": "File exists"
+    },
+    {
+      "check": "Metrics template JSON",
+      "result": "PASS",
+      "note": "File exists"
+    },
+    {
+      "check": "RC-SHADOW decision packet",
+      "result": "PASS",
+      "note": "File exists"
+    },
+    {
+      "check": "Allowlist wire-up doc",
+      "result": "PASS",
+      "note": "File exists"
+    },
+    {
+      "check": "Allowlist wire-up report",
+      "result": "PASS",
+      "note": "File exists"
+    },
+    {
+      "check": "Shadow control script",
+      "result": "PASS",
+      "note": "File exists"
+    },
+    {
+      "check": "Digest simulator script",
+      "result": "PASS",
+      "note": "File exists"
+    },
+    {
+      "check": "Acceptance harness",
+      "result": "PASS",
+      "note": "File exists"
+    },
+    {
+      "check": "Shadow evaluator JSON",
+      "result": "PASS",
+      "note": "File exists"
+    },
+    {
+      "check": "Owner approval checklist",
+      "result": "PASS",
+      "note": "File exists"
+    },
+    {
+      "check": "Live traffic bridge design",
+      "result": "PASS",
+      "note": "File exists"
+    },
+    {
+      "check": "Acceptance harness result is PASS",
+      "result": "PASS",
+      "note": "45/45 previously reported"
+    },
+    {
+      "check": "Allowlist report: no live send possible",
+      "result": "PASS",
+      "note": "All tests would_send_live_now=false"
+    },
+    {
+      "check": "RC-SHADOW-003: noted as pre-Gate 2 action",
+      "result": "WARN",
+      "note": "Must be resolved before Gate 2, not before shadow review"
+    },
+    {
+      "check": "Sample config defaults: autonomous_enabled=false, dry_run=true, shadow_only=true",
+      "result": "PASS",
+      "note": ""
+    }
+  ],
+  "gate2_approved": false,
+  "checks_failed": 0,
+  "shadow_evaluator_id": "aHzLtQiv6G8h1bqD"
+}

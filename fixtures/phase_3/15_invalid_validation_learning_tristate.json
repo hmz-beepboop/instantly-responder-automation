@@ -1,0 +1,64 @@
+{
+  "fixture_id": "phase3_15_invalid_validation_learning_tristate",
+  "description": "A normal POSITIVE_INTEREST reply that is processed through Workflow 1 and Workflow 2 Section B exactly as fixture 1, but the test harness then injects an invalid (non-tri-state) value into classifier.validation_learning.pricing_interest before Workflow 2 Section C runs, to confirm Section E (Repair 3) reads classifier.validation_learning via (input.classifier && input.classifier.validation_learning) || {} and its tri-state validation actually catches the bad value.",
+  "input": {
+    "intake_id": "phase3-fixture-15-invalid-tristate",
+    "event_id": "evt-phase3-015",
+    "email_id": "email-phase3-015",
+    "event_type": "reply_received",
+    "lead_email": "morgan.lee@prospectco.test",
+    "from_address_email": "morgan.lee@prospectco.test",
+    "email_account": "outbound1@hmzvalidation.test",
+    "reply_subject": "Re: Quick question about your sales pipeline",
+    "reply_text": "This sounds great, I'd like to learn more.",
+    "reply_text_snippet": "This sounds great, I'd like to learn more.",
+    "timestamp": "2026-06-10T10:00:00Z",
+    "campaign_id": "campaign-validation-001",
+    "validation_cell": "CELL_1_SAAS_SALES_HIRING",
+    "workspace": "hmz-workspace-dev",
+    "campaign_name": "US B2B Validation Sprint - Cell 1",
+    "step": 2,
+    "variant": 1,
+    "is_first": true,
+    "thread_id": "thread-phase3-015",
+    "message_id": "<msg-phase3-015@instantly.test>",
+    "unibox_url": "https://app.instantly.test/unibox/thread-phase3-015"
+  },
+  "inject": {
+    "path": "classifier.validation_learning.pricing_interest",
+    "value": "MAYBE"
+  },
+  "expected": {
+    "payload_status": "COMPLETE",
+    "deterministic": {
+      "deterministic_match": false,
+      "noop_match": false,
+      "category": null,
+      "rule_id": null
+    },
+    "classifier": {
+      "category": "POSITIVE_INTEREST",
+      "confidence": 0.75,
+      "interest_stage": "VALIDATION_SPRINT_INTEREST"
+    },
+    "decision": {
+      "category": "POSITIVE_INTEREST",
+      "review_hold": true,
+      "human_review_required": true,
+      "reply_permitted": false,
+      "external_action_status": "NOT_PERFORMED",
+      "terminal_status": "REVIEW_HOLD",
+      "reason_contains": "Output validation failed (1 issue(s)) - routed to REVIEW_HOLD"
+    },
+    "validation": {
+      "valid": false,
+      "errors": ["validation_learning.pricing_interest must be true, false, or \"unknown\", got \"MAYBE\""]
+    },
+    "validation_learning": {
+      "pricing_interest": "MAYBE",
+      "voice_of_customer_excerpt": "This sounds great, I'd like to learn more.",
+      "all_other_fields": "unknown_or_null_default"
+    },
+    "notes": "Before injection, classifier.validation_learning.pricing_interest would be 'unknown' (category is POSITIVE_INTEREST, not PRICING_OR_COMMERCIAL_NEGOTIATION, so Section B's pricing_interest enrichment does not fire) and Section E would report validation.valid=true exactly as fixture 1. The harness injects pricing_interest='MAYBE' (not true/false/'unknown') after Section B and before Section C, so Section E's per-field isTriState check on classifier.validation_learning fails with exactly one error, decision is overridden to review_hold=true/human_review_required=true/reply_permitted=false/external_action_status=NOT_PERFORMED/terminal_status=REVIEW_HOLD (terminal_status was already REVIEW_HOLD for POSITIVE_INTEREST, so review_hold/reply_permitted are the visible flips here), and the single top-level validation_learning object (Repair 3) carries the injected invalid value through unchanged for human review."
+  }
+}

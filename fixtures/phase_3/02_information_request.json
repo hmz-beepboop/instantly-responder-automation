@@ -1,0 +1,82 @@
+{
+  "fixture_id": "phase3_02_information_request",
+  "description": "Substantive information / mechanism question, no scheduling intent. Should be classified T2 (INFORMATION_REQUEST) by the mock semantic classifier (no deterministic rule matches), routed to human review with no fixed-template draft (composed from KB only, per policy).",
+  "input": {
+    "intake_id": "phase3-fixture-02-information-request",
+    "event_id": "evt-phase3-002",
+    "email_id": "email-phase3-002",
+    "event_type": "reply_received",
+    "lead_email": "morgan.lee@prospectco.test",
+    "from_address_email": "morgan.lee@prospectco.test",
+    "email_account": "outbound1@hmzvalidation.test",
+    "reply_subject": "Re: Outbound capacity for your sales team",
+    "reply_text": "Can you explain how the qualification process works and what counts as a qualified meeting?",
+    "reply_text_snippet": "Can you explain how the qualification process works and what counts as a qualified meeting?",
+    "timestamp": "2026-06-08T15:10:00Z",
+    "campaign_id": "campaign-validation-002",
+    "validation_cell": "CELL_2_SAAS_EXISTING_OUTBOUND",
+    "workspace": "hmz-workspace-dev",
+    "campaign_name": "US B2B Validation Sprint - Cell 2",
+    "step": 1,
+    "variant": 2,
+    "is_first": true,
+    "thread_id": "thread-phase3-002",
+    "message_id": "<msg-phase3-002@instantly.test>",
+    "unibox_url": "https://app.instantly.test/unibox/thread-phase3-002"
+  },
+  "expected": {
+    "payload_status": "COMPLETE",
+    "deterministic": {
+      "deterministic_match": false,
+      "noop_match": false,
+      "category": null,
+      "rule_id": null,
+      "media_flag": false
+    },
+    "classifier": {
+      "category": "INFORMATION_REQUEST",
+      "confidence": 0.75,
+      "interest_stage": "DISCOVERY_ONLY",
+      "permitted_automation_action": "AI_DRAFT",
+      "requested_action": "ANSWER_QUESTIONS",
+      "detected_questions": [
+        "Can you explain how the qualification process works and what counts as a qualified meeting?"
+      ]
+    },
+    "decision": {
+      "category": "INFORMATION_REQUEST",
+      "confidence": 0.75,
+      "confidence_overridden": false,
+      "stop_active_sequence": true,
+      "durable_dnc_intent": false,
+      "address_suppression_intent": "NONE",
+      "review_hold": false,
+      "legal_review_required": false,
+      "privacy_review_required": false,
+      "reputational_review_required": false,
+      "human_review_required": true,
+      "reply_permitted": true,
+      "reply_template_id": "T2_KB_INFORMATION_REQUEST",
+      "reply_draft_status": "DRAFT_PENDING_REVIEW",
+      "external_action_status": "NOT_PERFORMED",
+      "follow_up_date": null,
+      "interest_stage": "DISCOVERY_ONLY",
+      "terminal_status": "REVIEW_HOLD"
+    },
+    "draft": {
+      "template_id": "T2_KB_INFORMATION_REQUEST",
+      "draft_text_is_null": true,
+      "missing_variables": [],
+      "human_review_required": true,
+      "notes_mention": "composed from docs/HMZ_APPROVED_KNOWLEDGE_BASE.md"
+    },
+    "validation_learning": {
+      "voice_of_customer_excerpt": "Can you explain how the qualification process works and what counts as a qualified meeting?",
+      "all_other_fields": "unknown_or_null_default"
+    },
+    "validation": {
+      "valid": true
+    },
+    "notes": "infoRx matches 'can you explain' before positiveRx is checked, and no det-* rule matches first (no pricing/booking/legal/etc keywords). T2_KB_INFORMATION_REQUEST has no entry in TEMPLATE_REGISTRY (Section D), so draft.draft_text is null with an explanatory note - this is intentional, not a defect. interest_stage DISCOVERY_ONLY per interestStageFor(INFORMATION_REQUEST)."
+  }
+}

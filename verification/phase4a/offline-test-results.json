@@ -1,0 +1,219 @@
+{
+  "generatedAt": "2026-06-15T17:27:06.936Z",
+  "nodeVersion": "v24.15.0",
+  "total": 42,
+  "passed": 42,
+  "failed": 0,
+  "results": [
+    {
+      "id": "wf-json-parses",
+      "description": "Both generated workflow files parse as valid JSON",
+      "status": "pass"
+    },
+    {
+      "id": "wf-names",
+      "description": "Workflows have the required names",
+      "status": "pass"
+    },
+    {
+      "id": "wf-inactive",
+      "description": "Both workflows are inactive",
+      "status": "pass"
+    },
+    {
+      "id": "wf-no-credentials",
+      "description": "No node in either workflow has a credentials object",
+      "status": "pass"
+    },
+    {
+      "id": "wf-no-secret-values",
+      "description": "Neither workflow JSON contains secret-like literal values",
+      "status": "pass"
+    },
+    {
+      "id": "wf-no-live-instantly-request",
+      "description": "No httpRequest node targets a live Instantly endpoint unless gated by a credentialPlaceholder live-path adapter",
+      "status": "pass"
+    },
+    {
+      "id": "wf-live-instantly-only-in-contract-string",
+      "description": "api.instantly.ai appears only inside Code node source as a documented (non-executed) string literal, or in a gated credentialPlaceholder live-path adapter node",
+      "status": "pass"
+    },
+    {
+      "id": "wf-error-handler-no-external-notification-services",
+      "description": "Error handler workflow never calls Slack/email/Sheets",
+      "status": "pass"
+    },
+    {
+      "id": "wf-hardcoded-validation-config",
+      "description": "Sender workflow hardcodes OPERATING_MODE=VALIDATION, DRY_RUN=true, LIVE_CAMPAIGNS=[], LIVE_CREDENTIAL_READY=false",
+      "status": "pass"
+    },
+    {
+      "id": "wf-generated-code-compiles",
+      "description": "Every generated Code node compiles as standalone n8n JavaScript",
+      "status": "pass"
+    },
+    {
+      "id": "wf-generated-error-handler-runtime-smoke",
+      "description": "Generated Error Handler Code nodes execute a synthetic SEND_UNCERTAIN pipeline",
+      "status": "pass"
+    },
+    {
+      "id": "wf-generated-sender-runtime-smoke",
+      "description": "Generated Sender Code nodes execute the validation DRY_RUN path",
+      "status": "pass"
+    },
+    {
+      "id": "send-key-stable-ignores-random-marker",
+      "description": "computeSendKey() and the sidecar deriveSendKey() ignore the random body marker",
+      "status": "pass"
+    },
+    {
+      "id": "sidecar-acquire-and-concurrent-lock",
+      "description": "Concurrent second acquisition for the same identity is blocked (LOCK_ALREADY_HELD)",
+      "status": "pass"
+    },
+    {
+      "id": "sidecar-state-does-not-store-raw-email-identifiers",
+      "description": "Sidecar durable state stores hashes instead of raw sender/recipient identifiers",
+      "status": "pass"
+    },
+    {
+      "id": "sidecar-sequential-rerun-blocked-after-terminal",
+      "description": "A later sequential rerun for the same identity is blocked (DURABLE_STATE_EXISTS)",
+      "status": "pass"
+    },
+    {
+      "id": "sidecar-no-transition-from-uncertain-to-submission",
+      "description": "No transition is allowed from SEND_UNCERTAIN back to SUBMITTING",
+      "status": "pass"
+    },
+    {
+      "id": "gate-dry-run-prevents-transport",
+      "description": "DRY_RUN gate passes and the DRY_RUN terminal never sets transport other than NONE",
+      "status": "pass"
+    },
+    {
+      "id": "gate-missing-approval-blocks",
+      "description": "A missing approval blocks the send gates",
+      "status": "pass"
+    },
+    {
+      "id": "gate-empty-live-campaigns-blocks-live-send",
+      "description": "LIVE_CAMPAIGNS=[] always blocks live campaign sends",
+      "status": "pass"
+    },
+    {
+      "id": "gate-unresolved-template-variable-blocks",
+      "description": "An unresolved [[token]] in draft_text blocks the draft variable gate",
+      "status": "pass"
+    },
+    {
+      "id": "gate-invalid-decision-engine-output-rejected",
+      "description": "An invalid Decision Engine output fails validateSenderInput and the gate router",
+      "status": "pass"
+    },
+    {
+      "id": "acquisition-blocked-duplicate-terminal",
+      "description": "A blocked acquisition produces a single BLOCKED terminal with no further action",
+      "status": "pass"
+    },
+    {
+      "id": "suppression-unsubscribe-requires-both-actions-verified",
+      "description": "Unsubscribe confirmation is only permitted once both suppression actions are verified",
+      "status": "pass"
+    },
+    {
+      "id": "suppression-partial-failure-escalates",
+      "description": "A partial suppression failure escalates instead of confirming unsubscribe",
+      "status": "pass"
+    },
+    {
+      "id": "classify-permanent-failure-400",
+      "description": "HTTP 400 classifies as terminal PERMANENT_FAILURE",
+      "status": "pass"
+    },
+    {
+      "id": "classify-auth-or-plan-failure-401-403",
+      "description": "HTTP 401/402/403 classify as terminal AUTH_OR_PLAN_FAILURE",
+      "status": "pass"
+    },
+    {
+      "id": "classify-invalid-reply-target-404",
+      "description": "HTTP 404 classifies as terminal INVALID_REPLY_TARGET",
+      "status": "pass"
+    },
+    {
+      "id": "classify-retryable-429-honours-retry-after",
+      "description": "HTTP 429 with Retry-After is retryable and honours Retry-After (capped)",
+      "status": "pass"
+    },
+    {
+      "id": "classify-retryable-5xx",
+      "description": "HTTP 500/502/503/504 classify as retryable",
+      "status": "pass"
+    },
+    {
+      "id": "classify-malformed-2xx-and-timeout-are-uncertain",
+      "description": "A malformed 2xx body and a timeout both classify as SEND_UNCERTAIN",
+      "status": "pass"
+    },
+    {
+      "id": "valid-sent-contract-2xx",
+      "description": "A well-formed 2xx body (status=sent, messageId) classifies as terminal SENT",
+      "status": "pass"
+    },
+    {
+      "id": "no-retry-after-send-uncertain",
+      "description": "SEND_UNCERTAIN is terminal: no further POST is attempted even if outcomes remain",
+      "status": "pass"
+    },
+    {
+      "id": "reconcile-zero-matches-human-review",
+      "description": "Zero matches reconciles to HUMAN_REVIEW_ZERO_MATCHES",
+      "status": "pass"
+    },
+    {
+      "id": "reconcile-multiple-matches-human-review",
+      "description": "Multiple matches in a single poll reconciles to HUMAN_REVIEW_MULTIPLE_MATCHES",
+      "status": "pass"
+    },
+    {
+      "id": "reconcile-repeated-single-match-sent-reconciled",
+      "description": "The same single match on two consecutive polls reconciles to SENT_RECONCILED",
+      "status": "pass"
+    },
+    {
+      "id": "error-record-normalised-and-sanitised",
+      "description": "Error records are normalised, classified, and have secrets/long values redacted",
+      "status": "pass"
+    },
+    {
+      "id": "error-send-uncertain-never-retried",
+      "description": "SEND_UNCERTAIN error records are never marked retryable, regardless of http_status",
+      "status": "pass"
+    },
+    {
+      "id": "error-placeholder-notification-only",
+      "description": "The error handler produces only a placeholder notification",
+      "status": "pass"
+    },
+    {
+      "id": "error-id-attached-from-sidecar",
+      "description": "attachErrorId() merges the sidecar errorId onto the item, and writeErrorRecord round-trips",
+      "status": "pass"
+    },
+    {
+      "id": "compose-no-host-port-for-sidecar",
+      "description": "docker-compose.yml does not publish a host port for hmz-send-state",
+      "status": "pass"
+    },
+    {
+      "id": "compose-sidecar-volume-named",
+      "description": "hmz_send_state_data is declared as a named volume",
+      "status": "pass"
+    }
+  ]
+}

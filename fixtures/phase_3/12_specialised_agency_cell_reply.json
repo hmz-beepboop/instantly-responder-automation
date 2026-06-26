@@ -1,0 +1,90 @@
+{
+  "fixture_id": "phase3_12_specialised_agency_cell_reply",
+  "description": "Positive-interest reply from validation_cell=CELL_3_SPECIALISED_B2B_AGENCY. Primarily exercises Workflow 1 Section D's campaign-context lookup for the third approved validation cell (B2B agencies / $5k+ retainer services), confirming nes.campaign_context is fully populated (not UNKNOWN) for this cell. Decision shape mirrors fixture 01 (POSITIVE_INTEREST, mock classifier match, no det-* rule).",
+  "input": {
+    "intake_id": "phase3-fixture-12-specialised-agency-cell",
+    "event_id": "evt-phase3-012",
+    "email_id": "email-phase3-012",
+    "event_type": "reply_received",
+    "lead_email": "harper.collins@agencyco.test",
+    "from_address_email": "harper.collins@agencyco.test",
+    "email_account": "outbound1@hmzvalidation.test",
+    "reply_subject": "Re: Predictable pipeline for your agency",
+    "reply_text": "We're a 12-person agency and pipeline has been inconsistent lately - this could be relevant. Happy to discuss further.",
+    "reply_text_snippet": "We're a 12-person agency and pipeline has been inconsistent lately - this could be relevant.",
+    "timestamp": "2026-06-09T13:45:00Z",
+    "campaign_id": "campaign-validation-003",
+    "validation_cell": "CELL_3_SPECIALISED_B2B_AGENCY",
+    "workspace": "hmz-workspace-dev",
+    "campaign_name": "US B2B Validation Sprint - Cell 3",
+    "step": 1,
+    "variant": 1,
+    "is_first": true,
+    "thread_id": "thread-phase3-012",
+    "message_id": "<msg-phase3-012@instantly.test>",
+    "unibox_url": "https://app.instantly.test/unibox/thread-phase3-012"
+  },
+  "expected": {
+    "payload_status": "COMPLETE",
+    "nes": {
+      "campaign_context": {
+        "validation_cell": "CELL_3_SPECIALISED_B2B_AGENCY",
+        "segment": "B2B agencies",
+        "subsegment": "$5k+ monthly retainer services",
+        "pain_trigger": "Founder-led sales depends too much on referrals and inconsistent pipeline",
+        "offer_angle": "Predictable qualified meetings without hiring SDRs",
+        "geo_code": "US_B2B_CORE_12",
+        "campaign_purpose": "UNKNOWN",
+        "campaign_message_variant": "UNKNOWN"
+      }
+    },
+    "deterministic": {
+      "deterministic_match": false,
+      "noop_match": false,
+      "category": null,
+      "rule_id": null,
+      "media_flag": false
+    },
+    "classifier": {
+      "category": "POSITIVE_INTEREST",
+      "confidence": 0.75,
+      "interest_stage": "VALIDATION_SPRINT_INTEREST",
+      "permitted_automation_action": "AI_DRAFT",
+      "requested_action": "AWAIT_NEXT_STEPS"
+    },
+    "decision": {
+      "category": "POSITIVE_INTEREST",
+      "confidence": 0.75,
+      "confidence_overridden": false,
+      "stop_active_sequence": true,
+      "durable_dnc_intent": false,
+      "address_suppression_intent": "NONE",
+      "review_hold": false,
+      "legal_review_required": false,
+      "privacy_review_required": false,
+      "reputational_review_required": false,
+      "human_review_required": true,
+      "reply_permitted": true,
+      "reply_template_id": "T1_SCENARIO_C_UNCLEAR_INTEREST",
+      "reply_draft_status": "DRAFT_PENDING_REVIEW",
+      "external_action_status": "NOT_PERFORMED",
+      "follow_up_date": null,
+      "interest_stage": "VALIDATION_SPRINT_INTEREST",
+      "terminal_status": "REVIEW_HOLD"
+    },
+    "draft": {
+      "template_id": "T1_SCENARIO_C_UNCLEAR_INTEREST",
+      "draft_text_is_null": false,
+      "missing_variables": ["firstName", "senderName"],
+      "human_review_required": true
+    },
+    "validation_learning": {
+      "voice_of_customer_excerpt": "We're a 12-person agency and pipeline has been inconsistent lately - this could be relevant. Happy to discuss further.",
+      "all_other_fields": "unknown_or_null_default"
+    },
+    "validation": {
+      "valid": true
+    },
+    "notes": "validation_cell=CELL_3_SPECIALISED_B2B_AGENCY is recognised by Section D's CELL_DEFINITIONS, so nes.campaign_context is fully populated from docs/VALIDATION_CAMPAIGN_CONFIG.md (not the all-UNKNOWN fallback used for an unrecognised cell). 'Happy to discuss further' matches positiveRx ('happy to discuss'); no det-* rule fires (no pricing/booking/referral/legal/hostile language), so this is a mock-classifier match at confidence 0.75, identical decision shape to fixture 01."
+  }
+}

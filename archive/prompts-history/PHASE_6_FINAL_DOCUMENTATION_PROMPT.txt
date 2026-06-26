@@ -1,0 +1,306 @@
+# Phase 6 — Final Operator Documentation Only
+
+## Entry gate
+
+Proceed only if all conditions are true:
+
+- `reports/VALIDATION_REPORT.md` verdict is `READY_FOR_DRY_RUN`
+- `reports/PHASE_5_DOCUMENTATION_CORRECTION.md` exists
+- `reports/PHASE_5_MECHANICAL_AUDIT.md` verdict is `PHASE_5_MECHANICAL_AUDIT_PASSED`
+- all six workflow exports exist
+- no workflow logic change is required
+- all six workflows remain inactive
+
+If any condition fails, stop with `PHASE_6_BLOCKED`.
+
+## Objective
+
+Create the final operator documentation package for the current validation-stage Instantly responder.
+
+Do not modify workflow JSON, JavaScript, PowerShell, Docker Compose, sidecar code, fixtures, tests, or evidence reports.
+
+Do not access n8n.
+Do not access Instantly.
+Do not use MCP.
+Do not run shell commands.
+Do not use web search.
+Do not use agents.
+Do not create a Skill.
+
+## Source priority
+
+Read only these files:
+
+1. `reports/VALIDATION_REPORT.md`
+2. `reports/SECURITY_AUDIT.md`
+3. `reports/FAILURE_MODE_AUDIT.md`
+4. `reports/UNRESOLVED_ITEMS.md`
+5. `reports/PHASE_5_MECHANICAL_AUDIT.md`
+6. `reports/PHASE_5_DOCUMENTATION_CORRECTION.md`
+7. `docs/STATE_AND_IDEMPOTENCY.md`
+8. `docs/PHASE_5_VERIFIED_INPUT.md`
+9. `docs/ARCHITECTURE.md`
+10. `docs/INSTANTLY_FIELD_MAP.md`
+11. `docs/REPLY_POLICY.md`
+12. `docs/HMZ_APPROVED_REPLY_RULES.md`
+13. `docs/HMZ_APPROVED_KNOWLEDGE_BASE.md`
+14. `docs/TEST_PLAN.md`
+15. `infrastructure/local-n8n/docker-compose.yml`
+16. the six workflow exports under `workflows/`
+
+Do not scan the repository.
+Do not read source DOCX files.
+Do not rely on chat history.
+
+## Fixed system status
+
+Use these facts exactly:
+
+- System verdict: `READY_FOR_DRY_RUN`
+- Not production-ready
+- Not ready for unrestricted or controlled live sending yet
+- `OPERATING_MODE=VALIDATION`
+- `DRY_RUN=true`
+- `LIVE_CAMPAIGNS=[]`
+- No live Instantly credential is bound
+- All six workflows remain inactive
+- Full Test Harness and SLA Watchdog have actual n8n runtime evidence
+- Reply Sender and Error Handler still need actual n8n runtime execution evidence with synthetic inputs
+- Zero/multiple live reconciliation outcomes remain untested against Instantly
+- SLA schedule logic ran through direct CLI execution, not an active cron firing
+- Phase 4B n8n-MCP validator exception remains documented
+- Send ownership and error persistence use the internal `hmz-send-state` sidecar
+- Do not describe relational `sends` or `errors` tables as implemented
+- Implemented reconciled state is `SENT_RECONCILED`
+
+## Required outputs
+
+Create or finalise only:
+
+- `README.md`
+- `.env.example`
+- `config/config.example.json`
+- `docs/SETUP_GUIDE.md`
+- `docs/INSTANTLY_CONFIGURATION.md`
+- `docs/N8N_CONFIGURATION.md`
+- `docs/SECURITY.md`
+- `docs/TROUBLESHOOTING.md`
+- `docs/DEPLOYMENT_CHECKLIST.md`
+- `docs/ROLLBACK_GUIDE.md`
+- `reports/SKILL_READINESS_ASSESSMENT.md`
+
+## Documentation requirements
+
+### README
+
+Include:
+
+- purpose
+- current readiness
+- six-workflow inventory and IDs
+- architecture overview
+- project directory map
+- fastest safe installation path
+- validation evidence summary
+- limitations
+- exact next milestone
+- explicit statement that the system is not production-ready
+
+### `.env.example`
+
+Use placeholders only.
+
+Include only variables genuinely required or planned by the current system, such as:
+
+- local n8n URL
+- n8n API key placeholder
+- validation mode
+- dry-run flag
+- live campaign allowlist placeholder
+- Instantly API key placeholder, clearly unused until later approval
+- sidecar state directory where relevant
+
+No real values.
+No real addresses.
+No secrets.
+
+### Configuration example
+
+`config/config.example.json` must contain:
+
+- validation-safe defaults
+- `OPERATING_MODE: VALIDATION`
+- `DRY_RUN: true`
+- empty `LIVE_CAMPAIGNS`
+- warning 180 seconds
+- breach 300 seconds
+- bounded retry settings
+- reconciliation settings
+- placeholder notification surface
+- explicit live-credential readiness false
+
+### Setup Guide
+
+Explain:
+
+1. prerequisites
+2. safe folder preparation
+3. environment variables
+4. Docker Compose startup
+5. sidecar health check
+6. workflow import order
+7. workflow IDs/names
+8. keeping every workflow inactive
+9. running Phase 4A/4B offline tests
+10. running the Phase 5 mechanical audit
+11. reading the final verdict
+12. what must occur before a controlled live test
+
+Do not invent GUI labels.
+
+### Instantly configuration
+
+Document only empirically verified contracts:
+
+- genuine `reply_received` event
+- canonical webhook `email_id` as `reply_to_uuid`
+- connected `eaccount`
+- thread and subject preservation
+- update-interest-status result verification
+- subsequence removal result verification
+- source-campaign unsubscribe behaviour
+- exact email-level blocklist for workspace-wide suppression
+- rate-limit and failure policy
+- reconciliation rules
+
+Clearly distinguish verified live evidence from future configuration steps.
+
+### n8n configuration
+
+Document:
+
+- local n8n version used
+- Docker Compose services
+- internal sidecar URL
+- workflow import order
+- no credential bindings in current exports
+- inactive-by-default requirement
+- synthetic execution method
+- known task-broker port conflict when invoking `n8n execute` inside a running container
+- safe one-off-container approach used by the Phase 5 audit
+- Phase 4B validator exception
+
+### Security
+
+Document:
+
+- no secrets in exports
+- API keys only through environment/credential storage
+- sidecar internal network boundary
+- no published sidecar port
+- identifier hashing and content redaction
+- Code-node generic platform risk
+- strict dry-run and allowlist gates
+- no uncertain-send blind retry
+- workspace suppression requirement
+- log and evidence sanitisation
+
+### Troubleshooting
+
+Cover:
+
+- task broker port 5679 conflict
+- script execution-policy block
+- missing downloaded file
+- API-key environment missing
+- Docker service unavailable
+- sidecar health failure
+- duplicate workflow names
+- n8n-MCP validator false positive
+- `SEND_UNCERTAIN`
+- zero/multiple reconciliation matches
+- workflow remains inactive
+- report or export mismatch
+
+### Deployment checklist
+
+Separate into:
+
+- current dry-run readiness checklist
+- future controlled-live entry checklist
+- production readiness checklist marked out of scope/not achieved
+
+No activation instruction may imply the system is currently authorised for live sends.
+
+### Rollback guide
+
+Cover:
+
+- deactivate all workflows
+- restore prior workflow exports
+- remove live allowlist entries
+- restore `DRY_RUN=true`
+- remove credential bindings
+- inspect sidecar state before deletion
+- preserve uncertain-send records
+- never delete evidence needed for reconciliation
+- Docker Compose rollback
+- verification after rollback
+
+### Skill readiness
+
+Assess proposed Skill:
+
+`instantly-reply-automation-builder`
+
+Use exactly one verdict:
+
+- `NOT_READY_FOR_SKILL`
+- `READY_TO_DESIGN_SKILL`
+- `READY_TO_BUILD_SKILL`
+
+Given the current state, do not use `READY_TO_BUILD_SKILL` unless the evidence explicitly justifies it.
+
+Evaluate:
+
+- workflow stability
+- API verification
+- runtime evidence
+- repeatability
+- unresolved live-integration gaps
+- documentation completeness
+- expected reuse
+- risk of encoding validation-only assumptions into a reusable Skill
+
+Do not create the Skill.
+
+## Quality and efficiency limits
+
+- Maximum 22 files read.
+- Maximum 11 files written.
+- No code changes.
+- No workflow changes.
+- No evidence-report changes.
+- No commands.
+- No MCP.
+- No web.
+- No repeated full-file rewrites after initial creation.
+- One review pass only for contradictions.
+- Final response under 250 words.
+
+## Final response
+
+Report:
+
+- files created
+- installation order
+- current system-readiness verdict
+- remaining runtime/configuration tasks
+- Skill-readiness verdict
+- remaining blockers
+
+Use the exact system verdict:
+
+`READY_FOR_DRY_RUN`
+
+Stop after Phase 6.

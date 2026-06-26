@@ -1,0 +1,80 @@
+{
+  "fixture_id": "phase3_07_pricing_question",
+  "description": "Pricing / commercial-negotiation question (T11 / PRICING_OR_COMMERCIAL_NEGOTIATION). Matched deterministically by det-price-001. Always requires human review, no automated draft is produced (pricing is human-only per CLAUDE.md rule 15), and validation_learning.pricing_interest is set to true.",
+  "input": {
+    "intake_id": "phase3-fixture-07-pricing-question",
+    "event_id": "evt-phase3-007",
+    "email_id": "email-phase3-007",
+    "event_type": "reply_received",
+    "lead_email": "sam.ortiz@prospectco.test",
+    "from_address_email": "sam.ortiz@prospectco.test",
+    "email_account": "outbound1@hmzvalidation.test",
+    "reply_subject": "Re: Outbound capacity for your sales team",
+    "reply_text": "Thanks for reaching out. Before we go further, can you share your pricing? We'd need a quote for our team of 12 reps.",
+    "reply_text_snippet": "Before we go further, can you share your pricing? We'd need a quote for our team of 12 reps.",
+    "timestamp": "2026-06-08T20:00:00Z",
+    "campaign_id": "campaign-validation-002",
+    "validation_cell": "CELL_2_SAAS_EXISTING_OUTBOUND",
+    "workspace": "hmz-workspace-dev",
+    "campaign_name": "US B2B Validation Sprint - Cell 2",
+    "step": 2,
+    "variant": 2,
+    "is_first": false,
+    "thread_id": "thread-phase3-007",
+    "message_id": "<msg-phase3-007@instantly.test>",
+    "unibox_url": "https://app.instantly.test/unibox/thread-phase3-007"
+  },
+  "expected": {
+    "payload_status": "COMPLETE",
+    "deterministic": {
+      "deterministic_match": true,
+      "noop_match": false,
+      "category": "PRICING_OR_COMMERCIAL_NEGOTIATION",
+      "rule_id": "det-price-001",
+      "media_flag": false
+    },
+    "classifier": {
+      "category": "PRICING_OR_COMMERCIAL_NEGOTIATION",
+      "confidence": 1,
+      "interest_stage": "UNKNOWN",
+      "permitted_automation_action": "NONE",
+      "requested_action": "PROVIDE_PRICING",
+      "risk_flags": ["commercial"]
+    },
+    "decision": {
+      "category": "PRICING_OR_COMMERCIAL_NEGOTIATION",
+      "confidence": 1,
+      "confidence_overridden": false,
+      "stop_active_sequence": true,
+      "durable_dnc_intent": false,
+      "address_suppression_intent": "NONE",
+      "review_hold": false,
+      "legal_review_required": false,
+      "privacy_review_required": false,
+      "reputational_review_required": false,
+      "human_review_required": true,
+      "reply_permitted": false,
+      "reply_template_id": null,
+      "reply_draft_status": "NO_DRAFT_HUMAN_ONLY",
+      "external_action_status": "NOT_PERFORMED",
+      "follow_up_date": null,
+      "interest_stage": "UNKNOWN",
+      "terminal_status": "REVIEW_HOLD"
+    },
+    "draft": {
+      "template_id": null,
+      "draft_text_is_null": true,
+      "missing_variables": [],
+      "human_review_required": true
+    },
+    "validation_learning": {
+      "pricing_interest": true,
+      "voice_of_customer_excerpt": "Thanks for reaching out. Before we go further, can you share your pricing? We'd need a quote for our team of 12 reps.",
+      "all_other_fields": "unknown_or_null_default"
+    },
+    "validation": {
+      "valid": true
+    },
+    "notes": "'pricing' and 'quote' trigger det-price-001 ahead of det-booking-001/det-referral-001 in Section A's priority chain, so this is a deterministic match (confidence 1), not a mock-classifier guess. Section B sets classifier.validation_learning.pricing_interest=true specifically because category===PRICING_OR_COMMERCIAL_NEGOTIATION and the field was 'unknown'. No price is disclosed anywhere in the decision or draft (reply_permitted=false, draft_text=null) - any pricing reply is fully human-authored."
+  }
+}

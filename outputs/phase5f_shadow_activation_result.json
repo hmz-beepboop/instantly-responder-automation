@@ -1,0 +1,38 @@
+{
+  "phase": "5F",
+  "title": "Shadow Mode Activation",
+  "gate": "Gate 1",
+  "owner_approval": "Granted 2026-06-24 (explicit session instruction)",
+  "timestamp": "2026-06-24T10:14:28Z",
+  "config_validated": true,
+  "workflow_validated": true,
+  "workflow_imported": true,
+  "imported_workflow_id": "aHzLtQiv6G8h1bqD",
+  "imported_workflow_name": "HMZ Autonomous Shadow Evaluator [DISABLED — DO NOT ACTIVATE WITHOUT OWNER APPROVAL]",
+  "imported_workflow_active": false,
+  "imported_workflow_versionId": "7fcf032c-03d3-4da4-b1a5-f473fde4d144",
+  "config_changes": {
+    "reviewer_timezone": "Europe/London (changed from America/New_York)",
+    "escalation_channels": ["GOOGLE_CHAT_WEBHOOK_URL"],
+    "escalation_channels_note": "References $env.GOOGLE_CHAT_WEBHOOK_URL in n8n — existing HMZ Instantly Responder Alerts Google Chat webhook"
+  },
+  "safety_checks": [
+    "active=false confirmed on import and re-fetch",
+    "no Sender node in workflow",
+    "no Instantly API node in workflow",
+    "would_send_live_now hardcoded false in eligibility engine node",
+    "autonomous_enabled=false in config",
+    "max_autonomous_sends_per_day=0 in config",
+    "escalation_channels configured (GOOGLE_CHAT_WEBHOOK_URL)",
+    "shadow_evaluator_mode=true marker present"
+  ],
+  "current_mode": "Mode 1 — Shadow Only (no live sends)",
+  "autonomous_enabled": false,
+  "shadow_only": true,
+  "dry_run": true,
+  "emergency_disabled": true,
+  "max_sends_per_day": 0,
+  "production_workflows_changed": "NONE — Decision/HumanApproval/Proxy UNCHANGED",
+  "next_step": "Run manual tests from docs/NEXT_MANUAL_TEST_PACKET_AUTONOMOUS_SHADOW.md",
+  "gate2_requires": "14 days shadow review + explicit owner Gate 2 approval"
+}

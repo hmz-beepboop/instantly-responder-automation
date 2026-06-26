@@ -1,0 +1,35 @@
+{
+  "_description": "Template for a single shadow review day entry. Copy for each day in the 14-day period.",
+  "review_date": "YYYY-MM-DD",
+  "review_day_in_cycle": 0,
+  "reviewer": "owner",
+  "shadow_evaluator_workflow_id": "aHzLtQiv6G8h1bqD",
+  "shadow_evaluator_active_at_start": false,
+  "shadow_evaluator_active_at_end": false,
+  "cases_reviewed": 0,
+  "cases_blocked_correct": 0,
+  "cases_shadow_eligible_correct": 0,
+  "cases_incorrect": 0,
+  "false_positive_cases": [],
+  "false_negative_cases": [],
+  "learning_signals": [],
+  "checklist": {
+    "verified_active_false_at_start": false,
+    "pulled_real_replies": false,
+    "submitted_payloads": false,
+    "recorded_decisions": false,
+    "compared_owner_assessment": false,
+    "logged_disagreements": false,
+    "exported_daily_summary": false
+  },
+  "metrics": {
+    "total_shadow_eligible": 0,
+    "total_blocked_permanent": 0,
+    "total_blocked_allowlist": 0,
+    "total_human_review": 0,
+    "false_positive_count": 0,
+    "false_negative_count": 0
+  },
+  "gate2_readiness_notes": "",
+  "notes": ""
+}

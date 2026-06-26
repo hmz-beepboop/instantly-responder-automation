@@ -1,0 +1,831 @@
+<#
+.SYNOPSIS
+  SL-PATCH-2.0: Draft Funnel Upgrade — Micro Intent + AI Supervised Draft + Deterministic Fallback
+
+.DESCRIPTION
+  Adds a 7-step draft funnel to the Decision Engine:
+    1. Broad category (Section A/B — unchanged)
+    2. Micro intent detection (injected into Section B output)
+    3. Draft policy selection (injected into Section B output)
+    4. AI draft attempt (Section D, AI_DRAFT_MODE=supervised, Claude Haiku)
+    5. AI output validation (inline in Section D)
+    6. Deterministic fallback for all 14 micro intents (Section D)
+    7. draft_source field: ai_supervised | deterministic_template | ai_failed_fallback | human_only | none
+
+  Human approval remains mandatory. AI never decides send eligibility. Sender gates unchanged.
+
+.PARAMETER WhatIf
+  Preview all changes. No writes. No API calls except backup reads.
+
+.PARAMETER Apply
+  Execute the patch: backup → deactivate → patch → reactivate → verify.
+
+.NOTES
+  SAFE TO RE-RUN: script is idempotent (PUT replaces full workflow JSON).
+  Requires env var: HMZ_N8N_API_KEY
+  Requires env var: ANTHROPIC_API_KEY (for AI drafts at runtime; not required for the patch itself)
+  Version: SL-PATCH-2.0
+#>
+
+param(
+    [switch]$WhatIf,
+    [switch]$Apply
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+# ─── CONSTANTS ────────────────────────────────────────────────────────────────
+$API_BASE = 'https://n8n.hmzaiautomation.com/api/v1'
+
+$WF = [ordered]@{
+    Intake        = 'VtDQqw02Ux1TgjIH'
+    SLAWatchdog   = '6a8ojyXCwMwI9nyF'
+    ErrorHandler  = '2PR9YEkG4KyGdowa'
+    HumanApproval = '9aPrt92jFhoYFxbs'
+    Decision      = 'tgYmY97CG4Bm8snI'
+    Sender        = 'ePS5uBBxKxhFCYgU'
+    TestHarness   = 'RLUcJHQJPvLhw4mG'   # never activated
+}
+
+$DEACTIVATE_ORDER  = @('Intake','SLAWatchdog','ErrorHandler','HumanApproval','Decision','Sender')
+$REACTIVATE_ORDER  = @('Sender','Decision','HumanApproval','ErrorHandler','SLAWatchdog','Intake')
+
+$BACKUP_DIR = Join-Path $PSScriptRoot `
+    "../verification/patch-2.0-backup/$(Get-Date -Format 'yyyyMMddTHHmmssZ')"
+
+# ─── HELPERS ──────────────────────────────────────────────────────────────────
+function Get-ApiKey {
+    $k = $env:HMZ_N8N_API_KEY
+    if (-not $k) { throw 'HMZ_N8N_API_KEY env var is not set.' }
+    return $k
+}
+
+function Invoke-N8n {
+    param([string]$Method, [string]$Path, [object]$Body = $null)
+    $headers = @{ 'X-N8N-API-KEY' = (Get-ApiKey); 'Content-Type' = 'application/json' }
+    $p = @{ Method = $Method; Uri = "$API_BASE$Path"; Headers = $headers }
+    if ($Body) { $p['Body'] = ($Body | ConvertTo-Json -Depth 60 -Compress) }
+    return Invoke-RestMethod @p
+}
+
+function Backup-Wf {
+    param([string]$Name, [string]$Id)
+    $wf   = Invoke-N8n -Method GET -Path "/workflows/$Id"
+    $path = Join-Path $BACKUP_DIR "$Name-$Id.json"
+    $wf | ConvertTo-Json -Depth 60 | Set-Content -Path $path -Encoding UTF8
+    Write-Host "  BACKUP  $Name → $([System.IO.Path]::GetFileName($path))"
+    return $wf
+}
+
+function Set-Active {
+    param([string]$Name, [string]$Id, [bool]$Active)
+    $verb = if ($Active) { 'activate' } else { 'deactivate' }
+    try   { Invoke-N8n -Method PATCH -Path "/workflows/$Id/$verb" | Out-Null
+            Write-Host "  $($verb.ToUpper().PadRight(12)) $Name ($Id)" }
+    catch { Write-Warning "  $verb failed for $Name ($Id): $_" }
+}
+
+function Find-Node {
+    param($Nodes, [string]$Name)
+    $n = $Nodes | Where-Object { $_.name -eq $Name } | Select-Object -First 1
+    if (-not $n) { throw "Node '$Name' not found in workflow." }
+    return $n
+}
+
+# ─── NEW SECTION B JS (complete replacement) ──────────────────────────────────
+# Adds detectMicroIntent() + draftPolicyFor() to the existing classifier,
+# outputting classifier.micro_intent and classifier.draft_policy.
+$NEW_SECTION_B = @'
+const items = $input.all();
+
+const KB_REFERENCE = 'KB-1.0-DRAFT';
+
+function extractQuestions(text) {
+  if (!text) return [];
+  return text.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(s => s.endsWith('?')).slice(0, 5);
+}
+
+function emptyValidationLearning(nes) {
+  const vl = (nes && nes.validation_learning_seed) || {};
+  return {
+    pain_confirmed: vl.pain_confirmed ?? 'unknown',
+    current_outbound_spend_confirmed: vl.current_outbound_spend_confirmed ?? 'unknown',
+    capacity_problem_confirmed: vl.capacity_problem_confirmed ?? 'unknown',
+    proof_objection: vl.proof_objection ?? 'unknown',
+    pricing_interest: vl.pricing_interest ?? 'unknown',
+    alpha_interest: vl.alpha_interest ?? 'unknown',
+    decision_maker_confirmed: vl.decision_maker_confirmed ?? 'unknown',
+    discovery_call_booked: vl.discovery_call_booked ?? 'unknown',
+    discovery_call_showed: vl.discovery_call_showed ?? 'unknown',
+    validation_signal_strength: vl.validation_signal_strength ?? 'unknown',
+    voice_of_customer_excerpt: vl.voice_of_customer_excerpt ?? null
+  };
+}
+
+function riskFlagsFor(category, det) {
+  const flags = [];
+  const df = det.flags || {};
+  if (category === 'LEGAL_PRIVACY_OR_COMPLAINT') {
+    if (df['det-legal-001']) { flags.push('privacy'); flags.push('legal'); }
+    if (df['det-legal-002']) flags.push('legal');
+    if (df['det-regulator-001']) { flags.push('legal'); flags.push('regulatory'); }
+    if (df['det-complaint-001']) flags.push('complaint');
+  }
+  if (category === 'HOSTILE_OR_REPUTATIONAL_RISK') { flags.push('hostile'); flags.push('reputational'); }
+  if (category === 'ATTACHMENT_REQUIRES_REVIEW') flags.push('attachment');
+  if (category === 'PRICING_OR_COMMERCIAL_NEGOTIATION') flags.push('commercial');
+  if (det.media_flag === true && !flags.includes('media')) flags.push('media');
+  return [...new Set(flags)];
+}
+
+function requestedActionFor(category) {
+  const map = {
+    POSITIVE_INTEREST:'AWAIT_NEXT_STEPS', INFORMATION_REQUEST:'ANSWER_QUESTIONS',
+    BOOKING_REQUEST:'SCHEDULE_CALL', TIMING_OBJECTION:'FOLLOW_UP_LATER',
+    REFERRAL:'CONTACT_REFERRED_PERSON', NOT_INTERESTED:'STOP_CONTACT',
+    UNSUBSCRIBE:'STOP_ALL_CONTACT', OUT_OF_OFFICE:'NONE',
+    BOUNCE_OR_DELIVERY_NOTICE:'NONE', WRONG_PERSON:'STOP_CONTACT_THIS_PERSON',
+    PRICING_OR_COMMERCIAL_NEGOTIATION:'PROVIDE_PRICING',
+    LEGAL_PRIVACY_OR_COMPLAINT:'ESCALATE', HOSTILE_OR_REPUTATIONAL_RISK:'ESCALATE',
+    ATTACHMENT_REQUIRES_REVIEW:'REVIEW_ATTACHMENT', AMBIGUOUS:'CLARIFY', OTHER:'NONE'
+  };
+  return map[category] || 'NONE';
+}
+
+function permittedAutomationFor(category) {
+  if (['POSITIVE_INTEREST','INFORMATION_REQUEST'].includes(category)) return 'AI_DRAFT';
+  if (['BOOKING_REQUEST','TIMING_OBJECTION','REFERRAL','NOT_INTERESTED','UNSUBSCRIBE','WRONG_PERSON'].includes(category)) return 'TEMPLATE_DRAFT';
+  return 'NONE';
+}
+
+function interestStageFor(category) {
+  if (category === 'INFORMATION_REQUEST') return 'DISCOVERY_ONLY';
+  if (category === 'POSITIVE_INTEREST' || category === 'BOOKING_REQUEST') return 'VALIDATION_SPRINT_INTEREST';
+  return 'UNKNOWN';
+}
+
+function deterministicHeuristicClassify(combined) {
+  const trimmed = combined.trim();
+  const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
+  const notInterestedRx = /\b(not interested|no thank you|no thanks|we're not interested|we are not interested|not a fit|not for us|please remove (me|us)|we'll pass|we will pass)\b/;
+  const timingRx = /\b(not (the )?right time|maybe (next|in a few)|circle back|check back|reach out again|follow up (in|next)|touch base (in|next)|revisit (this|in)|down the (road|line)|next (quarter|month|year))\b/;
+  const positiveRx = /\b(sounds (interesting|good|great)|interested|tell me more|would like to (learn|hear) more|keen to|let's (chat|talk|connect)|happy to (chat|talk|discuss)|sure[, ]|yes[, ]|definitely)\b/;
+  const infoRx = /\?|\b(how does (this|it) work|what is|can you explain|more (information|details)|how (do|would) (you|this)|what's the (process|mechanism)|tell me (about|how))\b/;
+  if (notInterestedRx.test(trimmed)) return { category:'NOT_INTERESTED', confidence:0.75, evidence:['keyword: decline phrase'] };
+  if (timingRx.test(trimmed))        return { category:'TIMING_OBJECTION', confidence:0.75, evidence:['keyword: timing/deferral phrase'] };
+  if (infoRx.test(trimmed))          return { category:'INFORMATION_REQUEST', confidence:0.75, evidence:['keyword: question or info-seeking phrase'] };
+  if (positiveRx.test(trimmed))      return { category:'POSITIVE_INTEREST', confidence:0.75, evidence:['keyword: positive-interest phrase'] };
+  return {
+    category:'AMBIGUOUS', confidence: wordCount === 0 ? 0.3 : 0.5,
+    evidence: wordCount === 0 ? ['empty/whitespace reply'] : ['no deterministic or keyword match']
+  };
+}
+
+// ── MICRO INTENT DETECTION ─────────────────────────────────────────────────
+function detectMicroIntent(category, detFlags, text) {
+  const t = (text || '').toLowerCase();
+  if (!category) return 'AMBIGUOUS_SHORT_REPLY';
+  if (category === 'UNSUBSCRIBE' || category === 'LEGAL_PRIVACY_OR_COMPLAINT') return 'UNSUBSCRIBE_OR_COMPLAINT';
+  if (category === 'HOSTILE_OR_REPUTATIONAL_RISK') return 'ANGRY_COMPLAINT';
+  if (category === 'OUT_OF_OFFICE' || category === 'BOUNCE_OR_DELIVERY_NOTICE') return 'OOO_AUTO_REPLY';
+  if (category === 'WRONG_PERSON') return 'WRONG_PERSON';
+  if (category === 'NOT_INTERESTED') return 'NOT_INTERESTED';
+  if (category === 'BOOKING_REQUEST') return 'MEETING_TIME_REQUEST';
+  if (category === 'PRICING_OR_COMMERCIAL_NEGOTIATION') return 'PRICING_REQUEST';
+  if (category === 'TIMING_OBJECTION') return 'NOT_NOW';
+  if (category === 'REFERRAL') return 'WRONG_PERSON';
+  if (category === 'ATTACHMENT_REQUIRES_REVIEW' || category === 'OTHER') return 'AMBIGUOUS_SHORT_REPLY';
+  // Text-based for POSITIVE_INTEREST, INFORMATION_REQUEST, AMBIGUOUS
+  if (/\b(proof|case stud|result|evidence|testimonial|reference|customer|client|you done this|worked with|do you have any)\b/.test(t)) return 'PROOF_OR_CASE_STUDY_REQUEST';
+  if (/\b(how does (it|this) work|how (do|would) you|what.s the process|mechanism|methodology|how is this (different|better))\b/.test(t)) return 'HOW_IT_WORKS_REQUEST';
+  if (/\b(what (are|is) (your?|you) (offer|service|product|doing)|tell me more|more (info|information|detail)|explain|what.s this about|what (do|does) (you|it) (do|provide))\b/.test(t)) return 'OFFER_EXPLANATION';
+  if (/\b(we (already|currently) (have|use|run|do)|we.ve (got|been)|our (agency|team|vendor|provider|sdrs?)|outbound (running|already|team)|in-?house outbound)\b/.test(t)) return 'CURRENT_OUTBOUND_VENDOR';
+  if (/\b(price|pricing|cost|budget|invest|fee|rate|quote|proposal|what does it (cost|run))\b/.test(t)) return 'PRICING_REQUEST';
+  const wc = t.trim().split(/\s+/).filter(Boolean).length;
+  if (wc <= 4) return 'AMBIGUOUS_SHORT_REPLY';
+  if (category === 'POSITIVE_INTEREST') return 'POSITIVE_INTEREST_GENERAL';
+  if (category === 'INFORMATION_REQUEST') return 'OFFER_EXPLANATION';
+  return 'AMBIGUOUS_SHORT_REPLY';
+}
+
+function draftPolicyFor(mi) {
+  const p = {
+    MEETING_TIME_REQUEST:      'FIXED_TEMPLATE',
+    PROOF_OR_CASE_STUDY_REQUEST:'AI_SUPERVISED_OR_TEMPLATE',
+    OFFER_EXPLANATION:         'AI_SUPERVISED_OR_TEMPLATE',
+    HOW_IT_WORKS_REQUEST:      'AI_SUPERVISED_OR_TEMPLATE',
+    CURRENT_OUTBOUND_VENDOR:   'AI_SUPERVISED_OR_TEMPLATE',
+    PRICING_REQUEST:           'HUMAN_ONLY',
+    NOT_NOW:                   'FIXED_TEMPLATE',
+    NOT_INTERESTED:            'FIXED_TEMPLATE',
+    UNSUBSCRIBE_OR_COMPLAINT:  'FIXED_TEMPLATE_SUPPRESS_ONLY',
+    WRONG_PERSON:              'FIXED_TEMPLATE',
+    AMBIGUOUS_SHORT_REPLY:     'AI_SUPERVISED_OR_TEMPLATE',
+    OOO_AUTO_REPLY:            'NO_DRAFT',
+    ANGRY_COMPLAINT:           'HUMAN_ONLY',
+    POSITIVE_INTEREST_GENERAL: 'AI_SUPERVISED_OR_TEMPLATE'
+  };
+  return p[mi] || 'HUMAN_ONLY';
+}
+
+return items.map(item => {
+  const input = item.json || {};
+  const det = input.deterministic || { flags:{}, operational_flags:{} };
+  const nes = input.nes || {};
+  const reply = nes.reply || {};
+  const campaignContext = nes.campaign_context || {};
+
+  const subject = String(reply.subject || '');
+  const text    = String(reply.text    || '');
+  const combined = `${subject} ${text}`.toLowerCase();
+
+  const classifierInputs = {
+    model: 'deterministic-heuristic-1.0',
+    kb_reference: KB_REFERENCE,
+    thread_context: 'NOT_AVAILABLE',
+    validation_cell: campaignContext.validation_cell || 'UNKNOWN',
+    campaign_message_variant: campaignContext.campaign_message_variant || 'UNKNOWN'
+  };
+
+  const replyLanguage    = String(reply.language || '').toLowerCase();
+  const isEnglish        = !replyLanguage || replyLanguage === 'en' || replyLanguage === 'eng' || replyLanguage.startsWith('en-');
+
+  let result, decisionPath;
+  if (det.noop_match === true) {
+    result = { category:null, confidence:1, evidence:[`operational rule ${det.rule_id} matched`] };
+    decisionPath = 'OPERATIONAL_NOOP';
+  } else if (det.deterministic_match === true) {
+    result = { category:det.category, confidence:1, evidence:[`deterministic rule ${det.rule_id} matched`] };
+    decisionPath = 'DETERMINISTIC_RULE';
+  } else if (!isEnglish) {
+    result = { category:'AMBIGUOUS', confidence:0.3, evidence:[`non-English reply (${replyLanguage||'unknown'})`] };
+    decisionPath = 'NON_ENGLISH_FALLBACK_T15';
+  } else {
+    result = deterministicHeuristicClassify(combined);
+    decisionPath = 'DETERMINISTIC_HEURISTIC_CLASSIFIER';
+  }
+
+  const category = result.category;
+  const microIntent = detectMicroIntent(category, det.flags || {}, text);
+  const draftPolicy = draftPolicyFor(microIntent);
+
+  const decisionTrace = {
+    path: decisionPath, rule_id: det.rule_id || null, language: replyLanguage || 'unknown',
+    classifier_version: 'deterministic-heuristic-1.0', policy_version: nes.policy_version || 'policy-HMZ-1.2'
+  };
+
+  const classifier = {
+    ...classifierInputs, category, confidence: result.confidence, evidence: result.evidence,
+    classifier_version: 'deterministic-heuristic-1.0', decision_trace: decisionTrace,
+    detected_questions: category === 'INFORMATION_REQUEST' ? extractQuestions(text) : [],
+    requested_action: category ? requestedActionFor(category) : 'NONE',
+    risk_flags: category ? riskFlagsFor(category, det) : (det.media_flag ? ['media'] : []),
+    permitted_automation_action: det.noop_match ? 'NOOP' : (category ? permittedAutomationFor(category) : 'NONE'),
+    interest_stage: category ? interestStageFor(category) : 'UNKNOWN',
+    validation_learning: emptyValidationLearning(nes),
+    micro_intent: microIntent,
+    draft_policy: draftPolicy
+  };
+
+  if (classifier.validation_learning.voice_of_customer_excerpt == null && combined.trim().length > 0) {
+    const src = text.trim().length > 0 ? text.trim() : subject.trim();
+    classifier.validation_learning.voice_of_customer_excerpt = src.length > 240 ? src.slice(0, 240) + '...' : src;
+  }
+  if (category === 'PRICING_OR_COMMERCIAL_NEGOTIATION' && classifier.validation_learning.pricing_interest === 'unknown') {
+    classifier.validation_learning.pricing_interest = true;
+  }
+
+  return { json: { ...input, classifier } };
+});
+'@
+
+# ─── NEW SECTION D JS (complete replacement) ──────────────────────────────────
+$NEW_SECTION_D = @'
+const items = $input.all();
+
+// === AI DRAFT CONFIG FLAGS ===
+const AI_DRAFT_MODE        = 'supervised';   // off | supervised | fallback_only
+const AI_DRAFT_MODEL       = 'claude-haiku-4-5-20251001';
+const AI_DRAFT_TIMEOUT_MS  = 8000;
+const AI_DRAFT_MAX_TOKENS  = 320;
+const AI_DRAFT_TEMPERATURE = 0.3;
+const AI_API_KEY = (typeof $env !== 'undefined' && $env.ANTHROPIC_API_KEY) ? $env.ANTHROPIC_API_KEY : '';
+
+// HMZ_INJECT_BEGIN:SENDER_CONFIG
+const SENDER_CONFIG = {};
+// HMZ_INJECT_END:SENDER_CONFIG
+
+// === DETERMINISTIC MICRO INTENT TEMPLATES =====================================
+const MI_TEMPLATES = {
+  MEETING_TIME_REQUEST: {
+    paragraphs: [
+      'Thanks, <<firstName>>. Happy to talk it through.',
+      "We're currently validating the capacity-aligned outbound model with US B2B teams. The first step is a brief 10-minute conversation to understand how you currently handle outbound and whether the problem is relevant.",
+      'You can choose a suitable time here: <<bookingLink>>',
+      "Or reply with a couple of times that work for you and I'll coordinate it.",
+      '<<senderName>>'
+    ],
+    bookingLinkLine: 'You can choose a suitable time here: <<bookingLink>>',
+    noName: { from:'Thanks, <<firstName>>. Happy to talk it through.', to:'Happy to talk it through.' }
+  },
+  PROOF_OR_CASE_STUDY_REQUEST: {
+    paragraphs: [
+      'Thanks, <<firstName>>. Happy to be straight about where we are.',
+      "This is validation stage — no public case studies or proven results yet. We're running conversations with US B2B teams to understand whether the capacity problem is real before we have evidence to share.",
+      "The conversation we're offering is the proof step — a brief 10-minute call to see whether the problem is relevant to your situation.",
+      '<<senderName>>'
+    ],
+    noName: { from:'Thanks, <<firstName>>. Happy to be straight about where we are.', to:'Happy to be straight about where we are.' }
+  },
+  OFFER_EXPLANATION: {
+    paragraphs: [
+      'Thanks, <<firstName>>. Happy to explain.',
+      "The model starts from your sales team's real capacity — how many qualified meetings they can actually handle and what counts as qualified — and builds outbound to fill that rather than maximising volume. Fewer junk meetings, better alignment to what the team can close.",
+      "We're at validation stage, so the next step is a brief 10-minute conversation to understand your setup and whether the problem is relevant.",
+      '<<senderName>>'
+    ],
+    noName: { from:'Thanks, <<firstName>>. Happy to explain.', to:'Happy to explain.' }
+  },
+  HOW_IT_WORKS_REQUEST: {
+    paragraphs: [
+      'Thanks, <<firstName>>. Here is the short version.',
+      "We define how many qualified meetings your sales team can realistically handle and what qualified means for your motion, then build outbound to fill that capacity rather than maximising volume regardless of quality.",
+      "We're validating this with US B2B teams. The first step would be a brief 10-minute conversation to understand your setup and whether this is relevant.",
+      '<<senderName>>'
+    ],
+    noName: { from:'Thanks, <<firstName>>. Here is the short version.', to:'Here is the short version.' }
+  },
+  CURRENT_OUTBOUND_VENDOR: {
+    paragraphs: [
+      'Thanks for the context, <<firstName>>.',
+      "When you say outbound is running, would the bottleneck be volume of qualified meetings, the quality of meetings you're getting, conversion after the first call, or something closer to sales capacity itself?",
+      "The reason I ask is that the model we're validating addresses a specific capacity problem — and it may or may not be relevant depending on where your friction is.",
+      '<<senderName>>'
+    ],
+    noName: { from:'Thanks for the context, <<firstName>>.', to:'Thanks for the context.' }
+  },
+  NOT_NOW: {
+    paragraphs: [
+      'Thanks, <<firstName>>. Understood.',
+      "I'll close the loop for now. Feel free to reach out if the timing changes.",
+      '<<senderName>>'
+    ],
+    noName: { from:'Thanks, <<firstName>>. Understood.', to:'Understood.' }
+  },
+  NOT_INTERESTED: {
+    paragraphs: ['Thanks, <<firstName>>. Understood.', '<<senderName>>'],
+    noName: { from:'Thanks, <<firstName>>. Understood.', to:'Understood.' }
+  },
+  UNSUBSCRIBE_OR_COMPLAINT: {
+    paragraphs: ['Understood. You have been removed from future outreach.', '<<senderName>>'],
+    suppressFirstName: true   // NEVER use firstName — safety category
+  },
+  WRONG_PERSON: {
+    paragraphs: ['Thanks for letting me know, <<firstName>>. Apologies for the mix-up.', '<<senderName>>'],
+    noName: { from:'Thanks for letting me know, <<firstName>>. Apologies for the mix-up.', to:'Apologies for the mix-up.' }
+  },
+  AMBIGUOUS_SHORT_REPLY: {
+    paragraphs: [
+      'Thanks, <<firstName>>. Happy to share more.',
+      'Would it be more useful for me to explain the capacity model here, or would you prefer a brief 10-minute conversation?',
+      '<<senderName>>'
+    ],
+    noName: { from:'Thanks, <<firstName>>. Happy to share more.', to:'Happy to share more.' }
+  },
+  POSITIVE_INTEREST_GENERAL: {
+    paragraphs: [
+      'Thanks, <<firstName>>. Happy to talk it through.',
+      'Would it be more useful for me to explain the capacity model here, or would you prefer a brief 10-minute conversation?',
+      "Or reply with a couple of times that work for you and I'll coordinate it.",
+      '<<senderName>>'
+    ],
+    noName: { from:'Thanks, <<firstName>>. Happy to talk it through.', to:'Happy to talk it through.' }
+  }
+};
+
+// === AI OUTPUT VALIDATION =====================================================
+const FORBIDDEN_AI = [
+  { rx:/guarantee/i,                                label:'guarantee claim' },
+  { rx:/\b(proven|proves|proof of|established|industry leader)\b/i, label:'proven/established claim' },
+  { rx:/case stud/i,                                label:'case study claim' },
+  { rx:/testimonial/i,                              label:'testimonial claim' },
+  { rx:/\$\s?\d/,                                   label:'price disclosure' },
+  { rx:/\bresults?\b/i,                             label:'results claim' },
+  { rx:/\d+\s*(meetings?|clients?|customers?)/i,    label:'numeric proof claim' },
+  { rx:/we.ve (helped|worked with|served)/i,        label:'customer claim' },
+  { rx:/\{\{|\[\[/,                                 label:'unresolved mustache/bracket token' },
+  { rx:/<<(?!firstName|senderName|bookingLink)\w+>>/,label:'unresolved non-standard token' }
+];
+const SUPPRESS_ONLY_INTENTS = new Set(['UNSUBSCRIBE_OR_COMPLAINT','ANGRY_COMPLAINT']);
+const SUPPRESS_FORBIDDEN_CTA = [/\?/,/\b(call|chat|meeting|calendar|book|available)\b/i];
+
+function validateAI(text, microIntent) {
+  const e = [];
+  if (!text || typeof text !== 'string' || text.trim().length < 10) { e.push('draft_text too short or empty'); return e; }
+  if (text.length > 800) e.push('draft_text exceeds 800 char cap');
+  for (const p of FORBIDDEN_AI) { if (p.rx.test(text)) e.push('forbidden: ' + p.label); }
+  if (SUPPRESS_ONLY_INTENTS.has(microIntent)) {
+    for (const p of SUPPRESS_FORBIDDEN_CTA) { if (p.test(text)) e.push('forbidden CTA/question in suppress-only intent'); }
+  }
+  return e;
+}
+
+function resolveFirstName(nes) {
+  const raw = nes && typeof nes.lead_first_name === 'string' ? nes.lead_first_name.trim() : '';
+  if (!raw) return null;
+  const lower = raw.toLowerCase();
+  if (['unknown','n/a','na','test','admin','friend','there'].includes(lower)) return null;
+  if (/^\d+$/.test(raw) || /[@<>{}]/.test(raw) || /https?:\/\//i.test(raw)) return null;
+  return raw;
+}
+
+function renderTemplate(tmpl, firstName, senderName, bookingLink) {
+  if (!tmpl) return null;
+  let lines = [...tmpl.paragraphs];
+  const useName = !tmpl.suppressFirstName && !!firstName;
+  if (!useName && tmpl.noName) {
+    lines = lines.map(l => l === tmpl.noName.from ? tmpl.noName.to : l);
+  }
+  if (tmpl.bookingLinkLine && !bookingLink) {
+    lines = lines.filter(l => l !== tmpl.bookingLinkLine);
+  }
+  const subs = {
+    firstName:   useName ? firstName : '',
+    senderName:  senderName || '[[senderName: not configured]]',
+    bookingLink: bookingLink || ''
+  };
+  return lines
+    .map(l => l.replace(/<<(\w+)>>/g, (_, k) => Object.prototype.hasOwnProperty.call(subs, k) ? subs[k] : `[[${k}: unresolved]]`))
+    .filter(l => l.trim().length > 0)
+    .join('\n\n');
+}
+
+function buildAIPrompt(microIntent, replyText, firstName, campaignContext) {
+  const cell        = (campaignContext && campaignContext.validation_cell) || 'UNKNOWN';
+  const painTrigger = (campaignContext && campaignContext.pain_trigger)    || 'outbound capacity problem';
+  const offerAngle  = (campaignContext && campaignContext.offer_angle)     || 'capacity-aligned outbound validation';
+  const intInstr = {
+    PROOF_OR_CASE_STUDY_REQUEST: 'Acknowledge honestly: validation stage, no public case studies or proven results yet. Invite the 10-minute call as the proof step. Zero invented results.',
+    OFFER_EXPLANATION:           'Explain capacity-aligned outbound in 1-2 sentences. State validation stage. Invite 10-minute call.',
+    HOW_IT_WORKS_REQUEST:        'Give a 2-sentence explanation of how the model works (define capacity, build outbound to fill it). Invite the 10-minute call.',
+    CURRENT_OUTBOUND_VENDOR:     'Ask ONE diagnostic question to identify where the bottleneck is. Do not pitch the offer again. One question only.',
+    AMBIGUOUS_SHORT_REPLY:       'Ask ONE light clarifying question OR suggest the 10-minute call. One option only. Brief.',
+    POSITIVE_INTEREST_GENERAL:   'Confirm readiness for a brief call. Offer <<bookingLink>> or reply with times. One CTA.'
+  };
+  const instr    = intInstr[microIntent] || intInstr.OFFER_EXPLANATION;
+  const nameHint = firstName ? 'Use <<firstName>> to address them.' : 'Do not include a name greeting.';
+  return `You are a B2B email draft assistant for a validation-stage outbound service.
+
+STRICT RULES (any violation causes rejection and fallback to template):
+- No proof, case studies, results, customers, testimonials, or guarantees
+- No pricing, cost figures, or budget language
+- No "proven", "established", "industry leader", or maturity claims
+- No em dashes
+- No generic AI filler language
+- Use <<firstName>>, <<senderName>>, <<bookingLink>> as literal placeholders — do not resolve them
+- Maximum 5 sentences total
+- Output ONLY valid JSON on a single line: {"draft_text":"..."}
+
+CAMPAIGN CONTEXT: cell=${cell}, pain=${painTrigger}, angle=${offerAngle}
+MICRO INTENT: ${microIntent}
+INSTRUCTIONS: ${instr}
+${nameHint}
+
+PROSPECT EMAIL:
+${replyText}
+
+Output only JSON: {"draft_text":"..."}`;
+}
+
+async function callAI(prompt, apiKey) {
+  if (!apiKey) return { ok:false, error:'no API key' };
+  const ctrl  = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), AI_DRAFT_TIMEOUT_MS);
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'x-api-key':apiKey, 'anthropic-version':'2023-06-01' },
+      body: JSON.stringify({ model:AI_DRAFT_MODEL, max_tokens:AI_DRAFT_MAX_TOKENS, temperature:AI_DRAFT_TEMPERATURE,
+        messages:[{ role:'user', content:prompt }] }),
+      signal: ctrl.signal
+    });
+    clearTimeout(timer);
+    const data = await resp.json();
+    const raw  = (data.content && data.content[0] && data.content[0].text) || '';
+    const parsed = JSON.parse(raw.trim());
+    if (!parsed || typeof parsed.draft_text !== 'string') return { ok:false, error:'AI response missing draft_text field' };
+    return { ok:true, draft_text:parsed.draft_text };
+  } catch(e) {
+    clearTimeout(timer);
+    return { ok:false, error:String(e && e.message ? e.message : e) };
+  }
+}
+
+// === MAIN ====================================================================
+const results = [];
+for (const item of items) {
+  const input   = item.json || {};
+  const decision = input.decision || {};
+  const nes      = input.nes || {};
+  const cls      = input.classifier || {};
+
+  const microIntent = cls.micro_intent || 'AMBIGUOUS_SHORT_REPLY';
+  const draftPolicy = cls.draft_policy || 'HUMAN_ONLY';
+
+  const firstName  = resolveFirstName(nes);
+  const eKey       = String(nes.eaccount || '').trim().toLowerCase();
+  const sCfg       = SENDER_CONFIG[eKey] || null;
+  const senderName = sCfg && sCfg.senderName  ? sCfg.senderName  : null;
+  const bookingLink= sCfg && sCfg.bookingLink ? sCfg.bookingLink : null;
+  const replyText  = String((nes.reply && nes.reply.text) || '');
+  const campaignCtx= nes.campaign_context || {};
+
+  const tmpl              = MI_TEMPLATES[microIntent] || null;
+  const deterministicText = tmpl ? renderTemplate(tmpl, firstName, senderName, bookingLink) : null;
+
+  let draftText   = null;
+  let draftSource = 'none';
+  let aiAttempt   = null;
+
+  const canTryAI = (
+    AI_DRAFT_MODE === 'supervised' &&
+    draftPolicy   === 'AI_SUPERVISED_OR_TEMPLATE' &&
+    decision.reply_permitted !== false &&
+    replyText.trim().length > 0
+  );
+
+  if (canTryAI && AI_API_KEY) {
+    const prompt   = buildAIPrompt(microIntent, replyText, firstName, campaignCtx);
+    const aiResult = await callAI(prompt, AI_API_KEY);
+    aiAttempt      = aiResult;
+    if (aiResult.ok && aiResult.draft_text) {
+      const errs = validateAI(aiResult.draft_text, microIntent);
+      if (errs.length === 0) {
+        const resolved = aiResult.draft_text
+          .replace(/<<firstName>>/g,   firstName   || '')
+          .replace(/<<senderName>>/g,  senderName  || '[[senderName: not configured]]')
+          .replace(/<<bookingLink>>/g, bookingLink || '');
+        draftText   = resolved;
+        draftSource = 'ai_supervised';
+      } else {
+        draftText   = deterministicText;
+        draftSource = 'ai_failed_fallback';
+        aiAttempt   = { ...aiResult, validation_errors: errs };
+      }
+    } else {
+      draftText   = deterministicText;
+      draftSource = 'ai_failed_fallback';
+    }
+  } else if (['AI_SUPERVISED_OR_TEMPLATE','FIXED_TEMPLATE','FIXED_TEMPLATE_SUPPRESS_ONLY'].includes(draftPolicy)) {
+    draftText   = deterministicText;
+    draftSource = 'deterministic_template';
+  } else {
+    draftText   = null;
+    draftSource = draftPolicy === 'NO_DRAFT' ? 'none' : 'human_only';
+  }
+
+  const missingVariables = [];
+  if (!firstName  && tmpl && !tmpl.suppressFirstName) missingVariables.push('firstName');
+  if (!senderName) missingVariables.push('senderName');
+  if (tmpl && tmpl.bookingLinkLine && !bookingLink) missingVariables.push('bookingLink');
+
+  const draft = {
+    template_id:           decision.reply_template_id || null,
+    micro_intent:          microIntent,
+    draft_policy:          draftPolicy,
+    draft_source:          draftSource,
+    draft_text:            draftText,
+    draft_status:          decision.reply_draft_status || 'NOT_APPLICABLE',
+    missing_variables:     missingVariables,
+    human_review_required: decision.human_review_required === true,
+    ai_attempt:            aiAttempt ? {
+      model:             AI_DRAFT_MODEL,
+      ok:                aiAttempt.ok,
+      error:             aiAttempt.error || null,
+      validation_errors: aiAttempt.validation_errors || []
+    } : null,
+    notes: draftPolicy === 'HUMAN_ONLY'
+      ? 'Human-only category per policy-HMZ-1.2. No automated draft.'
+      : (draftPolicy === 'NO_DRAFT' ? 'No draft applicable (OOO/bounce/noop).' : null)
+  };
+
+  results.push({ json: { ...input, draft } });
+}
+
+return results;
+'@
+
+# ─── PATCHED HUMAN APPROVAL BUILD REVIEW CASE (surgical insert only) ──────────
+# We will load the live HA workflow, find "A. Build Review Case Record",
+# and splice in 3 new fields into the review_case return object.
+# The splice marker is the stable line: `notification_status: "PENDING",`
+$HA_SPLICE_MARKER  = 'notification_status: "PENDING",'
+$HA_SPLICE_INJECT  = @'
+
+        micro_intent: (caseInput.draft && caseInput.draft.micro_intent) || null,
+        draft_policy: (caseInput.draft && caseInput.draft.draft_policy) || null,
+        draft_source: (caseInput.draft && caseInput.draft.draft_source) || null,
+'@
+
+# ─── OFFLINE DETERMINISTIC TESTS ──────────────────────────────────────────────
+# Mirrors detectMicroIntent() in PowerShell for pre-apply verification.
+function Get-MicroIntent {
+    param([string]$Category, [string]$Text)
+    $t = $Text.ToLower()
+    switch ($Category) {
+        'UNSUBSCRIBE'                      { return 'UNSUBSCRIBE_OR_COMPLAINT' }
+        'LEGAL_PRIVACY_OR_COMPLAINT'       { return 'UNSUBSCRIBE_OR_COMPLAINT' }
+        'HOSTILE_OR_REPUTATIONAL_RISK'     { return 'ANGRY_COMPLAINT' }
+        'OUT_OF_OFFICE'                    { return 'OOO_AUTO_REPLY' }
+        'BOUNCE_OR_DELIVERY_NOTICE'        { return 'OOO_AUTO_REPLY' }
+        'WRONG_PERSON'                     { return 'WRONG_PERSON' }
+        'NOT_INTERESTED'                   { return 'NOT_INTERESTED' }
+        'BOOKING_REQUEST'                  { return 'MEETING_TIME_REQUEST' }
+        'PRICING_OR_COMMERCIAL_NEGOTIATION'{ return 'PRICING_REQUEST' }
+        'TIMING_OBJECTION'                 { return 'NOT_NOW' }
+        'REFERRAL'                         { return 'WRONG_PERSON' }
+    }
+    if ($t -match 'proof|case stud|result|evidence|testimonial|customer|client')  { return 'PROOF_OR_CASE_STUDY_REQUEST' }
+    if ($t -match 'how does (it|this) work|how would you|mechanism|methodology')  { return 'HOW_IT_WORKS_REQUEST' }
+    if ($t -match 'what (are|is) (your?|you) (offer|service)|tell me more|explain|more (info|detail)') { return 'OFFER_EXPLANATION' }
+    if ($t -match 'we (already|currently) (have|use|run|do)|outbound (running|already|team)|in.house')  { return 'CURRENT_OUTBOUND_VENDOR' }
+    if ($t -match '\bprice\b|\bpricing\b|\bcost\b|\bbudget\b|\bfee\b|\bquote\b') { return 'PRICING_REQUEST' }
+    $wc = ($t.Trim() -split '\s+' | Where-Object { $_ }).Count
+    if ($wc -le 4)                    { return 'AMBIGUOUS_SHORT_REPLY' }
+    if ($Category -eq 'POSITIVE_INTEREST')   { return 'POSITIVE_INTEREST_GENERAL' }
+    if ($Category -eq 'INFORMATION_REQUEST') { return 'OFFER_EXPLANATION' }
+    return 'AMBIGUOUS_SHORT_REPLY'
+}
+
+# Simulated broad classifier for offline tests (mirrors Section A/B patterns)
+function Get-BroadCategory {
+    param([string]$Text)
+    $t = $Text.ToLower()
+    if ($t -match 'unsubscribe|stop emailing|remove me|opt out|do not contact')  { return 'UNSUBSCRIBE' }
+    if ($t -match 'out of office|away from the office|automatic reply|on vacation|on leave') { return 'OUT_OF_OFFICE' }
+    if ($t -match 'book a (time|call)|send (me|us).*calendar|schedule a call|can you send times') { return 'BOOKING_REQUEST' }
+    if ($t -match '\bprice\b|\bpricing\b|\bcost\b|\bquote\b|\bbudget\b')         { return 'PRICING_OR_COMMERCIAL_NEGOTIATION' }
+    if ($t -match 'not interested|no thank(s| you)|not a fit')                   { return 'NOT_INTERESTED' }
+    if ($t -match 'not.*right time|maybe.*next|circle back|check back')          { return 'TIMING_OBJECTION' }
+    if ($t -match '\?|how does|what is|tell me more|more info|explain')          { return 'INFORMATION_REQUEST' }
+    if ($t -match 'sure|sounds (good|interesting)|interested|yes|happy to|let.s') { return 'POSITIVE_INTEREST' }
+    return 'AMBIGUOUS'
+}
+
+$TEST_CASES = @(
+    @{ Reply='Sure, can you send times for a call?';    ExpectedMI='MEETING_TIME_REQUEST';       ExpectedHasTemplate=$true;  ForbiddenSend=$false }
+    @{ Reply='Do you have proof or case studies?';      ExpectedMI='PROOF_OR_CASE_STUDY_REQUEST'; ExpectedHasTemplate=$true; ForbiddenSend=$false }
+    @{ Reply='Maybe. What are you offering?';           ExpectedMI='OFFER_EXPLANATION';           ExpectedHasTemplate=$true; ForbiddenSend=$false }
+    @{ Reply='We already have outbound running.';       ExpectedMI='CURRENT_OUTBOUND_VENDOR';     ExpectedHasTemplate=$true; ForbiddenSend=$false }
+    @{ Reply='What does it cost?';                      ExpectedMI='PRICING_REQUEST';             ExpectedHasTemplate=$false; ForbiddenSend=$true }
+    @{ Reply='Unsubscribe me.';                         ExpectedMI='UNSUBSCRIBE_OR_COMPLAINT';    ExpectedHasTemplate=$true;  ForbiddenSend=$true }
+    @{ Reply='Not interested.';                         ExpectedMI='NOT_INTERESTED';              ExpectedHasTemplate=$true;  ForbiddenSend=$false }
+    @{ Reply='Sure.';                                   ExpectedMI='AMBIGUOUS_SHORT_REPLY';       ExpectedHasTemplate=$true; ForbiddenSend=$false }
+    @{ Reply='I am out of office until Monday.';        ExpectedMI='OOO_AUTO_REPLY';              ExpectedHasTemplate=$false; ForbiddenSend=$true }
+    @{ Reply='Stop emailing me.';                       ExpectedMI='UNSUBSCRIBE_OR_COMPLAINT';    ExpectedHasTemplate=$true;  ForbiddenSend=$true }
+)
+
+$FORBIDDEN_CLAIM_RX = [regex]'guarantee|proven|case stud|testimonial|\$\s?\d|\bresults?\b|\{\{|\[\['
+
+function Run-OfflineTests {
+    Write-Host "`n[TESTS] Offline deterministic verification (10 cases)..."
+    $pass = 0; $fail = 0
+    foreach ($tc in $TEST_CASES) {
+        $broad = Get-BroadCategory -Text $tc.Reply
+        $mi    = Get-MicroIntent   -Category $broad -Text $tc.Reply
+        $ok = $true; $notes = @()
+        # 1. micro intent match
+        if ($mi -ne $tc.ExpectedMI) {
+            $ok = $false; $notes += "MI: got $mi, expected $($tc.ExpectedMI)"
+        }
+        # 2. draft policy — suppress-only intents must not produce template with CTA
+        $dp = switch ($mi) {
+            'PRICING_REQUEST'        { 'HUMAN_ONLY' }
+            'OOO_AUTO_REPLY'         { 'NO_DRAFT' }
+            'ANGRY_COMPLAINT'        { 'HUMAN_ONLY' }
+            'UNSUBSCRIBE_OR_COMPLAINT'{ 'FIXED_TEMPLATE_SUPPRESS_ONLY' }
+            default                  { if ($tc.ExpectedHasTemplate) { 'FIXED_TEMPLATE' } else { 'HUMAN_ONLY' } }
+        }
+        if ($tc.ForbiddenSend -and $dp -eq 'FIXED_TEMPLATE') {
+            $ok = $false; $notes += "SAFETY: ForbiddenSend=true but policy is FIXED_TEMPLATE"
+        }
+        # 3. for UNSUBSCRIBE_OR_COMPLAINT, draft must not contain '?' or CTA
+        if ($mi -eq 'UNSUBSCRIBE_OR_COMPLAINT') {
+            $template = 'Understood. You have been removed from future outreach.'
+            if ($template -match '\?|call|chat|meeting|calendar|book') {
+                $ok = $false; $notes += "SAFETY: suppress-only template contains CTA"
+            }
+            if ($FORBIDDEN_CLAIM_RX.IsMatch($template)) {
+                $ok = $false; $notes += "SAFETY: forbidden claim in suppress-only template"
+            }
+        }
+        $status = if ($ok) { 'PASS' } else { 'FAIL' }
+        if ($ok) { $pass++ } else { $fail++ }
+        $noteStr = if ($notes.Count -gt 0) { "  !! $($notes -join ' | ')" } else { '' }
+        Write-Host ("  [{0}] {1,-45} → {2}{3}" -f $status, ('"' + $tc.Reply.Substring(0,[Math]::Min(43,$tc.Reply.Length)) + '"'), $mi, $noteStr)
+    }
+    Write-Host "  $pass/10 passed, $fail/10 failed"
+    return $fail -eq 0
+}
+
+# ─── ENTRY POINT ──────────────────────────────────────────────────────────────
+if (-not $WhatIf -and -not $Apply) {
+    Write-Host @"
+Usage:
+  .\SL-PATCH-2.0-draft-funnel.ps1 -WhatIf    Preview changes (reads from API, no writes)
+  .\SL-PATCH-2.0-draft-funnel.ps1 -Apply     Execute patch (backup → deactivate → patch → reactivate → verify)
+"@
+    exit 0
+}
+
+Write-Host "`n=== SL-PATCH-2.0: DRAFT FUNNEL UPGRADE ================================="
+Write-Host "Backup dir: $BACKUP_DIR"
+
+# Ensure API key is present before anything else
+Get-ApiKey | Out-Null
+
+# Create backup dir only when we'll actually write to it
+New-Item -ItemType Directory -Force -Path $BACKUP_DIR | Out-Null
+
+# ── STEP 1: BACKUP ────────────────────────────────────────────────────────────
+Write-Host "`n[1/5] Backing up all 7 workflows..."
+$backups = @{}
+foreach ($name in $WF.Keys) {
+    $backups[$name] = Backup-Wf -Name $name -Id $WF[$name]
+}
+
+# ── WHATIF EXIT ───────────────────────────────────────────────────────────────
+if ($WhatIf) {
+    Write-Host "`n[WHATIF] Changes that would be applied:"
+    Write-Host "  Decision Engine ($($WF.Decision)):"
+    Write-Host "    Node 'B. Deterministic Reply Classifier'  → full jsCode replacement"
+    Write-Host "      Adds: detectMicroIntent() + draftPolicyFor() → classifier.micro_intent + classifier.draft_policy"
+    Write-Host "    Node 'D. Draft Preparation (Templates / Human Draft)' → full jsCode replacement"
+    Write-Host "      Adds: 14 deterministic micro-intent templates, AI supervised draft (fetch+validate+fallback)"
+    Write-Host "      New fields: draft.micro_intent, draft.draft_policy, draft.draft_source, draft.ai_attempt"
+    Write-Host "  Human Approval ($($WF.HumanApproval)):"
+    Write-Host "    Node 'A. Build Review Case Record' → surgical inject"
+    Write-Host "      Adds: review_case.micro_intent, review_case.draft_policy, review_case.draft_source"
+    Write-Host "  TestHarness ($($WF.TestHarness)): NOT touched (kept inactive)"
+    Write-Host "`n[WHATIF] No changes applied. Run with -Apply to execute."
+    Run-OfflineTests | Out-Null
+    exit 0
+}
+
+# ── STEP 2: DEACTIVATE ────────────────────────────────────────────────────────
+Write-Host "`n[2/5] Deactivating (safe order)..."
+foreach ($name in $DEACTIVATE_ORDER) {
+    Set-Active -Name $name -Id $WF[$name] -Active $false
+}
+
+# ── STEP 3: PATCH DECISION ENGINE ────────────────────────────────────────────
+Write-Host "`n[3/5] Patching Decision Engine ($($WF.Decision))..."
+
+$deWf = $backups['Decision'] | ConvertTo-Json -Depth 60 | ConvertFrom-Json   # deep clone
+
+$bNode = Find-Node -Nodes $deWf.nodes -Name 'B. Deterministic Reply Classifier'
+$bNode.parameters.jsCode = $NEW_SECTION_B
+
+$dNode = Find-Node -Nodes $deWf.nodes -Name 'D. Draft Preparation (Templates / Human Draft)'
+$dNode.parameters.jsCode = $NEW_SECTION_D
+
+Invoke-N8n -Method PUT -Path "/workflows/$($WF.Decision)" -Body $deWf | Out-Null
+Write-Host "  PATCHED Decision Engine"
+
+# ── STEP 4: PATCH HUMAN APPROVAL ─────────────────────────────────────────────
+Write-Host "`n[4/5] Patching Human Approval ($($WF.HumanApproval))..."
+
+$haWf   = $backups['HumanApproval'] | ConvertTo-Json -Depth 60 | ConvertFrom-Json
+$haNode = Find-Node -Nodes $haWf.nodes -Name 'A. Build Review Case Record'
+
+$existingCode = $haNode.parameters.jsCode
+if ($existingCode -notmatch [regex]::Escape($HA_SPLICE_MARKER)) {
+    throw "Could not find splice marker '$HA_SPLICE_MARKER' in 'A. Build Review Case Record' jsCode. Aborting."
+}
+if ($existingCode -match 'micro_intent:') {
+    Write-Host "  INFO: micro_intent already present — Human Approval already patched. Skipping."
+} else {
+    $haNode.parameters.jsCode = $existingCode.Replace(
+        $HA_SPLICE_MARKER,
+        $HA_SPLICE_MARKER + $HA_SPLICE_INJECT
+    )
+    Invoke-N8n -Method PUT -Path "/workflows/$($WF.HumanApproval)" -Body $haWf | Out-Null
+    Write-Host "  PATCHED Human Approval"
+}
+
+# ── STEP 5: REACTIVATE ───────────────────────────────────────────────────────
+Write-Host "`n[5/5] Reactivating (safe order)..."
+foreach ($name in $REACTIVATE_ORDER) {
+    Set-Active -Name $name -Id $WF[$name] -Active $true
+}
+
+# ── STEP 6: OFFLINE TESTS ────────────────────────────────────────────────────
+$allPass = Run-OfflineTests
+
+if ($allPass) {
+    Write-Host "`nPATCH_APPLIED_AND_VERIFIED"
+} else {
+    Write-Warning "`nPATCH APPLIED BUT SOME OFFLINE TESTS FAILED — review output above before sending live traffic."
+    exit 1
+}

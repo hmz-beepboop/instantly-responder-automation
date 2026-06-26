@@ -1,0 +1,535 @@
+{
+  "updatedAt": "2026-06-18T05:20:07.65Z",
+  "createdAt": "2026-06-17T18:29:52.707Z",
+  "id": "6a8ojyXCwMwI9nyF",
+  "name": "HMZ - Reply SLA Watchdog - Validation",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "sticky_overview",
+      "name": "Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -440
+      ],
+      "parameters": {
+        "content": "# HMZ - Reply SLA Watchdog - Validation (Phase 4B)\n\nWHAT: Periodically (Schedule Trigger, eventual) or on demand (Execute Workflow Trigger, synthetic tests) reads every unfinished hmz-send-state send/error record from GET /v1/unfinished, classifies each into a watchdog category (AI_CLASSIFICATION_WAIT, API_RETRY, HUMAN_REVIEW, SEND_FAILURE, SEND_UNCERTAIN, SUPPRESSION_FAILURE, UNKNOWN_STATE), and compares its age against the WARNING (180s) and BREACH (300s) thresholds.\n\nSLOs: only SEND_UNCERTAIN records belong to the Transmission SLO (an attempted send awaiting reconciliation). Every other category - including every HUMAN_REVIEW item - belongs to the Processing SLO. A draft, queue item, approval request, or human-review item is never counted as transmitted.\n\nALERTING: warning/breach records are reduced to sanitised alert candidates (category + SLO type + record identifier + status) and deduplicated atomically via POST /v1/alert/dedupe before routing to a PLACEHOLDER_NOT_CONFIGURED notification object only - no real notification call.\n\nVALIDATION MODE: hardcoded (watchdog_result.validation_mode = true). SIDECAR: http://hmz-send-state:5681 (internal Docker network only).\n\nINACTIVE: this workflow must remain inactive after import and after every test.",
+        "height": 460,
+        "width": 940,
+        "color": 7
+      }
+    },
+    {
+      "id": "trigger_schedule",
+      "name": "Schedule Trigger (Eventual)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        -120
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "trigger_synthetic",
+      "name": "Execute Workflow Trigger (Synthetic Test Entry)",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        140
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "node_a",
+      "name": "A. Capture Trigger Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        280,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "return $input.all();"
+      }
+    },
+    {
+      "id": "node_b_http",
+      "name": "B. Get Unfinished Records (hmz-send-state)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        0
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "http://hmz-send-state:5681/v1/unfinished",
+        "options": {
+          "timeout": 5000
+        }
+      }
+    },
+    {
+      "id": "node_c",
+      "name": "C. Build Evaluation Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nconst priorItems = $('A. Capture Trigger Input').all();\n\n\n\nfunction mergeUnfinishedResponse(priorItem, unfinishedResponse) {\n  const input = priorItem || {};\n  const response = unfinishedResponse || {};\n  if (!Array.isArray(response.sends) || !Array.isArray(response.errors)) {\n    throw new Error('invalid_unfinished_response');\n  }\n  return Object.assign({}, {\n    ...input,\n    unfinished: {\n      sends: response.sends,\n      errors: response.errors,\n    },\n  });\n}\n\nreturn items.map((item, idx) => ({ json: mergeUnfinishedResponse((priorItems[idx] && priorItems[idx].json) || {}, item.json || {}) }));"
+      }
+    },
+    {
+      "id": "node_d",
+      "name": "D. Evaluate Unfinished Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nconst SEND_STATE_BASE_URL = \"http://hmz-send-state:5681\";\n\nconst SLA_WARNING_THRESHOLD_SECONDS = 180;\n\nconst SLA_BREACH_THRESHOLD_SECONDS = 300;\n\nconst WATCHDOG_CATEGORIES = {\"AI_CLASSIFICATION_WAIT\": \"AI_CLASSIFICATION_WAIT\", \"API_RETRY\": \"API_RETRY\", \"HUMAN_REVIEW\": \"HUMAN_REVIEW\", \"SEND_FAILURE\": \"SEND_FAILURE\", \"SEND_UNCERTAIN\": \"SEND_UNCERTAIN\", \"SUPPRESSION_FAILURE\": \"SUPPRESSION_FAILURE\", \"UNKNOWN_STATE\": \"UNKNOWN_STATE\"};\n\nconst TRANSMISSION_CATEGORIES = [\"SEND_UNCERTAIN\"];\n\nconst SLO_TYPES = {\"PROCESSING\": \"PROCESSING\", \"TRANSMISSION\": \"TRANSMISSION\"};\n\nconst SLA_STATUSES = {\"OK\": \"OK\", \"WARNING\": \"WARNING\", \"BREACH\": \"BREACH\"};\n\nconst SEND_FAILURE_STATES = [\"PERMANENT_FAILURE\", \"AUTH_OR_PLAN_FAILURE\", \"INVALID_REPLY_TARGET\", \"RETRY_EXHAUSTED\"];\n\nfunction classifySendRecord(record) {\n  const rec = record || {};\n  switch (rec.state) {\n    case 'LOCKED':\n      return WATCHDOG_CATEGORIES.AI_CLASSIFICATION_WAIT;\n    case 'SUBMITTING':\n      return WATCHDOG_CATEGORIES.API_RETRY;\n    case 'SENT':\n    case 'SEND_UNCERTAIN':\n      return WATCHDOG_CATEGORIES.SEND_UNCERTAIN;\n    default:\n      return WATCHDOG_CATEGORIES.UNKNOWN_STATE;\n  }\n}\n\nfunction classifyErrorRecord(record) {\n  const rec = record || {};\n  const errorClass = rec.error_class;\n\n  if (errorClass === 'SEND_UNCERTAIN') return WATCHDOG_CATEGORIES.SEND_UNCERTAIN;\n  if (errorClass === 'RETRYABLE') return WATCHDOG_CATEGORIES.API_RETRY;\n  if (SEND_FAILURE_STATES.includes(errorClass)) return WATCHDOG_CATEGORIES.SEND_FAILURE;\n  if (rec.reason === 'suppression_verification_failed') return WATCHDOG_CATEGORIES.SUPPRESSION_FAILURE;\n  if (rec.operator_action === 'MANUAL_REVIEW' || errorClass === 'UNKNOWN') {\n    return rec.reason === undefined && errorClass === 'UNKNOWN'\n      ? WATCHDOG_CATEGORIES.UNKNOWN_STATE\n      : WATCHDOG_CATEGORIES.HUMAN_REVIEW;\n  }\n  return WATCHDOG_CATEGORIES.UNKNOWN_STATE;\n}\n\nfunction sloTypeForCategory(category) {\n  return TRANSMISSION_CATEGORIES.includes(category) ? SLO_TYPES.TRANSMISSION : SLO_TYPES.PROCESSING;\n}\n\nfunction timestampForSendRecord(record, sloType) {\n  const rec = record || {};\n  const details = rec.details || {};\n  if (sloType === SLO_TYPES.TRANSMISSION) {\n    return details.transmissionStartedAt || details.submissionStartedAt || rec.updatedAt || rec.createdAt || null;\n  }\n  return rec.createdAt || rec.updatedAt || null;\n}\n\nfunction ageSeconds(timestampIso, nowIso) {\n  const ts = Date.parse(timestampIso || '');\n  const now = Date.parse(nowIso || '');\n  if (!Number.isFinite(ts) || !Number.isFinite(now)) return null;\n  return Math.max(0, Math.round((now - ts) / 1000));\n}\n\nfunction statusForAge(age) {\n  if (age === null) return SLA_STATUSES.OK;\n  if (age >= SLA_BREACH_THRESHOLD_SECONDS) return SLA_STATUSES.BREACH;\n  if (age >= SLA_WARNING_THRESHOLD_SECONDS) return SLA_STATUSES.WARNING;\n  return SLA_STATUSES.OK;\n}\n\nfunction evaluateUnfinishedRecords(item) {\n  const input = item || {};\n  const unfinished = input.unfinished || { sends: [], errors: [] };\n  const now = (input.test_overrides && input.test_overrides.now) || input.now || new Date().toISOString();\n\n  const records = [];\n\n  for (const send of unfinished.sends || []) {\n    const category = classifySendRecord(send);\n    const sloType = sloTypeForCategory(category);\n    const ageTimestamp = timestampForSendRecord(send, sloType);\n    const age = ageSeconds(ageTimestamp, now);\n    records.push({\n      kind: 'send',\n      identifier: send.sendKey || null,\n      state: send.state || null,\n      category,\n      sloType,\n      ageSeconds: age,\n      status: statusForAge(age),\n      createdAt: send.createdAt || null,\n      updatedAt: send.updatedAt || null,\n      ageTimestamp,\n    });\n  }\n\n  for (const error of unfinished.errors || []) {\n    const category = classifyErrorRecord(error);\n    const sloType = sloTypeForCategory(category);\n    const age = ageSeconds(error.recordedAt, now);\n    records.push({\n      kind: 'error',\n      identifier: error.errorId || null,\n      state: error.error_class || null,\n      category,\n      sloType,\n      ageSeconds: age,\n      status: statusForAge(age),\n      updatedAt: error.recordedAt || null,\n    });\n  }\n\n  const warnings = records.filter((r) => r.status === SLA_STATUSES.WARNING);\n  const breaches = records.filter((r) => r.status === SLA_STATUSES.BREACH);\n\n  const processing = records.filter((r) => r.sloType === SLO_TYPES.PROCESSING);\n  const transmission = records.filter((r) => r.sloType === SLO_TYPES.TRANSMISSION);\n\n  return Object.assign({}, {\n    ...input,\n    watchdog_evaluation: {\n      schema_version: '1.0',\n      synthetic: input.synthetic === true,\n      now,\n      warning_threshold_seconds: SLA_WARNING_THRESHOLD_SECONDS,\n      breach_threshold_seconds: SLA_BREACH_THRESHOLD_SECONDS,\n      records,\n      warnings,\n      breaches,\n      processing_slo: {\n        total: processing.length,\n        warnings: processing.filter((r) => r.status === SLA_STATUSES.WARNING).length,\n        breaches: processing.filter((r) => r.status === SLA_STATUSES.BREACH).length,\n      },\n      transmission_slo: {\n        total: transmission.length,\n        warnings: transmission.filter((r) => r.status === SLA_STATUSES.WARNING).length,\n        breaches: transmission.filter((r) => r.status === SLA_STATUSES.BREACH).length,\n      },\n    },\n  });\n}\n\nfunction buildAlertKey(record) {\n  const rec = record || {};\n  return ['WATCHDOG_ALERT', rec.sloType, rec.category, rec.kind, rec.identifier, rec.status].join('|');\n}\n\nfunction buildAlertRecords(item) {\n  const input = item || {};\n  const evaluation = input.watchdog_evaluation || { warnings: [], breaches: [] };\n  const candidates = [...(evaluation.warnings || []), ...(evaluation.breaches || [])];\n\n  const alerts = candidates.map((record) => ({\n    schema_version: '1.0',\n    alert_key: buildAlertKey(record),\n    severity: record.status,\n    sloType: record.sloType,\n    category: record.category,\n    kind: record.kind,\n    identifier: record.identifier,\n    ageSeconds: record.ageSeconds,\n  }));\n\n  return Object.assign({}, {\n    ...input,\n    alert_candidates: alerts,\n  });\n}\n\nfunction mergeAlertDedupeResults(priorItem, dedupeResponse) {\n  const input = priorItem || {};\n  const candidates = input.alert_candidates || [];\n  const response = dedupeResponse || {};\n  if (!Array.isArray(response.results) || response.results.length !== candidates.length) {\n    throw new Error('invalid_alert_dedupe_response');\n  }\n  const results = response.results;\n  for (const result of results) {\n    if (typeof result?.deduped !== 'boolean') {\n      throw new Error('invalid_alert_dedupe_item');\n    }\n  }\n\n  const alerts = candidates.map((candidate, idx) => {\n    const dedupe = results[idx];\n    return Object.assign({}, {\n      ...candidate,\n      deduped: dedupe.deduped === true,\n      first_seen_at: dedupe.firstSeenAt || null,\n    });\n  });\n\n  const toNotify = alerts.filter((a) => a.deduped !== true);\n\n  return Object.assign({}, {\n    ...input,\n    alerts,\n    notification: {\n      schema_version: '1.0',\n      surface: 'PLACEHOLDER_NOT_CONFIGURED',\n      delivered: false,\n      alert_count: toNotify.length,\n      deduped_count: alerts.length - toNotify.length,\n    },\n  });\n}\n\nfunction buildWatchdogResult(item) {\n  const input = item || {};\n  const evaluation = input.watchdog_evaluation || {};\n  const alerts = input.alerts || [];\n  const notification = input.notification || { surface: 'PLACEHOLDER_NOT_CONFIGURED', delivered: false };\n\n  return Object.assign({}, {\n    ...input,\n    watchdog_result: {\n      schema_version: '1.0',\n      synthetic: evaluation.synthetic === true,\n      validation_mode: true,\n      now: evaluation.now || null,\n      processing_slo: evaluation.processing_slo || { total: 0, warnings: 0, breaches: 0 },\n      transmission_slo: evaluation.transmission_slo || { total: 0, warnings: 0, breaches: 0 },\n      alerts: alerts.map((a) => ({\n        alert_key: a.alert_key,\n        severity: a.severity,\n        sloType: a.sloType,\n        category: a.category,\n        kind: a.kind,\n        identifier: a.identifier,\n        ageSeconds: a.ageSeconds,\n        deduped: a.deduped === true,\n      })),\n      notification,\n    },\n  });\n}\n\nfunction mergeUnfinishedResponse(priorItem, unfinishedResponse) {\n  const input = priorItem || {};\n  const response = unfinishedResponse || {};\n  if (!Array.isArray(response.sends) || !Array.isArray(response.errors)) {\n    throw new Error('invalid_unfinished_response');\n  }\n  return Object.assign({}, {\n    ...input,\n    unfinished: {\n      sends: response.sends,\n      errors: response.errors,\n    },\n  });\n}\n\nfunction attachPhase4bResultId(priorItem, persistResponse) {\n  const input = priorItem || {};\n  const response = persistResponse || {};\n  if (!/^[0-9a-f]{16}$/.test(String(response.resultId || ''))) {\n    throw new Error('invalid_phase4b_persist_response');\n  }\n  return Object.assign({}, {\n    ...input,\n    phase4b_result_id: response.resultId,\n  });\n}\n\nfunction evaluateUnfinishedRecords(item) {\n  const input = item || {};\n  const unfinished = input.unfinished || { sends: [], errors: [] };\n  const now = (input.test_overrides && input.test_overrides.now) || input.now || new Date().toISOString();\n\n  const records = [];\n\n  for (const send of unfinished.sends || []) {\n    const category = classifySendRecord(send);\n    const sloType = sloTypeForCategory(category);\n    const ageTimestamp = timestampForSendRecord(send, sloType);\n    const age = ageSeconds(ageTimestamp, now);\n    records.push({\n      kind: 'send',\n      identifier: send.sendKey || null,\n      state: send.state || null,\n      category,\n      sloType,\n      ageSeconds: age,\n      status: statusForAge(age),\n      createdAt: send.createdAt || null,\n      updatedAt: send.updatedAt || null,\n      ageTimestamp,\n    });\n  }\n\n  for (const error of unfinished.errors || []) {\n    const category = classifyErrorRecord(error);\n    const sloType = sloTypeForCategory(category);\n    const age = ageSeconds(error.recordedAt, now);\n    records.push({\n      kind: 'error',\n      identifier: error.errorId || null,\n      state: error.error_class || null,\n      category,\n      sloType,\n      ageSeconds: age,\n      status: statusForAge(age),\n      updatedAt: error.recordedAt || null,\n    });\n  }\n\n  const warnings = records.filter((r) => r.status === SLA_STATUSES.WARNING);\n  const breaches = records.filter((r) => r.status === SLA_STATUSES.BREACH);\n\n  const processing = records.filter((r) => r.sloType === SLO_TYPES.PROCESSING);\n  const transmission = records.filter((r) => r.sloType === SLO_TYPES.TRANSMISSION);\n\n  return Object.assign({}, {\n    ...input,\n    watchdog_evaluation: {\n      schema_version: '1.0',\n      synthetic: input.synthetic === true,\n      now,\n      warning_threshold_seconds: SLA_WARNING_THRESHOLD_SECONDS,\n      breach_threshold_seconds: SLA_BREACH_THRESHOLD_SECONDS,\n      records,\n      warnings,\n      breaches,\n      processing_slo: {\n        total: processing.length,\n        warnings: processing.filter((r) => r.status === SLA_STATUSES.WARNING).length,\n        breaches: processing.filter((r) => r.status === SLA_STATUSES.BREACH).length,\n      },\n      transmission_slo: {\n        total: transmission.length,\n        warnings: transmission.filter((r) => r.status === SLA_STATUSES.WARNING).length,\n        breaches: transmission.filter((r) => r.status === SLA_STATUSES.BREACH).length,\n      },\n    },\n  });\n}\n\nreturn items.map(item => ({ json: evaluateUnfinishedRecords(item.json || {}) }));"
+      }
+    },
+    {
+      "id": "node_e",
+      "name": "E. Build Alert Records",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nconst SEND_STATE_BASE_URL = \"http://hmz-send-state:5681\";\n\nconst SLA_WARNING_THRESHOLD_SECONDS = 180;\n\nconst SLA_BREACH_THRESHOLD_SECONDS = 300;\n\nconst WATCHDOG_CATEGORIES = {\"AI_CLASSIFICATION_WAIT\": \"AI_CLASSIFICATION_WAIT\", \"API_RETRY\": \"API_RETRY\", \"HUMAN_REVIEW\": \"HUMAN_REVIEW\", \"SEND_FAILURE\": \"SEND_FAILURE\", \"SEND_UNCERTAIN\": \"SEND_UNCERTAIN\", \"SUPPRESSION_FAILURE\": \"SUPPRESSION_FAILURE\", \"UNKNOWN_STATE\": \"UNKNOWN_STATE\"};\n\nconst TRANSMISSION_CATEGORIES = [\"SEND_UNCERTAIN\"];\n\nconst SLO_TYPES = {\"PROCESSING\": \"PROCESSING\", \"TRANSMISSION\": \"TRANSMISSION\"};\n\nconst SLA_STATUSES = {\"OK\": \"OK\", \"WARNING\": \"WARNING\", \"BREACH\": \"BREACH\"};\n\nconst SEND_FAILURE_STATES = [\"PERMANENT_FAILURE\", \"AUTH_OR_PLAN_FAILURE\", \"INVALID_REPLY_TARGET\", \"RETRY_EXHAUSTED\"];\n\nfunction classifySendRecord(record) {\n  const rec = record || {};\n  switch (rec.state) {\n    case 'LOCKED':\n      return WATCHDOG_CATEGORIES.AI_CLASSIFICATION_WAIT;\n    case 'SUBMITTING':\n      return WATCHDOG_CATEGORIES.API_RETRY;\n    case 'SENT':\n    case 'SEND_UNCERTAIN':\n      return WATCHDOG_CATEGORIES.SEND_UNCERTAIN;\n    default:\n      return WATCHDOG_CATEGORIES.UNKNOWN_STATE;\n  }\n}\n\nfunction classifyErrorRecord(record) {\n  const rec = record || {};\n  const errorClass = rec.error_class;\n\n  if (errorClass === 'SEND_UNCERTAIN') return WATCHDOG_CATEGORIES.SEND_UNCERTAIN;\n  if (errorClass === 'RETRYABLE') return WATCHDOG_CATEGORIES.API_RETRY;\n  if (SEND_FAILURE_STATES.includes(errorClass)) return WATCHDOG_CATEGORIES.SEND_FAILURE;\n  if (rec.reason === 'suppression_verification_failed') return WATCHDOG_CATEGORIES.SUPPRESSION_FAILURE;\n  if (rec.operator_action === 'MANUAL_REVIEW' || errorClass === 'UNKNOWN') {\n    return rec.reason === undefined && errorClass === 'UNKNOWN'\n      ? WATCHDOG_CATEGORIES.UNKNOWN_STATE\n      : WATCHDOG_CATEGORIES.HUMAN_REVIEW;\n  }\n  return WATCHDOG_CATEGORIES.UNKNOWN_STATE;\n}\n\nfunction sloTypeForCategory(category) {\n  return TRANSMISSION_CATEGORIES.includes(category) ? SLO_TYPES.TRANSMISSION : SLO_TYPES.PROCESSING;\n}\n\nfunction timestampForSendRecord(record, sloType) {\n  const rec = record || {};\n  const details = rec.details || {};\n  if (sloType === SLO_TYPES.TRANSMISSION) {\n    return details.transmissionStartedAt || details.submissionStartedAt || rec.updatedAt || rec.createdAt || null;\n  }\n  return rec.createdAt || rec.updatedAt || null;\n}\n\nfunction ageSeconds(timestampIso, nowIso) {\n  const ts = Date.parse(timestampIso || '');\n  const now = Date.parse(nowIso || '');\n  if (!Number.isFinite(ts) || !Number.isFinite(now)) return null;\n  return Math.max(0, Math.round((now - ts) / 1000));\n}\n\nfunction statusForAge(age) {\n  if (age === null) return SLA_STATUSES.OK;\n  if (age >= SLA_BREACH_THRESHOLD_SECONDS) return SLA_STATUSES.BREACH;\n  if (age >= SLA_WARNING_THRESHOLD_SECONDS) return SLA_STATUSES.WARNING;\n  return SLA_STATUSES.OK;\n}\n\nfunction evaluateUnfinishedRecords(item) {\n  const input = item || {};\n  const unfinished = input.unfinished || { sends: [], errors: [] };\n  const now = (input.test_overrides && input.test_overrides.now) || input.now || new Date().toISOString();\n\n  const records = [];\n\n  for (const send of unfinished.sends || []) {\n    const category = classifySendRecord(send);\n    const sloType = sloTypeForCategory(category);\n    const ageTimestamp = timestampForSendRecord(send, sloType);\n    const age = ageSeconds(ageTimestamp, now);\n    records.push({\n      kind: 'send',\n      identifier: send.sendKey || null,\n      state: send.state || null,\n      category,\n      sloType,\n      ageSeconds: age,\n      status: statusForAge(age),\n      createdAt: send.createdAt || null,\n      updatedAt: send.updatedAt || null,\n      ageTimestamp,\n    });\n  }\n\n  for (const error of unfinished.errors || []) {\n    const category = classifyErrorRecord(error);\n    const sloType = sloTypeForCategory(category);\n    const age = ageSeconds(error.recordedAt, now);\n    records.push({\n      kind: 'error',\n      identifier: error.errorId || null,\n      state: error.error_class || null,\n      category,\n      sloType,\n      ageSeconds: age,\n      status: statusForAge(age),\n      updatedAt: error.recordedAt || null,\n    });\n  }\n\n  const warnings = records.filter((r) => r.status === SLA_STATUSES.WARNING);\n  const breaches = records.filter((r) => r.status === SLA_STATUSES.BREACH);\n\n  const processing = records.filter((r) => r.sloType === SLO_TYPES.PROCESSING);\n  const transmission = records.filter((r) => r.sloType === SLO_TYPES.TRANSMISSION);\n\n  return Object.assign({}, {\n    ...input,\n    watchdog_evaluation: {\n      schema_version: '1.0',\n      synthetic: input.synthetic === true,\n      now,\n      warning_threshold_seconds: SLA_WARNING_THRESHOLD_SECONDS,\n      breach_threshold_seconds: SLA_BREACH_THRESHOLD_SECONDS,\n      records,\n      warnings,\n      breaches,\n      processing_slo: {\n        total: processing.length,\n        warnings: processing.filter((r) => r.status === SLA_STATUSES.WARNING).length,\n        breaches: processing.filter((r) => r.status === SLA_STATUSES.BREACH).length,\n      },\n      transmission_slo: {\n        total: transmission.length,\n        warnings: transmission.filter((r) => r.status === SLA_STATUSES.WARNING).length,\n        breaches: transmission.filter((r) => r.status === SLA_STATUSES.BREACH).length,\n      },\n    },\n  });\n}\n\nfunction buildAlertKey(record) {\n  const rec = record || {};\n  return ['WATCHDOG_ALERT', rec.sloType, rec.category, rec.kind, rec.identifier, rec.status].join('|');\n}\n\nfunction buildAlertRecords(item) {\n  const input = item || {};\n  const evaluation = input.watchdog_evaluation || { warnings: [], breaches: [] };\n  const candidates = [...(evaluation.warnings || []), ...(evaluation.breaches || [])];\n\n  const alerts = candidates.map((record) => ({\n    schema_version: '1.0',\n    alert_key: buildAlertKey(record),\n    severity: record.status,\n    sloType: record.sloType,\n    category: record.category,\n    kind: record.kind,\n    identifier: record.identifier,\n    ageSeconds: record.ageSeconds,\n  }));\n\n  return Object.assign({}, {\n    ...input,\n    alert_candidates: alerts,\n  });\n}\n\nfunction mergeAlertDedupeResults(priorItem, dedupeResponse) {\n  const input = priorItem || {};\n  const candidates = input.alert_candidates || [];\n  const response = dedupeResponse || {};\n  if (!Array.isArray(response.results) || response.results.length !== candidates.length) {\n    throw new Error('invalid_alert_dedupe_response');\n  }\n  const results = response.results;\n  for (const result of results) {\n    if (typeof result?.deduped !== 'boolean') {\n      throw new Error('invalid_alert_dedupe_item');\n    }\n  }\n\n  const alerts = candidates.map((candidate, idx) => {\n    const dedupe = results[idx];\n    return Object.assign({}, {\n      ...candidate,\n      deduped: dedupe.deduped === true,\n      first_seen_at: dedupe.firstSeenAt || null,\n    });\n  });\n\n  const toNotify = alerts.filter((a) => a.deduped !== true);\n\n  return Object.assign({}, {\n    ...input,\n    alerts,\n    notification: {\n      schema_version: '1.0',\n      surface: 'PLACEHOLDER_NOT_CONFIGURED',\n      delivered: false,\n      alert_count: toNotify.length,\n      deduped_count: alerts.length - toNotify.length,\n    },\n  });\n}\n\nfunction buildWatchdogResult(item) {\n  const input = item || {};\n  const evaluation = input.watchdog_evaluation || {};\n  const alerts = input.alerts || [];\n  const notification = input.notification || { surface: 'PLACEHOLDER_NOT_CONFIGURED', delivered: false };\n\n  return Object.assign({}, {\n    ...input,\n    watchdog_result: {\n      schema_version: '1.0',\n      synthetic: evaluation.synthetic === true,\n      validation_mode: true,\n      now: evaluation.now || null,\n      processing_slo: evaluation.processing_slo || { total: 0, warnings: 0, breaches: 0 },\n      transmission_slo: evaluation.transmission_slo || { total: 0, warnings: 0, breaches: 0 },\n      alerts: alerts.map((a) => ({\n        alert_key: a.alert_key,\n        severity: a.severity,\n        sloType: a.sloType,\n        category: a.category,\n        kind: a.kind,\n        identifier: a.identifier,\n        ageSeconds: a.ageSeconds,\n        deduped: a.deduped === true,\n      })),\n      notification,\n    },\n  });\n}\n\nfunction mergeUnfinishedResponse(priorItem, unfinishedResponse) {\n  const input = priorItem || {};\n  const response = unfinishedResponse || {};\n  if (!Array.isArray(response.sends) || !Array.isArray(response.errors)) {\n    throw new Error('invalid_unfinished_response');\n  }\n  return Object.assign({}, {\n    ...input,\n    unfinished: {\n      sends: response.sends,\n      errors: response.errors,\n    },\n  });\n}\n\nfunction attachPhase4bResultId(priorItem, persistResponse) {\n  const input = priorItem || {};\n  const response = persistResponse || {};\n  if (!/^[0-9a-f]{16}$/.test(String(response.resultId || ''))) {\n    throw new Error('invalid_phase4b_persist_response');\n  }\n  return Object.assign({}, {\n    ...input,\n    phase4b_result_id: response.resultId,\n  });\n}\n\nfunction buildAlertRecords(item) {\n  const input = item || {};\n  const evaluation = input.watchdog_evaluation || { warnings: [], breaches: [] };\n  const candidates = [...(evaluation.warnings || []), ...(evaluation.breaches || [])];\n\n  const alerts = candidates.map((record) => ({\n    schema_version: '1.0',\n    alert_key: buildAlertKey(record),\n    severity: record.status,\n    sloType: record.sloType,\n    category: record.category,\n    kind: record.kind,\n    identifier: record.identifier,\n    ageSeconds: record.ageSeconds,\n  }));\n\n  return Object.assign({}, {\n    ...input,\n    alert_candidates: alerts,\n  });\n}\n\nreturn items.map(item => ({ json: buildAlertRecords(item.json || {}) }));"
+      }
+    },
+    {
+      "id": "node_f_http",
+      "name": "F. Dedupe Alerts (hmz-send-state)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://hmz-send-state:5681/v1/alert/dedupe",
+        "options": {
+          "timeout": 5000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { alertKeys: $json.alert_candidates.map(a => a.alert_key) } }}"
+      }
+    },
+    {
+      "id": "node_g",
+      "name": "G. Merge Alert Dedupe Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1960,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\n// Runtime configuration is injected from config/business-ready.config.json at apply time.\n// HMZ_INJECT_BEGIN:RUNTIME_CONFIG\r\nconst CONFIG = {\"config_version\":\"business-ready-1.1\",\"generated_by\":\"verification/business-ready (offline build)\",\"owner_inputs_status\":\"COMPLETE\",\"operating_mode\":\"VALIDATION\",\"launch_profile\":{\"name\":\"SUPERVISED_VALIDATION\",\"description\":\"Fixed launch profile for the live path: mandatory durable human approval for every prospect-facing reply, one exact campaign allowlist, one exact workspace allowlist, a connected-sender allowlist, English-only deterministic classification with human fallback, no unattended auto-send, no PROVEN mode. operating_mode/dry_run/live_campaigns above remain the live embedded switches; this block documents the gate-evaluation target state mirrored by workflows/03 node O (Live Send Gate Evaluation) and workflows/01 node F1 (Production Security & Allowlist Gate).\",\"required_operating_mode\":\"SUPERVISED_VALIDATION\",\"unattended_auto_send\":false,\"proven_mode\":false},\"dry_run\":true,\"live_campaigns\":[],\"workspace_allowlist\":[\"c7f84f11-4a1a-42dc-9a74-a417e44cb87e\"],\"allowlists\":{\"workspace_id\":\"c7f84f11-4a1a-42dc-9a74-a417e44cb87e\",\"campaign_ids\":[\"bcda01f7-21c9-4e12-9849-0a375b548467\"],\"connected_sender_eaccounts\":[\"hamzah@gethmzautomation.com\",\"hamzah@gethmzautomations.com\",\"hamzah@hmzautomation.com\",\"hamzah@hmzautomations.com\",\"hamzah@hubhmzautomation.com\",\"hamzah@hubhmzautomations.com\",\"hamzah@labshmzautomation.com\",\"hamzah@labshmzautomations.com\",\"hamzah@onehmzautomation.com\",\"hamzah@onehmzautomations.com\",\"hamzah@teamhmzautomation.org\",\"hamzah@teamhmzautomations.com\",\"zahid@gethmzautomation.com\",\"zahid@gethmzautomations.com\",\"zahid@hmzautomation.com\",\"zahid@hmzautomations.com\",\"zahid@hubhmzautomation.com\",\"zahid@hubhmzautomations.com\",\"zahid@labshmzautomation.com\",\"zahid@labshmzautomations.com\",\"zahid@onehmzautomation.com\",\"zahid@onehmzautomations.com\",\"zahid@teamhmzautomation.org\",\"zahid@teamhmzautomations.com\"],\"note\":\"Production allowlist contains all 24 currently active and fully set-up Instantly sender eaccounts. Reply transport must pass through the inbound nes.eaccount; no default sender is permitted.\"},\"reviewer_allowlist\":[\"humza@hmzaiautomation.com\"],\"sender_mapping\":{\"hamzah@gethmzautomation.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@gethmzautomations.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@hmzautomation.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@hmzautomations.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@hubhmzautomation.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@hubhmzautomations.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@labshmzautomation.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@labshmzautomations.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@onehmzautomation.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@onehmzautomations.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@teamhmzautomation.org\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"hamzah@teamhmzautomations.com\":{\"sender_name\":\"Hamza\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@gethmzautomation.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@gethmzautomations.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@hmzautomation.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@hmzautomations.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@hubhmzautomation.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@hubhmzautomations.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@labshmzautomation.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@labshmzautomations.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@onehmzautomation.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@onehmzautomations.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@teamhmzautomation.org\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"},\"zahid@teamhmzautomations.com\":{\"sender_name\":\"Zahid\",\"booking_link\":\"https://calendar.app.google/qtTHURBWvZKcDxeY7\"}},\"policy_version\":\"policy-HMZ-1.2\",\"kb_version\":\"KB-1.0-DRAFT\",\"kb_approved_for_runtime\":false,\"classifier_version\":\"deterministic-heuristic-1.0\",\"template_registry_version\":\"T-REGISTRY-1.0\",\"review\":{\"destination_status\":\"CONFIGURED\",\"google_chat_credential_name\":\"ENV:GOOGLE_CHAT_WEBHOOK_URL\",\"google_chat_configured\":true,\"review_base_url\":\"https://n8n.hmzaiautomation.com/webhook/reply-review\",\"review_token_ttl_minutes\":60,\"review_token_ttl_minutes_default\":60,\"fail_closed_state\":\"REVIEW_NOTIFICATION_FAILED\",\"production_review_form_path\":\"reply-review/review\",\"production_review_submit_path\":\"reply-review/submit\",\"review_basic_auth_credential_name\":\"hmzReviewBasicAuth\"},\"live_credential_readiness\":{\"instantly_api_key_bound\":true,\"instantly_credential_name\":\"hmzInstantlyApi\",\"instantly\":true,\"n8n_api_key_bound\":true,\"n8n_api_credential_name\":\"hmzN8nApi\",\"review_basic_auth_bound\":true,\"review_basic_auth\":true,\"ready_for_controlled_live_test\":true,\"note\":\"instantly mirrors instantly_api_key_bound for the new live-send gate evaluation (workflows/03 node O, gate 'instantly_credential_ready'); both must be true, set only after the owner binds hmzInstantlyApi AND hmzInstantlyWebhookToken (both httpHeaderAuth) out of band. review_basic_auth gates binding of hmzReviewBasicAuth (httpBasicAuth) on the production review-form/submit webhooks (workflow 07) and is independent of the instantly flags; it must never be resolved via the Instantly credential map.\"},\"suppression_action_enablement\":{\"source_campaign_stop_enabled\":false,\"interest_status_update_enabled\":false,\"subsequence_removal_enabled\":false,\"exact_email_blocklist_enabled\":false,\"note\":\"Each remains false until its own separate live-safety gate is explicitly enabled by the owner. Required suppression actions (T7/T12/T13) still execute idempotently in DRY_RUN against the validation-only adapter contract; only the real HTTP call is gated by these flags.\"},\"instantly_api\":{\"base_url\":\"https://api.instantly.ai\",\"version\":\"v2\",\"reply_credential_name\":\"hmzInstantlyApi\",\"webhook_token_credential_name\":\"hmzInstantlyWebhookToken\",\"endpoints\":{\"get_email\":{\"method\":\"GET\",\"path\":\"/api/v2/emails/{id}\"},\"reply_to_email\":{\"method\":\"POST\",\"path\":\"/api/v2/emails/reply\"},\"list_emails\":{\"method\":\"GET\",\"path\":\"/api/v2/emails\"},\"update_interest_status\":{\"method\":\"POST\",\"path\":\"/api/v2/leads/update-interest-status\"},\"remove_subsequence\":{\"method\":\"POST\",\"path\":\"/api/v2/leads/subsequence/remove\"},\"get_lead\":{\"method\":\"POST\",\"path\":\"/api/v2/leads/list\"},\"add_to_blocklist\":{\"method\":\"POST\",\"path\":\"/api/v2/block-lists-entries/bulk-create\"},\"list_block_list_entries\":{\"method\":\"GET\",\"path\":\"/api/v2/block-lists-entries\"}}},\"webhook_protection\":{\"dev_path\":\"hmz-validation-reply-intake-dev\",\"production_path\":\"instantly-reply\",\"shared_secret_header_name\":\"X-HMZ-Webhook-Token\",\"shared_secret_credential_name\":\"hmzInstantlyWebhookToken\",\"rate_limit_endpoint\":\"http://hmz-send-state:5681/v1/webhook/ratelimit\",\"campaign_allowlist_required\":true,\"sender_allowlist_required\":true,\"api_side_email_id_refetch_required\":true,\"rate_limit_per_minute\":60,\"duplicate_window_seconds\":300},\"slo\":{\"processing_warning_seconds\":180,\"processing_breach_seconds\":300,\"transmission_target_seconds\":300},\"retention\":{\"review_case_retention_days\":90,\"review_case_retention_days_default\":90,\"send_state_retention_days\":90,\"send_state_retention_days_default\":90,\"error_record_retention_days\":90,\"error_record_retention_days_default\":90},\"retry\":{\"max_total_attempts\":3,\"retryable_status_codes\":[429,500,502,503,504],\"honour_retry_after_header\":true,\"send_uncertain_blind_retry\":false},\"reconciliation\":{\"enabled\":true,\"match_fields\":[\"thread\",\"sender\",\"recipient\",\"exact_subject\",\"timestamp_window\",\"unique_marker\"],\"single_match_result\":\"SENT_RECONCILED\",\"zero_match_result\":\"HUMAN_REVIEW_ZERO_MATCHES\",\"multiple_match_result\":\"HUMAN_REVIEW_MULTIPLE_MATCHES\",\"second_post_on_zero_or_multiple_matches\":false},\"workflow_inventory\":{\"HMZ - Instantly Reply Intake - Validation\":\"01_reply_intake_validation.json\",\"HMZ - Reply Decision Engine - Validation\":\"02_reply_decision_engine_validation.json\",\"HMZ - Instantly Reply Sender - Validation\":\"03_reply_sender_validation.json\",\"HMZ - Reply Error Handler - Validation\":\"04_reply_error_handler_validation.json\",\"HMZ - Reply SLA Watchdog - Validation\":\"05_reply_sla_watchdog_validation.json\",\"HMZ - Reply Full Test Harness - Validation\":\"06_reply_full_test_harness_validation.json\",\"HMZ - Reply Human Approval - Validation\":\"07_reply_human_approval_validation.json\"}};\r\n// HMZ_INJECT_END:RUNTIME_CONFIG\n\nconst priorItems = $('E. Build Alert Records').all();\n\nconst SEND_STATE_BASE_URL = \"http://hmz-send-state:5681\";\n\nconst SLA_WARNING_THRESHOLD_SECONDS = 180;\n\nconst SLA_BREACH_THRESHOLD_SECONDS = 300;\n\nconst WATCHDOG_CATEGORIES = {\"AI_CLASSIFICATION_WAIT\": \"AI_CLASSIFICATION_WAIT\", \"API_RETRY\": \"API_RETRY\", \"HUMAN_REVIEW\": \"HUMAN_REVIEW\", \"SEND_FAILURE\": \"SEND_FAILURE\", \"SEND_UNCERTAIN\": \"SEND_UNCERTAIN\", \"SUPPRESSION_FAILURE\": \"SUPPRESSION_FAILURE\", \"UNKNOWN_STATE\": \"UNKNOWN_STATE\"};\n\nconst TRANSMISSION_CATEGORIES = [\"SEND_UNCERTAIN\"];\n\nconst SLO_TYPES = {\"PROCESSING\": \"PROCESSING\", \"TRANSMISSION\": \"TRANSMISSION\"};\n\nconst SLA_STATUSES = {\"OK\": \"OK\", \"WARNING\": \"WARNING\", \"BREACH\": \"BREACH\"};\n\nconst SEND_FAILURE_STATES = [\"PERMANENT_FAILURE\", \"AUTH_OR_PLAN_FAILURE\", \"INVALID_REPLY_TARGET\", \"RETRY_EXHAUSTED\"];\n\nfunction classifySendRecord(record) {\n  const rec = record || {};\n  switch (rec.state) {\n    case 'LOCKED':\n      return WATCHDOG_CATEGORIES.AI_CLASSIFICATION_WAIT;\n    case 'SUBMITTING':\n      return WATCHDOG_CATEGORIES.API_RETRY;\n    case 'SENT':\n    case 'SEND_UNCERTAIN':\n      return WATCHDOG_CATEGORIES.SEND_UNCERTAIN;\n    default:\n      return WATCHDOG_CATEGORIES.UNKNOWN_STATE;\n  }\n}\n\nfunction classifyErrorRecord(record) {\n  const rec = record || {};\n  const errorClass = rec.error_class;\n\n  if (errorClass === 'SEND_UNCERTAIN') return WATCHDOG_CATEGORIES.SEND_UNCERTAIN;\n  if (errorClass === 'RETRYABLE') return WATCHDOG_CATEGORIES.API_RETRY;\n  if (SEND_FAILURE_STATES.includes(errorClass)) return WATCHDOG_CATEGORIES.SEND_FAILURE;\n  if (rec.reason === 'suppression_verification_failed') return WATCHDOG_CATEGORIES.SUPPRESSION_FAILURE;\n  if (rec.operator_action === 'MANUAL_REVIEW' || errorClass === 'UNKNOWN') {\n    return rec.reason === undefined && errorClass === 'UNKNOWN'\n      ? WATCHDOG_CATEGORIES.UNKNOWN_STATE\n      : WATCHDOG_CATEGORIES.HUMAN_REVIEW;\n  }\n  return WATCHDOG_CATEGORIES.UNKNOWN_STATE;\n}\n\nfunction sloTypeForCategory(category) {\n  return TRANSMISSION_CATEGORIES.includes(category) ? SLO_TYPES.TRANSMISSION : SLO_TYPES.PROCESSING;\n}\n\nfunction timestampForSendRecord(record, sloType) {\n  const rec = record || {};\n  const details = rec.details || {};\n  if (sloType === SLO_TYPES.TRANSMISSION) {\n    return details.transmissionStartedAt || details.submissionStartedAt || rec.updatedAt || rec.createdAt || null;\n  }\n  return rec.createdAt || rec.updatedAt || null;\n}\n\nfunction ageSeconds(timestampIso, nowIso) {\n  const ts = Date.parse(timestampIso || '');\n  const now = Date.parse(nowIso || '');\n  if (!Number.isFinite(ts) || !Number.isFinite(now)) return null;\n  return Math.max(0, Math.round((now - ts) / 1000));\n}\n\nfunction statusForAge(age) {\n  if (age === null) return SLA_STATUSES.OK;\n  if (age >= SLA_BREACH_THRESHOLD_SECONDS) return SLA_STATUSES.BREACH;\n  if (age >= SLA_WARNING_THRESHOLD_SECONDS) return SLA_STATUSES.WARNING;\n  return SLA_STATUSES.OK;\n}\n\nfunction evaluateUnfinishedRecords(item) {\n  const input = item || {};\n  const unfinished = input.unfinished || { sends: [], errors: [] };\n  const now = (input.test_overrides && input.test_overrides.now) || input.now || new Date().toISOString();\n\n  const records = [];\n\n  for (const send of unfinished.sends || []) {\n    const category = classifySendRecord(send);\n    const sloType = sloTypeForCategory(category);\n    const ageTimestamp = timestampForSendRecord(send, sloType);\n    const age = ageSeconds(ageTimestamp, now);\n    records.push({\n      kind: 'send',\n      identifier: send.sendKey || null,\n      state: send.state || null,\n      category,\n      sloType,\n      ageSeconds: age,\n      status: statusForAge(age),\n      createdAt: send.createdAt || null,\n      updatedAt: send.updatedAt || null,\n      ageTimestamp,\n    });\n  }\n\n  for (const error of unfinished.errors || []) {\n    const category = classifyErrorRecord(error);\n    const sloType = sloTypeForCategory(category);\n    const age = ageSeconds(error.recordedAt, now);\n    records.push({\n      kind: 'error',\n      identifier: error.errorId || null,\n      state: error.error_class || null,\n      category,\n      sloType,\n      ageSeconds: age,\n      status: statusForAge(age),\n      updatedAt: error.recordedAt || null,\n    });\n  }\n\n  const warnings = records.filter((r) => r.status === SLA_STATUSES.WARNING);\n  const breaches = records.filter((r) => r.status === SLA_STATUSES.BREACH);\n\n  const processing = records.filter((r) => r.sloType === SLO_TYPES.PROCESSING);\n  const transmission = records.filter((r) => r.sloType === SLO_TYPES.TRANSMISSION);\n\n  return Object.assign({}, {\n    ...input,\n    watchdog_evaluation: {\n      schema_version: '1.0',\n      synthetic: input.synthetic === true,\n      now,\n      warning_threshold_seconds: SLA_WARNING_THRESHOLD_SECONDS,\n      breach_threshold_seconds: SLA_BREACH_THRESHOLD_SECONDS,\n      records,\n      warnings,\n      breaches,\n      processing_slo: {\n        total: processing.length,\n        warnings: processing.filter((r) => r.status === SLA_STATUSES.WARNING).length,\n        breaches: processing.filter((r) => r.status === SLA_STATUSES.BREACH).length,\n      },\n      transmission_slo: {\n        total: transmission.length,\n        warnings: transmission.filter((r) => r.status === SLA_STATUSES.WARNING).length,\n        breaches: transmission.filter((r) => r.status === SLA_STATUSES.BREACH).length,\n      },\n    },\n  });\n}\n\nfunction buildAlertKey(record) {\n  const rec = record || {};\n  return ['WATCHDOG_ALERT', rec.sloType, rec.category, rec.kind, rec.identifier, rec.status].join('|');\n}\n\nfunction buildAlertRecords(item) {\n  const input = item || {};\n  const evaluation = input.watchdog_evaluation || { warnings: [], breaches: [] };\n  const candidates = [...(evaluation.warnings || []), ...(evaluation.breaches || [])];\n\n  const alerts = candidates.map((record) => ({\n    schema_version: '1.0',\n    alert_key: buildAlertKey(record),\n    severity: record.status,\n    sloType: record.sloType,\n    category: record.category,\n    kind: record.kind,\n    identifier: record.identifier,\n    ageSeconds: record.ageSeconds,\n  }));\n\n  return Object.assign({}, {\n    ...input,\n    alert_candidates: alerts,\n  });\n}\n\nfunction mergeAlertDedupeResults(priorItem, dedupeResponse) {\n  const input = priorItem || {};\n  const candidates = input.alert_candidates || [];\n  const response = dedupeResponse || {};\n  if (!Array.isArray(response.results) || response.results.length !== candidates.length) {\n    throw new Error('invalid_alert_dedupe_response');\n  }\n  const results = response.results;\n  for (const result of results) {\n    if (typeof result?.deduped !== 'boolean') {\n      throw new Error('invalid_alert_dedupe_item');\n    }\n  }\n\n  const alerts = candidates.map((candidate, idx) => {\n    const dedupe = results[idx];\n    return Object.assign({}, {\n      ...candidate,\n      deduped: dedupe.deduped === true,\n      first_seen_at: dedupe.firstSeenAt || null,\n    });\n  });\n\n  const toNotify = alerts.filter((a) => a.deduped !== true);\n\n  const chatLines = toNotify.map((a) => `${a.severity} ${a.sloType}/${a.category} ${a.kind}:${a.identifier} age=${a.ageSeconds}s`);\n  const chatText = ['HMZ Watchdog alerts (' + toNotify.length + ')'].concat(chatLines).join('\\n');\n\n  return Object.assign({}, {\n    ...input,\n    config: CONFIG,\n    alerts,\n    chat_notification: { payload: { text: chatText } },\n    notification: {\n      schema_version: '1.0',\n      surface: CONFIG.review.google_chat_configured === true ? 'GOOGLE_CHAT' : 'NOT_CONFIGURED',\n      delivered: false,\n      alert_count: toNotify.length,\n      deduped_count: alerts.length - toNotify.length,\n    },\n  });\n}\n\nfunction buildWatchdogResult(item) {\n  const input = item || {};\n  const evaluation = input.watchdog_evaluation || {};\n  const alerts = input.alerts || [];\n  const notification = input.notification || { surface: 'PLACEHOLDER_NOT_CONFIGURED', delivered: false };\n\n  return Object.assign({}, {\n    ...input,\n    watchdog_result: {\n      schema_version: '1.0',\n      synthetic: evaluation.synthetic === true,\n      validation_mode: true,\n      now: evaluation.now || null,\n      processing_slo: evaluation.processing_slo || { total: 0, warnings: 0, breaches: 0 },\n      transmission_slo: evaluation.transmission_slo || { total: 0, warnings: 0, breaches: 0 },\n      alerts: alerts.map((a) => ({\n        alert_key: a.alert_key,\n        severity: a.severity,\n        sloType: a.sloType,\n        category: a.category,\n        kind: a.kind,\n        identifier: a.identifier,\n        ageSeconds: a.ageSeconds,\n        deduped: a.deduped === true,\n      })),\n      notification,\n    },\n  });\n}\n\nfunction mergeUnfinishedResponse(priorItem, unfinishedResponse) {\n  const input = priorItem || {};\n  const response = unfinishedResponse || {};\n  if (!Array.isArray(response.sends) || !Array.isArray(response.errors)) {\n    throw new Error('invalid_unfinished_response');\n  }\n  return Object.assign({}, {\n    ...input,\n    unfinished: {\n      sends: response.sends,\n      errors: response.errors,\n    },\n  });\n}\n\nfunction attachPhase4bResultId(priorItem, persistResponse) {\n  const input = priorItem || {};\n  const response = persistResponse || {};\n  if (!/^[0-9a-f]{16}$/.test(String(response.resultId || ''))) {\n    throw new Error('invalid_phase4b_persist_response');\n  }\n  return Object.assign({}, {\n    ...input,\n    phase4b_result_id: response.resultId,\n  });\n}\n\nfunction mergeAlertDedupeResults(priorItem, dedupeResponse) {\n  const input = priorItem || {};\n  const candidates = input.alert_candidates || [];\n  const response = dedupeResponse || {};\n  if (!Array.isArray(response.results) || response.results.length !== candidates.length) {\n    throw new Error('invalid_alert_dedupe_response');\n  }\n  const results = response.results;\n  for (const result of results) {\n    if (typeof result?.deduped !== 'boolean') {\n      throw new Error('invalid_alert_dedupe_item');\n    }\n  }\n\n  const alerts = candidates.map((candidate, idx) => {\n    const dedupe = results[idx];\n    return Object.assign({}, {\n      ...candidate,\n      deduped: dedupe.deduped === true,\n      first_seen_at: dedupe.firstSeenAt || null,\n    });\n  });\n\n  const toNotify = alerts.filter((a) => a.deduped !== true);\n\n  const chatLines = toNotify.map((a) => `${a.severity} ${a.sloType}/${a.category} ${a.kind}:${a.identifier} age=${a.ageSeconds}s`);\n  const chatText = ['HMZ Watchdog alerts (' + toNotify.length + ')'].concat(chatLines).join('\\n');\n\n  return Object.assign({}, {\n    ...input,\n    config: CONFIG,\n    alerts,\n    chat_notification: { payload: { text: chatText } },\n    notification: {\n      schema_version: '1.0',\n      surface: CONFIG.review.google_chat_configured === true ? 'GOOGLE_CHAT' : 'NOT_CONFIGURED',\n      delivered: false,\n      alert_count: toNotify.length,\n      deduped_count: alerts.length - toNotify.length,\n    },\n  });\n}\n\nreturn items.map((item, idx) => ({ json: mergeAlertDedupeResults((priorItems[idx] && priorItems[idx].json) || {}, item.json || {}) }));"
+      }
+    },
+    {
+      "id": "node_h",
+      "name": "H. Build Watchdog Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nconst SEND_STATE_BASE_URL = \"http://hmz-send-state:5681\";\n\nconst SLA_WARNING_THRESHOLD_SECONDS = 180;\n\nconst SLA_BREACH_THRESHOLD_SECONDS = 300;\n\nconst WATCHDOG_CATEGORIES = {\"AI_CLASSIFICATION_WAIT\": \"AI_CLASSIFICATION_WAIT\", \"API_RETRY\": \"API_RETRY\", \"HUMAN_REVIEW\": \"HUMAN_REVIEW\", \"SEND_FAILURE\": \"SEND_FAILURE\", \"SEND_UNCERTAIN\": \"SEND_UNCERTAIN\", \"SUPPRESSION_FAILURE\": \"SUPPRESSION_FAILURE\", \"UNKNOWN_STATE\": \"UNKNOWN_STATE\"};\n\nconst TRANSMISSION_CATEGORIES = [\"SEND_UNCERTAIN\"];\n\nconst SLO_TYPES = {\"PROCESSING\": \"PROCESSING\", \"TRANSMISSION\": \"TRANSMISSION\"};\n\nconst SLA_STATUSES = {\"OK\": \"OK\", \"WARNING\": \"WARNING\", \"BREACH\": \"BREACH\"};\n\nconst SEND_FAILURE_STATES = [\"PERMANENT_FAILURE\", \"AUTH_OR_PLAN_FAILURE\", \"INVALID_REPLY_TARGET\", \"RETRY_EXHAUSTED\"];\n\nfunction classifySendRecord(record) {\n  const rec = record || {};\n  switch (rec.state) {\n    case 'LOCKED':\n      return WATCHDOG_CATEGORIES.AI_CLASSIFICATION_WAIT;\n    case 'SUBMITTING':\n      return WATCHDOG_CATEGORIES.API_RETRY;\n    case 'SENT':\n    case 'SEND_UNCERTAIN':\n      return WATCHDOG_CATEGORIES.SEND_UNCERTAIN;\n    default:\n      return WATCHDOG_CATEGORIES.UNKNOWN_STATE;\n  }\n}\n\nfunction classifyErrorRecord(record) {\n  const rec = record || {};\n  const errorClass = rec.error_class;\n\n  if (errorClass === 'SEND_UNCERTAIN') return WATCHDOG_CATEGORIES.SEND_UNCERTAIN;\n  if (errorClass === 'RETRYABLE') return WATCHDOG_CATEGORIES.API_RETRY;\n  if (SEND_FAILURE_STATES.includes(errorClass)) return WATCHDOG_CATEGORIES.SEND_FAILURE;\n  if (rec.reason === 'suppression_verification_failed') return WATCHDOG_CATEGORIES.SUPPRESSION_FAILURE;\n  if (rec.operator_action === 'MANUAL_REVIEW' || errorClass === 'UNKNOWN') {\n    return rec.reason === undefined && errorClass === 'UNKNOWN'\n      ? WATCHDOG_CATEGORIES.UNKNOWN_STATE\n      : WATCHDOG_CATEGORIES.HUMAN_REVIEW;\n  }\n  return WATCHDOG_CATEGORIES.UNKNOWN_STATE;\n}\n\nfunction sloTypeForCategory(category) {\n  return TRANSMISSION_CATEGORIES.includes(category) ? SLO_TYPES.TRANSMISSION : SLO_TYPES.PROCESSING;\n}\n\nfunction timestampForSendRecord(record, sloType) {\n  const rec = record || {};\n  const details = rec.details || {};\n  if (sloType === SLO_TYPES.TRANSMISSION) {\n    return details.transmissionStartedAt || details.submissionStartedAt || rec.updatedAt || rec.createdAt || null;\n  }\n  return rec.createdAt || rec.updatedAt || null;\n}\n\nfunction ageSeconds(timestampIso, nowIso) {\n  const ts = Date.parse(timestampIso || '');\n  const now = Date.parse(nowIso || '');\n  if (!Number.isFinite(ts) || !Number.isFinite(now)) return null;\n  return Math.max(0, Math.round((now - ts) / 1000));\n}\n\nfunction statusForAge(age) {\n  if (age === null) return SLA_STATUSES.OK;\n  if (age >= SLA_BREACH_THRESHOLD_SECONDS) return SLA_STATUSES.BREACH;\n  if (age >= SLA_WARNING_THRESHOLD_SECONDS) return SLA_STATUSES.WARNING;\n  return SLA_STATUSES.OK;\n}\n\nfunction evaluateUnfinishedRecords(item) {\n  const input = item || {};\n  const unfinished = input.unfinished || { sends: [], errors: [] };\n  const now = (input.test_overrides && input.test_overrides.now) || input.now || new Date().toISOString();\n\n  const records = [];\n\n  for (const send of unfinished.sends || []) {\n    const category = classifySendRecord(send);\n    const sloType = sloTypeForCategory(category);\n    const ageTimestamp = timestampForSendRecord(send, sloType);\n    const age = ageSeconds(ageTimestamp, now);\n    records.push({\n      kind: 'send',\n      identifier: send.sendKey || null,\n      state: send.state || null,\n      category,\n      sloType,\n      ageSeconds: age,\n      status: statusForAge(age),\n      createdAt: send.createdAt || null,\n      updatedAt: send.updatedAt || null,\n      ageTimestamp,\n    });\n  }\n\n  for (const error of unfinished.errors || []) {\n    const category = classifyErrorRecord(error);\n    const sloType = sloTypeForCategory(category);\n    const age = ageSeconds(error.recordedAt, now);\n    records.push({\n      kind: 'error',\n      identifier: error.errorId || null,\n      state: error.error_class || null,\n      category,\n      sloType,\n      ageSeconds: age,\n      status: statusForAge(age),\n      updatedAt: error.recordedAt || null,\n    });\n  }\n\n  const warnings = records.filter((r) => r.status === SLA_STATUSES.WARNING);\n  const breaches = records.filter((r) => r.status === SLA_STATUSES.BREACH);\n\n  const processing = records.filter((r) => r.sloType === SLO_TYPES.PROCESSING);\n  const transmission = records.filter((r) => r.sloType === SLO_TYPES.TRANSMISSION);\n\n  return Object.assign({}, {\n    ...input,\n    watchdog_evaluation: {\n      schema_version: '1.0',\n      synthetic: input.synthetic === true,\n      now,\n      warning_threshold_seconds: SLA_WARNING_THRESHOLD_SECONDS,\n      breach_threshold_seconds: SLA_BREACH_THRESHOLD_SECONDS,\n      records,\n      warnings,\n      breaches,\n      processing_slo: {\n        total: processing.length,\n        warnings: processing.filter((r) => r.status === SLA_STATUSES.WARNING).length,\n        breaches: processing.filter((r) => r.status === SLA_STATUSES.BREACH).length,\n      },\n      transmission_slo: {\n        total: transmission.length,\n        warnings: transmission.filter((r) => r.status === SLA_STATUSES.WARNING).length,\n        breaches: transmission.filter((r) => r.status === SLA_STATUSES.BREACH).length,\n      },\n    },\n  });\n}\n\nfunction buildAlertKey(record) {\n  const rec = record || {};\n  return ['WATCHDOG_ALERT', rec.sloType, rec.category, rec.kind, rec.identifier, rec.status].join('|');\n}\n\nfunction buildAlertRecords(item) {\n  const input = item || {};\n  const evaluation = input.watchdog_evaluation || { warnings: [], breaches: [] };\n  const candidates = [...(evaluation.warnings || []), ...(evaluation.breaches || [])];\n\n  const alerts = candidates.map((record) => ({\n    schema_version: '1.0',\n    alert_key: buildAlertKey(record),\n    severity: record.status,\n    sloType: record.sloType,\n    category: record.category,\n    kind: record.kind,\n    identifier: record.identifier,\n    ageSeconds: record.ageSeconds,\n  }));\n\n  return Object.assign({}, {\n    ...input,\n    alert_candidates: alerts,\n  });\n}\n\nfunction mergeAlertDedupeResults(priorItem, dedupeResponse) {\n  const input = priorItem || {};\n  const candidates = input.alert_candidates || [];\n  const response = dedupeResponse || {};\n  if (!Array.isArray(response.results) || response.results.length !== candidates.length) {\n    throw new Error('invalid_alert_dedupe_response');\n  }\n  const results = response.results;\n  for (const result of results) {\n    if (typeof result?.deduped !== 'boolean') {\n      throw new Error('invalid_alert_dedupe_item');\n    }\n  }\n\n  const alerts = candidates.map((candidate, idx) => {\n    const dedupe = results[idx];\n    return Object.assign({}, {\n      ...candidate,\n      deduped: dedupe.deduped === true,\n      first_seen_at: dedupe.firstSeenAt || null,\n    });\n  });\n\n  const toNotify = alerts.filter((a) => a.deduped !== true);\n\n  return Object.assign({}, {\n    ...input,\n    alerts,\n    notification: {\n      schema_version: '1.0',\n      surface: 'PLACEHOLDER_NOT_CONFIGURED',\n      delivered: false,\n      alert_count: toNotify.length,\n      deduped_count: alerts.length - toNotify.length,\n    },\n  });\n}\n\nfunction buildWatchdogResult(item) {\n  const input = item || {};\n  const evaluation = input.watchdog_evaluation || {};\n  const alerts = input.alerts || [];\n  const notification = input.notification || { surface: 'PLACEHOLDER_NOT_CONFIGURED', delivered: false };\n\n  return Object.assign({}, {\n    ...input,\n    watchdog_result: {\n      schema_version: '1.0',\n      synthetic: evaluation.synthetic === true,\n      validation_mode: true,\n      now: evaluation.now || null,\n      processing_slo: evaluation.processing_slo || { total: 0, warnings: 0, breaches: 0 },\n      transmission_slo: evaluation.transmission_slo || { total: 0, warnings: 0, breaches: 0 },\n      alerts: alerts.map((a) => ({\n        alert_key: a.alert_key,\n        severity: a.severity,\n        sloType: a.sloType,\n        category: a.category,\n        kind: a.kind,\n        identifier: a.identifier,\n        ageSeconds: a.ageSeconds,\n        deduped: a.deduped === true,\n      })),\n      notification,\n    },\n  });\n}\n\nfunction mergeUnfinishedResponse(priorItem, unfinishedResponse) {\n  const input = priorItem || {};\n  const response = unfinishedResponse || {};\n  if (!Array.isArray(response.sends) || !Array.isArray(response.errors)) {\n    throw new Error('invalid_unfinished_response');\n  }\n  return Object.assign({}, {\n    ...input,\n    unfinished: {\n      sends: response.sends,\n      errors: response.errors,\n    },\n  });\n}\n\nfunction attachPhase4bResultId(priorItem, persistResponse) {\n  const input = priorItem || {};\n  const response = persistResponse || {};\n  if (!/^[0-9a-f]{16}$/.test(String(response.resultId || ''))) {\n    throw new Error('invalid_phase4b_persist_response');\n  }\n  return Object.assign({}, {\n    ...input,\n    phase4b_result_id: response.resultId,\n  });\n}\n\nfunction buildWatchdogResult(item) {\n  const input = item || {};\n  const evaluation = input.watchdog_evaluation || {};\n  const alerts = input.alerts || [];\n  const notification = input.notification || { surface: 'PLACEHOLDER_NOT_CONFIGURED', delivered: false };\n\n  return Object.assign({}, {\n    ...input,\n    watchdog_result: {\n      schema_version: '1.0',\n      synthetic: evaluation.synthetic === true,\n      validation_mode: true,\n      now: evaluation.now || null,\n      processing_slo: evaluation.processing_slo || { total: 0, warnings: 0, breaches: 0 },\n      transmission_slo: evaluation.transmission_slo || { total: 0, warnings: 0, breaches: 0 },\n      alerts: alerts.map((a) => ({\n        alert_key: a.alert_key,\n        severity: a.severity,\n        sloType: a.sloType,\n        category: a.category,\n        kind: a.kind,\n        identifier: a.identifier,\n        ageSeconds: a.ageSeconds,\n        deduped: a.deduped === true,\n      })),\n      notification,\n    },\n  });\n}\n\nreturn items.map(item => ({ json: buildWatchdogResult(item.json || {}) }));"
+      }
+    },
+    {
+      "id": "node_i_http",
+      "name": "I. Persist Watchdog Result (hmz-send-state)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2520,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://hmz-send-state:5681/v1/phase4b/result",
+        "options": {
+          "timeout": 5000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.watchdog_result }}"
+      }
+    },
+    {
+      "id": "node_j",
+      "name": "J. Attach Result ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2800,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nconst priorItems = $('H. Build Watchdog Result').all();\n\n\n\nfunction attachPhase4bResultId(priorItem, persistResponse) {\n  const input = priorItem || {};\n  const response = persistResponse || {};\n  if (!/^[0-9a-f]{16}$/.test(String(response.resultId || ''))) {\n    throw new Error('invalid_phase4b_persist_response');\n  }\n  return Object.assign({}, {\n    ...input,\n    phase4b_result_id: response.resultId,\n  });\n}\n\nreturn items.map((item, idx) => ({ json: attachPhase4bResultId((priorItems[idx] && priorItems[idx].json) || {}, item.json || {}) }));"
+      }
+    },
+    {
+      "id": "sticky_evaluation",
+      "name": "Evaluate, Alert, Persist (notes)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        840,
+        240
+      ],
+      "parameters": {
+        "content": "## C-J. Evaluation, Alerting, Persistence\n\nC merges GET /v1/unfinished (sends/errors) onto the triggering item, preserving any test_overrides.now / synthetic flag from the Execute Workflow Trigger so synthetic runs are deterministic. D classifies and ages every record (warning_threshold_seconds=180, breach_threshold_seconds=300) and splits Processing vs Transmission SLO totals.\n\nE builds one sanitised alert candidate per warning/breach record (stable alert_key = category + SLO type + kind + identifier + status, no message bodies, no raw email addresses - identifiers are already sha256 hashes). F atomically records each alert_key at most once via POST /v1/alert/dedupe (open('wx')); G merges the dedupe response so a repeated alert is never re-notified.\n\nH builds the final sanitised watchdog_result (validation_mode=true, notification.surface=PLACEHOLDER_NOT_CONFIGURED, delivered=false - no real notification call). I persists it via POST /v1/phase4b/result; J attaches the returned resultId.",
+        "height": 460,
+        "width": 1180,
+        "color": 5
+      }
+    },
+    {
+      "id": "650727e3-781f-4a94-a086-eb6aeed0b336",
+      "name": "G2. Notification Configured Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2060,
+        220
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $json.config.review.google_chat_configured === true && $json.notification.alert_count > 0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "4acce40d-99fb-40f1-93e9-cd7b6f2560de",
+      "name": "G3. POST Google Chat Alert (Gated)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2340,
+        120
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.GOOGLE_CHAT_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.chat_notification.payload) }}",
+        "options": {
+          "timeout": 5000
+        }
+      }
+    },
+    {
+      "id": "044bf7fa-e221-4ad6-ae08-b620774fd04b",
+      "name": "G4. Skip Watchdog Notification (Not Configured / No Alerts)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2340,
+        320
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction skipWatchdogNotification(input) {\n  const notification = Object.assign({}, input.notification || {});\n  notification.delivered = false;\n  notification.fail_closed_reason = (input.config && input.config.review && input.config.review.google_chat_configured === true)\n    ? 'NO_ALERTS_TO_NOTIFY'\n    : 'WATCHDOG_NOTIFICATION_FAILED';\n  return Object.assign({}, input, { notification });\n}\n\nreturn items.map((item) => ({ json: skipWatchdogNotification(item.json || {}) }));"
+      }
+    },
+    {
+      "id": "e8a969a9-b609-4811-bbc1-22282351250f",
+      "name": "G5. Finalize Watchdog Notification Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2620,
+        220
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction finalizeWatchdogNotification(input) {\n  const notification = Object.assign({}, input.notification || {});\n  if (notification.fail_closed_reason) {\n    return Object.assign({}, input, { notification });\n  }\n  notification.delivered = true;\n  return Object.assign({}, input, { notification });\n}\n\nreturn items.map((item) => ({ json: finalizeWatchdogNotification(item.json || {}) }));"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (Eventual)": {
+      "main": [
+        [
+          {
+            "node": "A. Capture Trigger Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Workflow Trigger (Synthetic Test Entry)": {
+      "main": [
+        [
+          {
+            "node": "A. Capture Trigger Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A. Capture Trigger Input": {
+      "main": [
+        [
+          {
+            "node": "B. Get Unfinished Records (hmz-send-state)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B. Get Unfinished Records (hmz-send-state)": {
+      "main": [
+        [
+          {
+            "node": "C. Build Evaluation Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "C. Build Evaluation Input": {
+      "main": [
+        [
+          {
+            "node": "D. Evaluate Unfinished Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "D. Evaluate Unfinished Records": {
+      "main": [
+        [
+          {
+            "node": "E. Build Alert Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "E. Build Alert Records": {
+      "main": [
+        [
+          {
+            "node": "F. Dedupe Alerts (hmz-send-state)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "F. Dedupe Alerts (hmz-send-state)": {
+      "main": [
+        [
+          {
+            "node": "G. Merge Alert Dedupe Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "G. Merge Alert Dedupe Results": {
+      "main": [
+        [
+          {
+            "node": "G2. Notification Configured Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "H. Build Watchdog Result": {
+      "main": [
+        [
+          {
+            "node": "I. Persist Watchdog Result (hmz-send-state)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "I. Persist Watchdog Result (hmz-send-state)": {
+      "main": [
+        [
+          {
+            "node": "J. Attach Result ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "G2. Notification Configured Router": {
+      "main": [
+        [
+          {
+            "node": "G3. POST Google Chat Alert (Gated)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "G4. Skip Watchdog Notification (Not Configured / No Alerts)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "G3. POST Google Chat Alert (Gated)": {
+      "main": [
+        [
+          {
+            "node": "G5. Finalize Watchdog Notification Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "G4. Skip Watchdog Notification (Not Configured / No Alerts)": {
+      "main": [
+        [
+          {
+            "node": "G5. Finalize Watchdog Notification Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "G5. Finalize Watchdog Notification Result": {
+      "main": [
+        [
+          {
+            "node": "H. Build Watchdog Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "errorWorkflow": "2PR9YEkG4KyGdowa"
+  },
+  "staticData": {
+    "node:Schedule Trigger (Eventual)": {
+      "recurrenceRules": []
+    }
+  },
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": null,
+  "versionId": "193aea8e-ca93-4b10-8f4d-0e4ba1ccc4ff",
+  "activeVersionId": null,
+  "versionCounter": 11,
+  "triggerCount": 1,
+  "sourceWorkflowId": null,
+  "shared": [
+    {
+      "updatedAt": "2026-06-17T18:29:52.708Z",
+      "createdAt": "2026-06-17T18:29:52.708Z",
+      "role": "workflow:owner",
+      "workflowId": "6a8ojyXCwMwI9nyF",
+      "projectId": "wczOkcRaHDWk4Ffs",
+      "project": {
+        "updatedAt": "2026-06-17T07:02:32.299Z",
+        "createdAt": "2026-06-17T06:55:32.963Z",
+        "id": "wczOkcRaHDWk4Ffs",
+        "name": "Hamzah Zahid <hamzahzahidsales@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "c36de550-8f81-4842-a501-1a1e33f7d4b8"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": null
+}

@@ -1,0 +1,294 @@
+# Phase 4A Offline Build Only — No MCP, No n8n Access
+
+## Objective
+
+Create a complete local Phase 4A package for:
+
+1. `HMZ - Instantly Reply Sender - Validation`
+2. `HMZ - Reply Error Handler - Validation`
+
+Do not connect to n8n.
+Do not use MCP.
+Do not import workflows.
+Do not access Instantly.
+Do not request or read any API key.
+Do not begin the SLA Watchdog or Full Test Harness.
+
+This is an offline file-generation and deterministic local-test task only.
+
+## Source files you may read
+
+Read only:
+
+- `docs/PHASE_4_VERIFIED_INPUT.md`
+- `workflows/01_reply_intake_validation.json`
+- `workflows/02_reply_decision_engine_validation.json`
+- `verification/v5/layer1/sender-policy.mjs`
+- `verification/v5/layer2/state-store.mjs`
+- `verification/v5/layer2/run-layer2.mjs`
+- `reports/V5_LAYER1_EVIDENCE.md`
+- `reports/V5_LAYER2_EVIDENCE.md`
+
+Do not scan the repository.
+Do not read the original DOCX files.
+Do not read other Markdown files.
+Do not use web search.
+
+## Fixed architecture decision
+
+Do not spend time reconsidering the storage architecture.
+
+The n8n Data Table documentation does not establish a transactional unique-key or compare-and-set guarantee sufficient for a concurrent send lock. Therefore:
+
+- Use n8n Data Tables only for ordinary validation records where atomic ownership is not required.
+- Reuse the already verified V5 Layer 2 atomic file-lock/state logic for send ownership.
+- Package that logic as a tiny internal Docker sidecar named `hmz-send-state`.
+- The service must be reachable only on the internal Docker Compose network.
+- Do not publish its port to the Windows host.
+- n8n must address it as `http://hmz-send-state:5681`.
+- The state directory must use a named Docker volume.
+- No credentials or prospect message bodies may be stored by the sidecar.
+
+This is a Validation-MVP mechanism, not a production-scale database claim.
+
+## Hard scope and file allowlist
+
+You may create or modify only:
+
+- `infrastructure/send-state/server.mjs`
+- `infrastructure/send-state/state-store.mjs`
+- `infrastructure/send-state/Dockerfile`
+- `infrastructure/send-state/README.md`
+- `infrastructure/local-n8n/docker-compose.yml`
+- `verification/phase4a/sender-core.mjs`
+- `verification/phase4a/error-core.mjs`
+- `verification/phase4a/build-workflows.mjs`
+- `verification/phase4a/run-offline-tests.mjs`
+- `verification/phase4a/offline-test-results.json`
+- `verification/phase4a/import-phase4a.ps1`
+- `workflows/03_reply_sender_validation.json`
+- `workflows/04_reply_error_handler_validation.json`
+- files under `fixtures/phase_4a/`
+- `reports/PHASE_4A_OFFLINE_BUILD.md`
+
+Do not touch any other file.
+
+## Efficiency limits
+
+- Use Sonnet's own reasoning; do not spawn agents.
+- Run no package installation.
+- Use Node.js built-ins only.
+- Use no Docker commands except a final `docker compose config` syntax check.
+- Run the offline test suite once.
+- Permit one repair pass only when a test or syntax check proves a defect.
+- Run one final test suite only if a repair was made.
+- Do not rewrite files repeatedly.
+- Do not print generated workflow JSON in the terminal.
+- Final terminal response must be under 250 words.
+
+## Sidecar contract
+
+Implement a minimal HTTP JSON service using Node.js built-ins.
+
+Required endpoints:
+
+- `GET /health`
+- `POST /v1/send/acquire`
+- `POST /v1/send/transition`
+- `GET /v1/send/:sendKey`
+- `POST /v1/error`
+- `GET /v1/error/:errorId`
+
+Requirements:
+
+- Bind to `0.0.0.0:5681` inside the container.
+- No published host port in Docker Compose.
+- Stable send key derived from canonical inbound Email ID, sender, recipient, and policy/template identity.
+- Random body marker must not be part of the send key.
+- Exclusive atomic acquisition.
+- Durable state survives process/container restart through the named volume.
+- A concurrent second acquisition returns a blocked result.
+- A later sequential rerun returns a durable-state-exists result.
+- Forward-only states:
+  - `READY`
+  - `LOCKED`
+  - `DRY_RUN_OK`
+  - `SUBMITTING`
+  - `SENT`
+  - `SEND_UNCERTAIN`
+  - `SENT_RECONCILED`
+  - `HUMAN_REVIEW_ZERO_MATCHES`
+  - `HUMAN_REVIEW_MULTIPLE_MATCHES`
+  - `PERMANENT_FAILURE`
+  - `AUTH_OR_PLAN_FAILURE`
+  - `INVALID_REPLY_TARGET`
+  - `RETRY_EXHAUSTED`
+  - `BLOCKED`
+- No transition from an uncertain or human-review state back to submission.
+- Store only sanitised identifiers, hashes, state, timestamps, attempt counts, HTTP class, and operator action.
+- Never store API keys, Authorization headers, full reply bodies, full webhook payloads, or raw API responses.
+- Error records must be sanitised and written atomically.
+
+Copy and adapt the verified V5 logic rather than rewriting atomic locking from scratch.
+
+## Sender workflow
+
+Generate an import-ready inactive n8n workflow JSON.
+
+Use only standard built-in nodes and patterns already present in the existing exports where possible.
+
+Required high-level flow:
+
+1. Execute Workflow Trigger.
+2. Validate Decision Engine output and required identifiers.
+3. Re-run configuration, approval, campaign, sender, draft, template-variable, suppression, and safety gates.
+4. Compute stable send key.
+5. Acquire ownership through `hmz-send-state`.
+6. Route blocked duplicate/rerun to a terminal no-send result.
+7. Execute required suppression actions through a mock adapter only.
+8. Verify suppression results.
+9. Block unsubscribe confirmation until both source-campaign action and exact workspace email block-list action are verified.
+10. Apply DRY_RUN gate.
+11. In DRY_RUN, transition to `DRY_RUN_OK` and return a sanitised result.
+12. Include an unreachable validation-only live-adapter contract for the verified Instantly fields, but do not bind credentials and do not make a live HTTP request.
+13. Implement the V5 error classification, bounded retry policy, `Retry-After`, and uncertain-send state as deterministic code/contracts.
+14. Implement read-only reconciliation contract with zero/one/multiple outcomes.
+15. Never issue a second POST after `SEND_UNCERTAIN`.
+16. Return one structured terminal object.
+
+Hardcoded validation settings:
+
+- `OPERATING_MODE=VALIDATION`
+- `DRY_RUN=true`
+- `LIVE_CAMPAIGNS=[]`
+- `LIVE_CREDENTIAL_READY=false`
+
+No path may override these through input.
+
+## Error Handler workflow
+
+Generate an import-ready inactive n8n workflow JSON.
+
+Required flow:
+
+1. Error Trigger entry.
+2. Execute Workflow Trigger entry for synthetic tests.
+3. Normalise workflow, execution, failed node, intake ID, send key, send state, HTTP status, error class, attempt, retryability, and operator action.
+4. Redact secrets, Authorization values, complete payloads, and long PII.
+5. Persist the sanitised record through `hmz-send-state`.
+6. Produce a placeholder notification object only.
+7. Never call Slack, email, Sheets, or another external service.
+8. Never turn `SEND_UNCERTAIN` into a retry.
+
+## Workflow construction
+
+Do not hand-maintain two giant JSON blobs.
+
+Create `verification/phase4a/build-workflows.mjs` that deterministically generates both workflow JSON files from compact node definitions and embedded Code-node source.
+
+Requirements:
+
+- Preserve n8n import shape.
+- `active: false`.
+- No credentials objects.
+- No real Instantly endpoint reachable.
+- Clear node names and sticky notes.
+- Settings appropriate for validation.
+- Avoid read-only export metadata that is not required for import.
+
+## Offline tests
+
+Test at minimum:
+
+- Workflow JSON parses.
+- Required workflow names.
+- Both inactive.
+- No credentials.
+- No secret-like values.
+- No reachable live Instantly request.
+- Stable send key ignores random marker.
+- Concurrent acquisition blocks the second owner.
+- Sequential rerun remains blocked.
+- DRY_RUN prevents transport.
+- Missing approval blocks.
+- Empty LIVE_CAMPAIGNS blocks.
+- Unresolved template variable blocks.
+- Unsubscribe requires source action plus exact workspace block-list success.
+- Partial suppression failure escalates.
+- 400 permanent failure.
+- 401/402/403 auth-or-plan failure.
+- 404 invalid reply target.
+- 429 and 5xx bounded retry contract.
+- Timeout/malformed 2xx becomes `SEND_UNCERTAIN`.
+- No uncertain state retries.
+- Zero and multiple reconciliation matches require human review.
+- Exactly one repeated identical match becomes `SENT_RECONCILED`.
+- Error record is sanitised.
+- Docker Compose has no host port for `hmz-send-state`.
+
+The tests must not access external hosts.
+
+## Import script
+
+Create `verification/phase4a/import-phase4a.ps1`.
+
+It must:
+
+- Require PowerShell 7.
+- Require `HMZ_N8N_API_KEY` in the current process.
+- Use `N8N_URL=http://127.0.0.1:5678`.
+- Use official `npx -y @n8n/cli`.
+- Refuse import if local offline tests did not pass.
+- Refuse import if either workflow JSON is active or contains credentials.
+- Create the two workflows from JSON through stdin.
+- Never activate them.
+- Never persist the API key.
+- Print the two created workflow IDs.
+- Make no other n8n change.
+
+Do not run the import script in this session.
+
+## Report
+
+Create `reports/PHASE_4A_OFFLINE_BUILD.md` with:
+
+- Files created
+- Architecture decision
+- Tests run
+- Tests passed/failed
+- Sidecar safety result
+- Workflow static safety result
+- Known limitations
+- Exact import command
+- Verdict
+
+Use exactly one verdict:
+
+- `PHASE_4A_OFFLINE_READY`
+- `PHASE_4A_OFFLINE_FAILED`
+- `PHASE_4A_OFFLINE_BLOCKED`
+
+## Execution order
+
+1. Check `node --version`.
+2. Read only the allowlisted sources.
+3. Create the files.
+4. Run `node verification/phase4a/build-workflows.mjs`.
+5. Run `node verification/phase4a/run-offline-tests.mjs`.
+6. Run `docker compose -f infrastructure/local-n8n/docker-compose.yml config`.
+7. If a proven defect exists, repair once and repeat only the failed check plus one final full test.
+8. Do not import.
+9. Stop.
+
+Final terminal summary:
+
+- Node version
+- Files created/modified
+- Offline tests passed/failed
+- Concurrent-lock result
+- Sequential-rerun result
+- Secret scan
+- Live-call scan
+- Docker Compose validation
+- Verdict
+- Exact next action

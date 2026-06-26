@@ -1,0 +1,92 @@
+{
+  "fixture_id": "phase3_11_malformed_payload",
+  "description": "Malformed payload: event_type is missing entirely (no non-empty string event_type), so Workflow 1 Section C marks the whole payload MALFORMED, all 11 validated fields become null, and Section E1 proposes state REJECTED. Workflow 2 Section A then matches op-malformed (category OTHER) and Section C routes to terminal_status=REJECTED with stop_active_sequence=false (the sequence was never confirmed to exist for this event).",
+  "input": {
+    "intake_id": "phase3-fixture-11-malformed-payload",
+    "lead_email": "pat.jones@prospectco.test",
+    "reply_text": "Hello there"
+  },
+  "expected": {
+    "payload_status": "MALFORMED",
+    "validation_errors": [
+      {
+        "field": "event_type",
+        "issue": "MISSING_OR_INVALID"
+      }
+    ],
+    "validated": {
+      "event_id": null,
+      "email_id": null,
+      "event_type": null,
+      "lead_email": null,
+      "from_address_email": null,
+      "email_account": null,
+      "reply_subject": null,
+      "reply_text": null,
+      "timestamp": null,
+      "campaign_id": null,
+      "validation_cell": null
+    },
+    "nes": {
+      "event_type": "UNKNOWN",
+      "lead_email": "UNKNOWN",
+      "campaign_id": "UNKNOWN",
+      "campaign_context": {
+        "validation_cell": "UNKNOWN",
+        "segment": "UNKNOWN"
+      }
+    },
+    "idempotency": {
+      "proposed_state": "REJECTED",
+      "key_scheme": "identifier_poor_hash",
+      "idempotency_key": { "starts_with": "identifier_poor:instantly:payload_hash=" }
+    },
+    "prefilter": {
+      "is_malformed_payload": true,
+      "is_unsupported_event_type": true
+    },
+    "deterministic": {
+      "deterministic_match": true,
+      "noop_match": false,
+      "category": "OTHER",
+      "rule_id": "op-malformed",
+      "media_flag": false
+    },
+    "classifier": {
+      "category": "OTHER",
+      "confidence": 1,
+      "interest_stage": "UNKNOWN"
+    },
+    "decision": {
+      "category": "OTHER",
+      "confidence": 1,
+      "confidence_overridden": false,
+      "stop_active_sequence": false,
+      "durable_dnc_intent": false,
+      "address_suppression_intent": "NONE",
+      "review_hold": false,
+      "legal_review_required": false,
+      "privacy_review_required": false,
+      "reputational_review_required": false,
+      "human_review_required": true,
+      "reply_permitted": false,
+      "reply_template_id": null,
+      "reply_draft_status": "NO_DRAFT_HUMAN_ONLY",
+      "external_action_status": "NOT_PERFORMED",
+      "follow_up_date": null,
+      "interest_stage": "UNKNOWN",
+      "terminal_status": "REJECTED",
+      "reason_contains": "Payload failed validation in Workflow 1 (op-malformed)"
+    },
+    "draft": {
+      "template_id": null,
+      "draft_text_is_null": true,
+      "missing_variables": [],
+      "human_review_required": true
+    },
+    "validation": {
+      "valid": true
+    },
+    "notes": "Even though raw_payload.lead_email and raw_payload.reply_text are present, Section C's isMalformed branch sets ALL 11 validated.* fields to null (not just event_type) once event_type is missing/invalid - this is intentional ('never fabricate values' / 'malformed payloads must route to a terminal rejected state, not continue silently'). Because validated.event_id/email_id/campaign_id/email_account and nes.lead_email ('UNKNOWN') are all null/UNKNOWN, Section E1 treats this payload as identifier-poor and computes idempotency_key='identifier_poor:instantly:payload_hash=<canonicalPayloadHash(raw_payload)>' (key_scheme='identifier_poor_hash') - a hash of this exact payload, not a fixed placeholder string. Fixture 13 is a second, content-different malformed payload; run_synthetic_tests.js's main loop cross-checks that fixtures 11 and 13 get DIFFERENT idempotency_key values and both independently reach op-malformed/REJECTED, resolving the shared-key collision previously logged in reports/UNRESOLVED_ITEMS.md U3."
+  }
+}

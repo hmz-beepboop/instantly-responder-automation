@@ -1,0 +1,1262 @@
+{
+  "updatedAt": "2026-06-18T21:33:41.695Z",
+  "createdAt": "2026-06-17T18:29:52.559Z",
+  "id": "ePS5uBBxKxhFCYgU",
+  "name": "HMZ - Instantly Reply Sender - Validation",
+  "description": null,
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "sticky_overview",
+      "name": "Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        -440
+      ],
+      "parameters": {
+        "content": "# HMZ - Instantly Reply Sender - Validation (Phase 4A)\n\nWHAT: Sub-workflow invoked with the Reply Decision Engine output (workflow NJcnNQoJ5nSIWYte). Re-validates required identifiers, re-runs every send/suppression/safety gate, derives a stable send key, acquires durable ownership from the hmz-send-state sidecar, runs suppression actions via a mock adapter only, and - because DRY_RUN=true is hardcoded - transitions to DRY_RUN_OK and returns one structured terminal object. No external HTTP call to Instantly is ever made.\n\nHARDCODED: OPERATING_MODE=VALIDATION, DRY_RUN=true, LIVE_CAMPAIGNS=[], LIVE_CREDENTIAL_READY=false. No input path may override these.\n\nSIDECAR: http://hmz-send-state:5681 (internal Docker network only, not published to the host). Provides atomic send-ownership and forward-only send state. See infrastructure/send-state/README.md.\n\nINACTIVE: this workflow must remain inactive after import and after every test.",
+        "height": 420,
+        "width": 900,
+        "color": 7
+      }
+    },
+    {
+      "id": "trigger_entry",
+      "name": "When Called With Decision Engine Output",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "node_a",
+      "name": "A. Validate Decision Engine Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        280,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\n// HMZ_INJECT_BEGIN:SENDER_CONFIG\r\nconst SENDER_CONFIG = {\"OPERATING_MODE\":\"VALIDATION\",\"DRY_RUN\":true,\"LIVE_CAMPAIGNS\":[],\"LIVE_CREDENTIAL_READY\":true};\r\n// HMZ_INJECT_END:SENDER_CONFIG\n\nconst OPERATING_MODE = SENDER_CONFIG.OPERATING_MODE;\n\nconst DRY_RUN = SENDER_CONFIG.DRY_RUN;\n\nconst LIVE_CAMPAIGNS = SENDER_CONFIG.LIVE_CAMPAIGNS;\n\nconst LIVE_CREDENTIAL_READY = SENDER_CONFIG.LIVE_CREDENTIAL_READY;\n\nconst SEND_RESULT_STATES = {\"SENT\":\"SENT\",\"PERMANENT_FAILURE\":\"PERMANENT_FAILURE\",\"AUTH_OR_PLAN_FAILURE\":\"AUTH_OR_PLAN_FAILURE\",\"INVALID_REPLY_TARGET\":\"INVALID_REPLY_TARGET\",\"RETRY_EXHAUSTED\":\"RETRY_EXHAUSTED\",\"SEND_UNCERTAIN\":\"SEND_UNCERTAIN\"};\n\nconst MAX_SEND_ATTEMPTS = 3;\n\nconst BASE_BACKOFF_MS = 100;\n\nconst MAX_BACKOFF_MS = 2000;\n\nconst RETRY_AFTER_CAP_MS = 5000;\n\nconst RECONCILE_STATES = {\"SENT_RECONCILED\":\"SENT_RECONCILED\",\"HUMAN_REVIEW_ZERO_MATCHES\":\"HUMAN_REVIEW_ZERO_MATCHES\",\"HUMAN_REVIEW_MULTIPLE_MATCHES\":\"HUMAN_REVIEW_MULTIPLE_MATCHES\"};\n\nfunction normalizeEmail(value) {\n  return String(value ?? '').trim().toLowerCase();\n}\n\nfunction djb2Hash(str) {\n  let hash = 5381;\n  for (let i = 0; i < str.length; i++) {\n    hash = (hash << 5) + hash + str.charCodeAt(i);\n    hash = hash & 0xffffffff;\n  }\n  return (hash >>> 0).toString(16).padStart(8, '0');\n}\n\nfunction deriveSendKey({ inboundEmailId, sender, recipient, policyTemplateId }) {\n  const raw = [\n    'HMZ_PHASE4A_SEND',\n    String(inboundEmailId ?? '').trim(),\n    normalizeEmail(sender),\n    normalizeEmail(recipient),\n    String(policyTemplateId ?? '').trim(),\n  ].join('|');\n  return `send-${djb2Hash(raw)}`;\n}\n\nfunction isValidSentEmailObject(body, expected) {\n  const exp = expected || {};\n  const norm = (v) => String(v == null ? '' : v).trim().toLowerCase();\n  const isEmptyAddr = (v) => {\n    if (v === null || v === undefined) return true;\n    if (Array.isArray(v)) return v.length === 0;\n    if (typeof v === 'string') return v.trim().length === 0;\n    return false;\n  };\n  if (!body || typeof body !== 'object') return false;\n  if (typeof body.id !== 'string' || body.id.length === 0) return false;\n  if (typeof body.message_id !== 'string' || body.message_id.length === 0) return false;\n  if (typeof body.thread_id !== 'string' || body.thread_id.length === 0) return false;\n  if (exp.eaccount && body.eaccount !== exp.eaccount) return false;\n  if (exp.recipient) {\n    const recipients = Array.isArray(body.to_address_email_list)\n      ? body.to_address_email_list.map(norm)\n      : String(body.to_address_email_list || '').split(',').map(norm).filter(Boolean);\n    if (!recipients.includes(norm(exp.recipient))) return false;\n  }\n  if (exp.subject && body.subject !== exp.subject) return false;\n  if (!exp.ccBccApproved) {\n    if (!isEmptyAddr(body.cc_address_email_list)) return false;\n    if (!isEmptyAddr(body.bcc_address_email_list)) return false;\n  }\n  return true;\n}\n\nfunction deterministicJitter(attemptNumber) {\n  return (attemptNumber * 37) % 50;\n}\n\nfunction classifySendOutcome(outcome, expected) {\n  const out = outcome || {};\n\n  if (out.kind === 'http') {\n    const status = out.status;\n    const body = out.body;\n    const headers = out.headers || {};\n\n    if (status === 400) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.PERMANENT_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 401 || status === 402 || status === 403) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.AUTH_OR_PLAN_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 404) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.INVALID_REPLY_TARGET, ambiguousSideEffect: false };\n    }\n    if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {\n      const retryAfterRaw = headers['retry-after'] ?? headers['Retry-After'] ?? null;\n      const retryAfterSeconds = retryAfterRaw == null ? null : Number(retryAfterRaw);\n      const retryAfterMs =\n        status === 429 && Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0\n          ? retryAfterSeconds * 1000\n          : null;\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs,\n        ambiguousSideEffect: false,\n      };\n    }\n    if (status >= 200 && status < 300) {\n      if (isValidSentEmailObject(body, expected)) {\n        return { mode: 'terminal', state: SEND_RESULT_STATES.SENT, ambiguousSideEffect: false };\n      }\n      return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  if (out.kind === 'network-error') {\n    const retryablePhases = ['connection-refused', 'pre-submission'];\n    if (retryablePhases.includes(out.errorPhase)) {\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs: null,\n        ambiguousSideEffect: false,\n      };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n}\n\nfunction planSendAttempts(outcomes, options) {\n  const opts = options || {};\n  const jitter = opts.jitter || deterministicJitter;\n  const maxAttempts = opts.maxAttempts || MAX_SEND_ATTEMPTS;\n  const list = Array.isArray(outcomes) ? outcomes : [];\n\n  const attemptOutcomes = [];\n  const backoffDelaysRequested = [];\n  let postSubmissions = 0;\n  let retried = false;\n  let retryAfterHonoured = null;\n  let finalState = null;\n  let secondPostAfterUncertain = false;\n\n  for (let attempt = 1; attempt <= Math.min(maxAttempts, list.length || maxAttempts); attempt++) {\n    const outcome = list[attempt - 1] || { kind: 'network-error', errorPhase: 'pre-submission', serverReceived: false };\n    attemptOutcomes.push(outcome);\n    if (outcome.serverReceived) postSubmissions++;\n\n    const classification = classifySendOutcome(outcome);\n\n    if (classification.mode === 'terminal') {\n      finalState = classification.state;\n      if (finalState === SEND_RESULT_STATES.SEND_UNCERTAIN && attempt < list.length) {\n        secondPostAfterUncertain = true;\n      }\n      break;\n    }\n\n    if (attempt === maxAttempts || attempt === list.length) {\n      finalState = classification.exhaustedState;\n      break;\n    }\n\n    let delayMs;\n    if (classification.retryAfterMs != null) {\n      delayMs = Math.min(classification.retryAfterMs, RETRY_AFTER_CAP_MS);\n      if (retryAfterHonoured === null) retryAfterHonoured = true;\n    } else {\n      if (retryAfterHonoured === null) retryAfterHonoured = false;\n      const exponential = BASE_BACKOFF_MS * 2 ** (attempt - 1);\n      delayMs = Math.min(exponential + jitter(attempt), MAX_BACKOFF_MS);\n    }\n    backoffDelaysRequested.push(delayMs);\n    retried = true;\n  }\n\n  return {\n    finalState,\n    attempts: attemptOutcomes.length,\n    postSubmissions,\n    retried,\n    backoffDelaysRequested,\n    retryAfterHonoured,\n    secondPostAfterUncertain,\n    humanReviewRequired: finalState !== SEND_RESULT_STATES.SENT,\n  };\n}\n\nfunction reconcileMatches(checks, options) {\n  const opts = options || {};\n  const consecutiveRequired = opts.consecutiveRequired || 2;\n  const polls = Array.isArray(checks) ? checks : [];\n\n  let lastSingleMatchId = null;\n  let consecutiveSameSingleMatch = 0;\n\n  for (const matchIds of polls) {\n    const ids = Array.isArray(matchIds) ? matchIds : [];\n    if (ids.length > 1) {\n      return { state: RECONCILE_STATES.HUMAN_REVIEW_MULTIPLE_MATCHES, matchCount: ids.length, matchIds: ids };\n    }\n    if (ids.length === 1) {\n      const currentId = ids[0];\n      if (currentId === lastSingleMatchId) {\n        consecutiveSameSingleMatch += 1;\n      } else {\n        lastSingleMatchId = currentId;\n        consecutiveSameSingleMatch = 1;\n      }\n      if (consecutiveSameSingleMatch >= consecutiveRequired) {\n        return { state: RECONCILE_STATES.SENT_RECONCILED, matchCount: 1, matchId: currentId };\n      }\n    } else {\n      lastSingleMatchId = null;\n      consecutiveSameSingleMatch = 0;\n    }\n  }\n\n  return { state: RECONCILE_STATES.HUMAN_REVIEW_ZERO_MATCHES, matchCount: 0, matchIds: [] };\n}\n\nfunction liveAdapterContract(item) {\n  const input = item || {};\n  const nes = input.nes || {};\n  const threading = nes.threading || {};\n  const reply = nes.reply || {};\n  const draft = input.draft || {};\n\n  const subject = reply.subject || null;\n  const replySubject = subject ? (/^re:/i.test(subject) ? subject : `Re: ${subject}`) : null;\n\n  return {\n    ...input,\n    live_adapter_contract: {\n      reachable: false,\n      blocked: true,\n      reason: 'VALIDATION_MODE_LIVE_ADAPTER_UNREACHABLE',\n      // Verified V3 contract: POST /api/v2/emails/reply with eaccount,\n      // reply_to_uuid, subject, body.text/html. Never sent in Phase 4A.\n      request_contract: {\n        method: 'POST',\n        url: 'https://api.instantly.ai/api/v2/emails/reply',\n        body: {\n          eaccount: nes.eaccount || null,\n          reply_to_uuid: threading.reply_to_uuid || null,\n          subject: replySubject,\n          body: {\n            text: draft.draft_text || null,\n            html: null,\n          },\n        },\n      },\n      retry_policy: {\n        max_attempts: MAX_SEND_ATTEMPTS,\n        base_backoff_ms: BASE_BACKOFF_MS,\n        max_backoff_ms: MAX_BACKOFF_MS,\n        retry_after_cap_ms: RETRY_AFTER_CAP_MS,\n      },\n      classification_contract: 'classifySendOutcome',\n      reconciliation_contract: 'reconcileMatches',\n    },\n  };\n}\n\nfunction validateSenderInput(item) {\n  const input = item || {};\n  const nes = input.nes || {};\n  const decision = input.decision || {};\n  const validation = input.validation || {};\n  const threading = nes.threading || {};\n\n  const errors = [];\n\n  if (validation.valid !== true) errors.push('validation.valid is not true');\n  if (!threading.reply_to_uuid) errors.push('nes.threading.reply_to_uuid (inbound email id) is missing');\n  if (!nes.eaccount || nes.eaccount === 'UNKNOWN') errors.push('nes.eaccount (sender) is missing or UNKNOWN');\n  if (!nes.lead_email || nes.lead_email === 'UNKNOWN') errors.push('nes.lead_email (recipient) is missing or UNKNOWN');\n  if (!nes.intake_id) errors.push('nes.intake_id is missing');\n  if (typeof decision.reply_permitted !== 'boolean') errors.push('decision.reply_permitted is missing');\n  if (decision.human_review_required !== true) errors.push('decision.human_review_required is not true');\n\n  return {\n    ...input,\n    sender_validation: {\n      valid: errors.length === 0,\n      errors,\n    },\n  };\n}\n\nreturn items.map(item => ({ json: validateSenderInput(item.json || {}) }));"
+      }
+    },
+    {
+      "id": "node_b",
+      "name": "B. Re-run Send & Suppression Gates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\n// HMZ_INJECT_BEGIN:SENDER_CONFIG\r\nconst SENDER_CONFIG = {\"OPERATING_MODE\":\"VALIDATION\",\"DRY_RUN\":true,\"LIVE_CAMPAIGNS\":[],\"LIVE_CREDENTIAL_READY\":true};\r\n// HMZ_INJECT_END:SENDER_CONFIG\n\nconst OPERATING_MODE = SENDER_CONFIG.OPERATING_MODE;\n\nconst DRY_RUN = SENDER_CONFIG.DRY_RUN;\n\nconst LIVE_CAMPAIGNS = SENDER_CONFIG.LIVE_CAMPAIGNS;\n\nconst LIVE_CREDENTIAL_READY = SENDER_CONFIG.LIVE_CREDENTIAL_READY;\n\nconst SEND_RESULT_STATES = {\"SENT\":\"SENT\",\"PERMANENT_FAILURE\":\"PERMANENT_FAILURE\",\"AUTH_OR_PLAN_FAILURE\":\"AUTH_OR_PLAN_FAILURE\",\"INVALID_REPLY_TARGET\":\"INVALID_REPLY_TARGET\",\"RETRY_EXHAUSTED\":\"RETRY_EXHAUSTED\",\"SEND_UNCERTAIN\":\"SEND_UNCERTAIN\"};\n\nconst MAX_SEND_ATTEMPTS = 3;\n\nconst BASE_BACKOFF_MS = 100;\n\nconst MAX_BACKOFF_MS = 2000;\n\nconst RETRY_AFTER_CAP_MS = 5000;\n\nconst RECONCILE_STATES = {\"SENT_RECONCILED\":\"SENT_RECONCILED\",\"HUMAN_REVIEW_ZERO_MATCHES\":\"HUMAN_REVIEW_ZERO_MATCHES\",\"HUMAN_REVIEW_MULTIPLE_MATCHES\":\"HUMAN_REVIEW_MULTIPLE_MATCHES\"};\n\nfunction normalizeEmail(value) {\n  return String(value ?? '').trim().toLowerCase();\n}\n\nfunction djb2Hash(str) {\n  let hash = 5381;\n  for (let i = 0; i < str.length; i++) {\n    hash = (hash << 5) + hash + str.charCodeAt(i);\n    hash = hash & 0xffffffff;\n  }\n  return (hash >>> 0).toString(16).padStart(8, '0');\n}\n\nfunction deriveSendKey({ inboundEmailId, sender, recipient, policyTemplateId }) {\n  const raw = [\n    'HMZ_PHASE4A_SEND',\n    String(inboundEmailId ?? '').trim(),\n    normalizeEmail(sender),\n    normalizeEmail(recipient),\n    String(policyTemplateId ?? '').trim(),\n  ].join('|');\n  return `send-${djb2Hash(raw)}`;\n}\n\nfunction isValidSentEmailObject(body, expected) {\n  const exp = expected || {};\n  const norm = (v) => String(v == null ? '' : v).trim().toLowerCase();\n  const isEmptyAddr = (v) => {\n    if (v === null || v === undefined) return true;\n    if (Array.isArray(v)) return v.length === 0;\n    if (typeof v === 'string') return v.trim().length === 0;\n    return false;\n  };\n  if (!body || typeof body !== 'object') return false;\n  if (typeof body.id !== 'string' || body.id.length === 0) return false;\n  if (typeof body.message_id !== 'string' || body.message_id.length === 0) return false;\n  if (typeof body.thread_id !== 'string' || body.thread_id.length === 0) return false;\n  if (exp.eaccount && body.eaccount !== exp.eaccount) return false;\n  if (exp.recipient) {\n    const recipients = Array.isArray(body.to_address_email_list)\n      ? body.to_address_email_list.map(norm)\n      : String(body.to_address_email_list || '').split(',').map(norm).filter(Boolean);\n    if (!recipients.includes(norm(exp.recipient))) return false;\n  }\n  if (exp.subject && body.subject !== exp.subject) return false;\n  if (!exp.ccBccApproved) {\n    if (!isEmptyAddr(body.cc_address_email_list)) return false;\n    if (!isEmptyAddr(body.bcc_address_email_list)) return false;\n  }\n  return true;\n}\n\nfunction deterministicJitter(attemptNumber) {\n  return (attemptNumber * 37) % 50;\n}\n\nfunction classifySendOutcome(outcome, expected) {\n  const out = outcome || {};\n\n  if (out.kind === 'http') {\n    const status = out.status;\n    const body = out.body;\n    const headers = out.headers || {};\n\n    if (status === 400) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.PERMANENT_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 401 || status === 402 || status === 403) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.AUTH_OR_PLAN_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 404) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.INVALID_REPLY_TARGET, ambiguousSideEffect: false };\n    }\n    if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {\n      const retryAfterRaw = headers['retry-after'] ?? headers['Retry-After'] ?? null;\n      const retryAfterSeconds = retryAfterRaw == null ? null : Number(retryAfterRaw);\n      const retryAfterMs =\n        status === 429 && Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0\n          ? retryAfterSeconds * 1000\n          : null;\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs,\n        ambiguousSideEffect: false,\n      };\n    }\n    if (status >= 200 && status < 300) {\n      if (isValidSentEmailObject(body, expected)) {\n        return { mode: 'terminal', state: SEND_RESULT_STATES.SENT, ambiguousSideEffect: false };\n      }\n      return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  if (out.kind === 'network-error') {\n    const retryablePhases = ['connection-refused', 'pre-submission'];\n    if (retryablePhases.includes(out.errorPhase)) {\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs: null,\n        ambiguousSideEffect: false,\n      };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n}\n\nfunction planSendAttempts(outcomes, options) {\n  const opts = options || {};\n  const jitter = opts.jitter || deterministicJitter;\n  const maxAttempts = opts.maxAttempts || MAX_SEND_ATTEMPTS;\n  const list = Array.isArray(outcomes) ? outcomes : [];\n\n  const attemptOutcomes = [];\n  const backoffDelaysRequested = [];\n  let postSubmissions = 0;\n  let retried = false;\n  let retryAfterHonoured = null;\n  let finalState = null;\n  let secondPostAfterUncertain = false;\n\n  for (let attempt = 1; attempt <= Math.min(maxAttempts, list.length || maxAttempts); attempt++) {\n    const outcome = list[attempt - 1] || { kind: 'network-error', errorPhase: 'pre-submission', serverReceived: false };\n    attemptOutcomes.push(outcome);\n    if (outcome.serverReceived) postSubmissions++;\n\n    const classification = classifySendOutcome(outcome);\n\n    if (classification.mode === 'terminal') {\n      finalState = classification.state;\n      if (finalState === SEND_RESULT_STATES.SEND_UNCERTAIN && attempt < list.length) {\n        secondPostAfterUncertain = true;\n      }\n      break;\n    }\n\n    if (attempt === maxAttempts || attempt === list.length) {\n      finalState = classification.exhaustedState;\n      break;\n    }\n\n    let delayMs;\n    if (classification.retryAfterMs != null) {\n      delayMs = Math.min(classification.retryAfterMs, RETRY_AFTER_CAP_MS);\n      if (retryAfterHonoured === null) retryAfterHonoured = true;\n    } else {\n      if (retryAfterHonoured === null) retryAfterHonoured = false;\n      const exponential = BASE_BACKOFF_MS * 2 ** (attempt - 1);\n      delayMs = Math.min(exponential + jitter(attempt), MAX_BACKOFF_MS);\n    }\n    backoffDelaysRequested.push(delayMs);\n    retried = true;\n  }\n\n  return {\n    finalState,\n    attempts: attemptOutcomes.length,\n    postSubmissions,\n    retried,\n    backoffDelaysRequested,\n    retryAfterHonoured,\n    secondPostAfterUncertain,\n    humanReviewRequired: finalState !== SEND_RESULT_STATES.SENT,\n  };\n}\n\nfunction reconcileMatches(checks, options) {\n  const opts = options || {};\n  const consecutiveRequired = opts.consecutiveRequired || 2;\n  const polls = Array.isArray(checks) ? checks : [];\n\n  let lastSingleMatchId = null;\n  let consecutiveSameSingleMatch = 0;\n\n  for (const matchIds of polls) {\n    const ids = Array.isArray(matchIds) ? matchIds : [];\n    if (ids.length > 1) {\n      return { state: RECONCILE_STATES.HUMAN_REVIEW_MULTIPLE_MATCHES, matchCount: ids.length, matchIds: ids };\n    }\n    if (ids.length === 1) {\n      const currentId = ids[0];\n      if (currentId === lastSingleMatchId) {\n        consecutiveSameSingleMatch += 1;\n      } else {\n        lastSingleMatchId = currentId;\n        consecutiveSameSingleMatch = 1;\n      }\n      if (consecutiveSameSingleMatch >= consecutiveRequired) {\n        return { state: RECONCILE_STATES.SENT_RECONCILED, matchCount: 1, matchId: currentId };\n      }\n    } else {\n      lastSingleMatchId = null;\n      consecutiveSameSingleMatch = 0;\n    }\n  }\n\n  return { state: RECONCILE_STATES.HUMAN_REVIEW_ZERO_MATCHES, matchCount: 0, matchIds: [] };\n}\n\nfunction liveAdapterContract(item) {\n  const input = item || {};\n  const nes = input.nes || {};\n  const threading = nes.threading || {};\n  const reply = nes.reply || {};\n  const draft = input.draft || {};\n\n  const subject = reply.subject || null;\n  const replySubject = subject ? (/^re:/i.test(subject) ? subject : `Re: ${subject}`) : null;\n\n  return {\n    ...input,\n    live_adapter_contract: {\n      reachable: false,\n      blocked: true,\n      reason: 'VALIDATION_MODE_LIVE_ADAPTER_UNREACHABLE',\n      // Verified V3 contract: POST /api/v2/emails/reply with eaccount,\n      // reply_to_uuid, subject, body.text/html. Never sent in Phase 4A.\n      request_contract: {\n        method: 'POST',\n        url: 'https://api.instantly.ai/api/v2/emails/reply',\n        body: {\n          eaccount: nes.eaccount || null,\n          reply_to_uuid: threading.reply_to_uuid || null,\n          subject: replySubject,\n          body: {\n            text: draft.draft_text || null,\n            html: null,\n          },\n        },\n      },\n      retry_policy: {\n        max_attempts: MAX_SEND_ATTEMPTS,\n        base_backoff_ms: BASE_BACKOFF_MS,\n        max_backoff_ms: MAX_BACKOFF_MS,\n        retry_after_cap_ms: RETRY_AFTER_CAP_MS,\n      },\n      classification_contract: 'classifySendOutcome',\n      reconciliation_contract: 'reconcileMatches',\n    },\n  };\n}\n\nfunction runSendGates(item) {\n  const input = item || {};\n  const cfg = SENDER_CONFIG;\n  const reasons = [];\n\n  if (input.sender_validation && input.sender_validation.valid !== true) {\n    reasons.push('sender_validation_failed');\n  }\n\n  const safeValidationMode =\n    cfg.OPERATING_MODE === 'VALIDATION' &&\n    cfg.DRY_RUN === true &&\n    Array.isArray(cfg.LIVE_CAMPAIGNS) &&\n    cfg.LIVE_CAMPAIGNS.length === 0;\n\n  const supervisedLiveMode =\n    cfg.OPERATING_MODE === 'SUPERVISED_VALIDATION' &&\n    cfg.DRY_RUN === false &&\n    Array.isArray(cfg.LIVE_CAMPAIGNS) &&\n    cfg.LIVE_CAMPAIGNS.length > 0 &&\n    cfg.LIVE_CREDENTIAL_READY === true;\n\n  const configGatePassed = safeValidationMode || supervisedLiveMode;\n  if (!configGatePassed) reasons.push('config_gate_failed');\n\n  const approval = input.approval || {};\n  const approvalGatePassed = approval.approved === true;\n  if (!approvalGatePassed) reasons.push('approval_missing');\n\n  const nes = input.nes || {};\n  const campaignId = nes.campaign_id || null;\n  const liveCampaignSendAllowed = cfg.LIVE_CAMPAIGNS.includes(campaignId);\n  if (!liveCampaignSendAllowed) reasons.push('live_campaigns_empty_live_send_blocked');\n\n  const senderGatePassed = !!nes.eaccount && nes.eaccount !== 'UNKNOWN';\n  if (!senderGatePassed) reasons.push('sender_gate_failed');\n\n  const draft = input.draft || {};\n  const draftText = typeof draft.draft_text === 'string' ? draft.draft_text : null;\n  const unresolvedTokens = draftText ? draftText.match(/\\[\\[[^\\]]+\\]\\]|<<[^>]+>>/g) || [] : [];\n  const draftVariableGatePassed = draftText === null || unresolvedTokens.length === 0;\n  if (!draftVariableGatePassed) reasons.push('unresolved_template_variables');\n\n  const decision = input.decision || {};\n  const suppressionRequired =\n    decision.address_suppression_intent === 'ORGANISATION_DNC' ||\n    decision.address_suppression_intent === 'GLOBAL_BLOCKLIST' ||\n    decision.durable_dnc_intent === true;\n\n  const dryRunGatePassed = cfg.DRY_RUN === true;\n  const dryRunFlagValid = cfg.DRY_RUN === true || cfg.DRY_RUN === false;\n  if (!dryRunFlagValid) reasons.push('dry_run_flag_invalid');\n\n  const passed =\n    (input.sender_validation ? input.sender_validation.valid === true : true) &&\n    configGatePassed &&\n    approvalGatePassed &&\n    senderGatePassed &&\n    draftVariableGatePassed &&\n    dryRunFlagValid;\n\n  return {\n    ...input,\n    gates: {\n      config_gate_passed: configGatePassed,\n      approval_gate_passed: approvalGatePassed,\n      live_campaign_send_allowed: liveCampaignSendAllowed,\n      sender_gate_passed: senderGatePassed,\n      draft_variable_gate_passed: draftVariableGatePassed,\n      unresolved_tokens: unresolvedTokens,\n      suppression_required: suppressionRequired,\n      dry_run_gate_passed: dryRunGatePassed,\n      passed,\n      reasons,\n    },\n  };\n}\n\nreturn items.map(item => ({ json: runSendGates(item.json || {}) }));"
+      }
+    },
+    {
+      "id": "if_gates",
+      "name": "C. Send Gates Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        840,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-1",
+              "leftValue": "={{ $json.gates.passed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node_c2",
+      "name": "C2. Gate Rejection Terminal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        220
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\n// HMZ_INJECT_BEGIN:SENDER_CONFIG\r\nconst SENDER_CONFIG = {\"OPERATING_MODE\":\"VALIDATION\",\"DRY_RUN\":true,\"LIVE_CAMPAIGNS\":[],\"LIVE_CREDENTIAL_READY\":true};\r\n// HMZ_INJECT_END:SENDER_CONFIG\n\nconst OPERATING_MODE = SENDER_CONFIG.OPERATING_MODE;\n\nconst DRY_RUN = SENDER_CONFIG.DRY_RUN;\n\nconst LIVE_CAMPAIGNS = SENDER_CONFIG.LIVE_CAMPAIGNS;\n\nconst LIVE_CREDENTIAL_READY = SENDER_CONFIG.LIVE_CREDENTIAL_READY;\n\nconst SEND_RESULT_STATES = {\"SENT\":\"SENT\",\"PERMANENT_FAILURE\":\"PERMANENT_FAILURE\",\"AUTH_OR_PLAN_FAILURE\":\"AUTH_OR_PLAN_FAILURE\",\"INVALID_REPLY_TARGET\":\"INVALID_REPLY_TARGET\",\"RETRY_EXHAUSTED\":\"RETRY_EXHAUSTED\",\"SEND_UNCERTAIN\":\"SEND_UNCERTAIN\"};\n\nconst MAX_SEND_ATTEMPTS = 3;\n\nconst BASE_BACKOFF_MS = 100;\n\nconst MAX_BACKOFF_MS = 2000;\n\nconst RETRY_AFTER_CAP_MS = 5000;\n\nconst RECONCILE_STATES = {\"SENT_RECONCILED\":\"SENT_RECONCILED\",\"HUMAN_REVIEW_ZERO_MATCHES\":\"HUMAN_REVIEW_ZERO_MATCHES\",\"HUMAN_REVIEW_MULTIPLE_MATCHES\":\"HUMAN_REVIEW_MULTIPLE_MATCHES\"};\n\nfunction normalizeEmail(value) {\n  return String(value ?? '').trim().toLowerCase();\n}\n\nfunction djb2Hash(str) {\n  let hash = 5381;\n  for (let i = 0; i < str.length; i++) {\n    hash = (hash << 5) + hash + str.charCodeAt(i);\n    hash = hash & 0xffffffff;\n  }\n  return (hash >>> 0).toString(16).padStart(8, '0');\n}\n\nfunction deriveSendKey({ inboundEmailId, sender, recipient, policyTemplateId }) {\n  const raw = [\n    'HMZ_PHASE4A_SEND',\n    String(inboundEmailId ?? '').trim(),\n    normalizeEmail(sender),\n    normalizeEmail(recipient),\n    String(policyTemplateId ?? '').trim(),\n  ].join('|');\n  return `send-${djb2Hash(raw)}`;\n}\n\nfunction isValidSentEmailObject(body, expected) {\n  const exp = expected || {};\n  const norm = (v) => String(v == null ? '' : v).trim().toLowerCase();\n  const isEmptyAddr = (v) => {\n    if (v === null || v === undefined) return true;\n    if (Array.isArray(v)) return v.length === 0;\n    if (typeof v === 'string') return v.trim().length === 0;\n    return false;\n  };\n  if (!body || typeof body !== 'object') return false;\n  if (typeof body.id !== 'string' || body.id.length === 0) return false;\n  if (typeof body.message_id !== 'string' || body.message_id.length === 0) return false;\n  if (typeof body.thread_id !== 'string' || body.thread_id.length === 0) return false;\n  if (exp.eaccount && body.eaccount !== exp.eaccount) return false;\n  if (exp.recipient) {\n    const recipients = Array.isArray(body.to_address_email_list)\n      ? body.to_address_email_list.map(norm)\n      : String(body.to_address_email_list || '').split(',').map(norm).filter(Boolean);\n    if (!recipients.includes(norm(exp.recipient))) return false;\n  }\n  if (exp.subject && body.subject !== exp.subject) return false;\n  if (!exp.ccBccApproved) {\n    if (!isEmptyAddr(body.cc_address_email_list)) return false;\n    if (!isEmptyAddr(body.bcc_address_email_list)) return false;\n  }\n  return true;\n}\n\nfunction deterministicJitter(attemptNumber) {\n  return (attemptNumber * 37) % 50;\n}\n\nfunction classifySendOutcome(outcome, expected) {\n  const out = outcome || {};\n\n  if (out.kind === 'http') {\n    const status = out.status;\n    const body = out.body;\n    const headers = out.headers || {};\n\n    if (status === 400) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.PERMANENT_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 401 || status === 402 || status === 403) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.AUTH_OR_PLAN_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 404) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.INVALID_REPLY_TARGET, ambiguousSideEffect: false };\n    }\n    if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {\n      const retryAfterRaw = headers['retry-after'] ?? headers['Retry-After'] ?? null;\n      const retryAfterSeconds = retryAfterRaw == null ? null : Number(retryAfterRaw);\n      const retryAfterMs =\n        status === 429 && Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0\n          ? retryAfterSeconds * 1000\n          : null;\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs,\n        ambiguousSideEffect: false,\n      };\n    }\n    if (status >= 200 && status < 300) {\n      if (isValidSentEmailObject(body, expected)) {\n        return { mode: 'terminal', state: SEND_RESULT_STATES.SENT, ambiguousSideEffect: false };\n      }\n      return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  if (out.kind === 'network-error') {\n    const retryablePhases = ['connection-refused', 'pre-submission'];\n    if (retryablePhases.includes(out.errorPhase)) {\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs: null,\n        ambiguousSideEffect: false,\n      };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n}\n\nfunction planSendAttempts(outcomes, options) {\n  const opts = options || {};\n  const jitter = opts.jitter || deterministicJitter;\n  const maxAttempts = opts.maxAttempts || MAX_SEND_ATTEMPTS;\n  const list = Array.isArray(outcomes) ? outcomes : [];\n\n  const attemptOutcomes = [];\n  const backoffDelaysRequested = [];\n  let postSubmissions = 0;\n  let retried = false;\n  let retryAfterHonoured = null;\n  let finalState = null;\n  let secondPostAfterUncertain = false;\n\n  for (let attempt = 1; attempt <= Math.min(maxAttempts, list.length || maxAttempts); attempt++) {\n    const outcome = list[attempt - 1] || { kind: 'network-error', errorPhase: 'pre-submission', serverReceived: false };\n    attemptOutcomes.push(outcome);\n    if (outcome.serverReceived) postSubmissions++;\n\n    const classification = classifySendOutcome(outcome);\n\n    if (classification.mode === 'terminal') {\n      finalState = classification.state;\n      if (finalState === SEND_RESULT_STATES.SEND_UNCERTAIN && attempt < list.length) {\n        secondPostAfterUncertain = true;\n      }\n      break;\n    }\n\n    if (attempt === maxAttempts || attempt === list.length) {\n      finalState = classification.exhaustedState;\n      break;\n    }\n\n    let delayMs;\n    if (classification.retryAfterMs != null) {\n      delayMs = Math.min(classification.retryAfterMs, RETRY_AFTER_CAP_MS);\n      if (retryAfterHonoured === null) retryAfterHonoured = true;\n    } else {\n      if (retryAfterHonoured === null) retryAfterHonoured = false;\n      const exponential = BASE_BACKOFF_MS * 2 ** (attempt - 1);\n      delayMs = Math.min(exponential + jitter(attempt), MAX_BACKOFF_MS);\n    }\n    backoffDelaysRequested.push(delayMs);\n    retried = true;\n  }\n\n  return {\n    finalState,\n    attempts: attemptOutcomes.length,\n    postSubmissions,\n    retried,\n    backoffDelaysRequested,\n    retryAfterHonoured,\n    secondPostAfterUncertain,\n    humanReviewRequired: finalState !== SEND_RESULT_STATES.SENT,\n  };\n}\n\nfunction reconcileMatches(checks, options) {\n  const opts = options || {};\n  const consecutiveRequired = opts.consecutiveRequired || 2;\n  const polls = Array.isArray(checks) ? checks : [];\n\n  let lastSingleMatchId = null;\n  let consecutiveSameSingleMatch = 0;\n\n  for (const matchIds of polls) {\n    const ids = Array.isArray(matchIds) ? matchIds : [];\n    if (ids.length > 1) {\n      return { state: RECONCILE_STATES.HUMAN_REVIEW_MULTIPLE_MATCHES, matchCount: ids.length, matchIds: ids };\n    }\n    if (ids.length === 1) {\n      const currentId = ids[0];\n      if (currentId === lastSingleMatchId) {\n        consecutiveSameSingleMatch += 1;\n      } else {\n        lastSingleMatchId = currentId;\n        consecutiveSameSingleMatch = 1;\n      }\n      if (consecutiveSameSingleMatch >= consecutiveRequired) {\n        return { state: RECONCILE_STATES.SENT_RECONCILED, matchCount: 1, matchId: currentId };\n      }\n    } else {\n      lastSingleMatchId = null;\n      consecutiveSameSingleMatch = 0;\n    }\n  }\n\n  return { state: RECONCILE_STATES.HUMAN_REVIEW_ZERO_MATCHES, matchCount: 0, matchIds: [] };\n}\n\nfunction liveAdapterContract(item) {\n  const input = item || {};\n  const nes = input.nes || {};\n  const threading = nes.threading || {};\n  const reply = nes.reply || {};\n  const draft = input.draft || {};\n\n  const subject = reply.subject || null;\n  const replySubject = subject ? (/^re:/i.test(subject) ? subject : `Re: ${subject}`) : null;\n\n  return {\n    ...input,\n    live_adapter_contract: {\n      reachable: false,\n      blocked: true,\n      reason: 'VALIDATION_MODE_LIVE_ADAPTER_UNREACHABLE',\n      // Verified V3 contract: POST /api/v2/emails/reply with eaccount,\n      // reply_to_uuid, subject, body.text/html. Never sent in Phase 4A.\n      request_contract: {\n        method: 'POST',\n        url: 'https://api.instantly.ai/api/v2/emails/reply',\n        body: {\n          eaccount: nes.eaccount || null,\n          reply_to_uuid: threading.reply_to_uuid || null,\n          subject: replySubject,\n          body: {\n            text: draft.draft_text || null,\n            html: null,\n          },\n        },\n      },\n      retry_policy: {\n        max_attempts: MAX_SEND_ATTEMPTS,\n        base_backoff_ms: BASE_BACKOFF_MS,\n        max_backoff_ms: MAX_BACKOFF_MS,\n        retry_after_cap_ms: RETRY_AFTER_CAP_MS,\n      },\n      classification_contract: 'classifySendOutcome',\n      reconciliation_contract: 'reconcileMatches',\n    },\n  };\n}\n\nfunction buildGateRejectionTerminal(item) {\n  const input = item || {};\n  const gates = input.gates || {};\n  return {\n    ...input,\n    terminal: {\n      schema_version: '1.0',\n      result: 'BLOCKED',\n      send_state: 'BLOCKED',\n      reason: 'send_gates_failed',\n      details: gates.reasons || [],\n      sent: false,\n    },\n  };\n}\n\nreturn items.map(item => ({ json: buildGateRejectionTerminal(item.json || {}) }));"
+      }
+    },
+    {
+      "id": "node_d",
+      "name": "D. Compute Stable Send Key",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        -120
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\n// HMZ_INJECT_BEGIN:SENDER_CONFIG\r\nconst SENDER_CONFIG = {\"OPERATING_MODE\":\"VALIDATION\",\"DRY_RUN\":true,\"LIVE_CAMPAIGNS\":[],\"LIVE_CREDENTIAL_READY\":true};\r\n// HMZ_INJECT_END:SENDER_CONFIG\n\nconst OPERATING_MODE = SENDER_CONFIG.OPERATING_MODE;\n\nconst DRY_RUN = SENDER_CONFIG.DRY_RUN;\n\nconst LIVE_CAMPAIGNS = SENDER_CONFIG.LIVE_CAMPAIGNS;\n\nconst LIVE_CREDENTIAL_READY = SENDER_CONFIG.LIVE_CREDENTIAL_READY;\n\nconst SEND_RESULT_STATES = {\"SENT\":\"SENT\",\"PERMANENT_FAILURE\":\"PERMANENT_FAILURE\",\"AUTH_OR_PLAN_FAILURE\":\"AUTH_OR_PLAN_FAILURE\",\"INVALID_REPLY_TARGET\":\"INVALID_REPLY_TARGET\",\"RETRY_EXHAUSTED\":\"RETRY_EXHAUSTED\",\"SEND_UNCERTAIN\":\"SEND_UNCERTAIN\"};\n\nconst MAX_SEND_ATTEMPTS = 3;\n\nconst BASE_BACKOFF_MS = 100;\n\nconst MAX_BACKOFF_MS = 2000;\n\nconst RETRY_AFTER_CAP_MS = 5000;\n\nconst RECONCILE_STATES = {\"SENT_RECONCILED\":\"SENT_RECONCILED\",\"HUMAN_REVIEW_ZERO_MATCHES\":\"HUMAN_REVIEW_ZERO_MATCHES\",\"HUMAN_REVIEW_MULTIPLE_MATCHES\":\"HUMAN_REVIEW_MULTIPLE_MATCHES\"};\n\nfunction normalizeEmail(value) {\n  return String(value ?? '').trim().toLowerCase();\n}\n\nfunction djb2Hash(str) {\n  let hash = 5381;\n  for (let i = 0; i < str.length; i++) {\n    hash = (hash << 5) + hash + str.charCodeAt(i);\n    hash = hash & 0xffffffff;\n  }\n  return (hash >>> 0).toString(16).padStart(8, '0');\n}\n\nfunction deriveSendKey({ inboundEmailId, sender, recipient, policyTemplateId }) {\n  const raw = [\n    'HMZ_PHASE4A_SEND',\n    String(inboundEmailId ?? '').trim(),\n    normalizeEmail(sender),\n    normalizeEmail(recipient),\n    String(policyTemplateId ?? '').trim(),\n  ].join('|');\n  return `send-${djb2Hash(raw)}`;\n}\n\nfunction isValidSentEmailObject(body, expected) {\n  const exp = expected || {};\n  const norm = (v) => String(v == null ? '' : v).trim().toLowerCase();\n  const isEmptyAddr = (v) => {\n    if (v === null || v === undefined) return true;\n    if (Array.isArray(v)) return v.length === 0;\n    if (typeof v === 'string') return v.trim().length === 0;\n    return false;\n  };\n  if (!body || typeof body !== 'object') return false;\n  if (typeof body.id !== 'string' || body.id.length === 0) return false;\n  if (typeof body.message_id !== 'string' || body.message_id.length === 0) return false;\n  if (typeof body.thread_id !== 'string' || body.thread_id.length === 0) return false;\n  if (exp.eaccount && body.eaccount !== exp.eaccount) return false;\n  if (exp.recipient) {\n    const recipients = Array.isArray(body.to_address_email_list)\n      ? body.to_address_email_list.map(norm)\n      : String(body.to_address_email_list || '').split(',').map(norm).filter(Boolean);\n    if (!recipients.includes(norm(exp.recipient))) return false;\n  }\n  if (exp.subject && body.subject !== exp.subject) return false;\n  if (!exp.ccBccApproved) {\n    if (!isEmptyAddr(body.cc_address_email_list)) return false;\n    if (!isEmptyAddr(body.bcc_address_email_list)) return false;\n  }\n  return true;\n}\n\nfunction deterministicJitter(attemptNumber) {\n  return (attemptNumber * 37) % 50;\n}\n\nfunction classifySendOutcome(outcome, expected) {\n  const out = outcome || {};\n\n  if (out.kind === 'http') {\n    const status = out.status;\n    const body = out.body;\n    const headers = out.headers || {};\n\n    if (status === 400) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.PERMANENT_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 401 || status === 402 || status === 403) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.AUTH_OR_PLAN_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 404) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.INVALID_REPLY_TARGET, ambiguousSideEffect: false };\n    }\n    if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {\n      const retryAfterRaw = headers['retry-after'] ?? headers['Retry-After'] ?? null;\n      const retryAfterSeconds = retryAfterRaw == null ? null : Number(retryAfterRaw);\n      const retryAfterMs =\n        status === 429 && Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0\n          ? retryAfterSeconds * 1000\n          : null;\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs,\n        ambiguousSideEffect: false,\n      };\n    }\n    if (status >= 200 && status < 300) {\n      if (isValidSentEmailObject(body, expected)) {\n        return { mode: 'terminal', state: SEND_RESULT_STATES.SENT, ambiguousSideEffect: false };\n      }\n      return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  if (out.kind === 'network-error') {\n    const retryablePhases = ['connection-refused', 'pre-submission'];\n    if (retryablePhases.includes(out.errorPhase)) {\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs: null,\n        ambiguousSideEffect: false,\n      };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n}\n\nfunction planSendAttempts(outcomes, options) {\n  const opts = options || {};\n  const jitter = opts.jitter || deterministicJitter;\n  const maxAttempts = opts.maxAttempts || MAX_SEND_ATTEMPTS;\n  const list = Array.isArray(outcomes) ? outcomes : [];\n\n  const attemptOutcomes = [];\n  const backoffDelaysRequested = [];\n  let postSubmissions = 0;\n  let retried = false;\n  let retryAfterHonoured = null;\n  let finalState = null;\n  let secondPostAfterUncertain = false;\n\n  for (let attempt = 1; attempt <= Math.min(maxAttempts, list.length || maxAttempts); attempt++) {\n    const outcome = list[attempt - 1] || { kind: 'network-error', errorPhase: 'pre-submission', serverReceived: false };\n    attemptOutcomes.push(outcome);\n    if (outcome.serverReceived) postSubmissions++;\n\n    const classification = classifySendOutcome(outcome);\n\n    if (classification.mode === 'terminal') {\n      finalState = classification.state;\n      if (finalState === SEND_RESULT_STATES.SEND_UNCERTAIN && attempt < list.length) {\n        secondPostAfterUncertain = true;\n      }\n      break;\n    }\n\n    if (attempt === maxAttempts || attempt === list.length) {\n      finalState = classification.exhaustedState;\n      break;\n    }\n\n    let delayMs;\n    if (classification.retryAfterMs != null) {\n      delayMs = Math.min(classification.retryAfterMs, RETRY_AFTER_CAP_MS);\n      if (retryAfterHonoured === null) retryAfterHonoured = true;\n    } else {\n      if (retryAfterHonoured === null) retryAfterHonoured = false;\n      const exponential = BASE_BACKOFF_MS * 2 ** (attempt - 1);\n      delayMs = Math.min(exponential + jitter(attempt), MAX_BACKOFF_MS);\n    }\n    backoffDelaysRequested.push(delayMs);\n    retried = true;\n  }\n\n  return {\n    finalState,\n    attempts: attemptOutcomes.length,\n    postSubmissions,\n    retried,\n    backoffDelaysRequested,\n    retryAfterHonoured,\n    secondPostAfterUncertain,\n    humanReviewRequired: finalState !== SEND_RESULT_STATES.SENT,\n  };\n}\n\nfunction reconcileMatches(checks, options) {\n  const opts = options || {};\n  const consecutiveRequired = opts.consecutiveRequired || 2;\n  const polls = Array.isArray(checks) ? checks : [];\n\n  let lastSingleMatchId = null;\n  let consecutiveSameSingleMatch = 0;\n\n  for (const matchIds of polls) {\n    const ids = Array.isArray(matchIds) ? matchIds : [];\n    if (ids.length > 1) {\n      return { state: RECONCILE_STATES.HUMAN_REVIEW_MULTIPLE_MATCHES, matchCount: ids.length, matchIds: ids };\n    }\n    if (ids.length === 1) {\n      const currentId = ids[0];\n      if (currentId === lastSingleMatchId) {\n        consecutiveSameSingleMatch += 1;\n      } else {\n        lastSingleMatchId = currentId;\n        consecutiveSameSingleMatch = 1;\n      }\n      if (consecutiveSameSingleMatch >= consecutiveRequired) {\n        return { state: RECONCILE_STATES.SENT_RECONCILED, matchCount: 1, matchId: currentId };\n      }\n    } else {\n      lastSingleMatchId = null;\n      consecutiveSameSingleMatch = 0;\n    }\n  }\n\n  return { state: RECONCILE_STATES.HUMAN_REVIEW_ZERO_MATCHES, matchCount: 0, matchIds: [] };\n}\n\nfunction liveAdapterContract(item) {\n  const input = item || {};\n  const nes = input.nes || {};\n  const threading = nes.threading || {};\n  const reply = nes.reply || {};\n  const draft = input.draft || {};\n\n  const subject = reply.subject || null;\n  const replySubject = subject ? (/^re:/i.test(subject) ? subject : `Re: ${subject}`) : null;\n\n  return {\n    ...input,\n    live_adapter_contract: {\n      reachable: false,\n      blocked: true,\n      reason: 'VALIDATION_MODE_LIVE_ADAPTER_UNREACHABLE',\n      // Verified V3 contract: POST /api/v2/emails/reply with eaccount,\n      // reply_to_uuid, subject, body.text/html. Never sent in Phase 4A.\n      request_contract: {\n        method: 'POST',\n        url: 'https://api.instantly.ai/api/v2/emails/reply',\n        body: {\n          eaccount: nes.eaccount || null,\n          reply_to_uuid: threading.reply_to_uuid || null,\n          subject: replySubject,\n          body: {\n            text: draft.draft_text || null,\n            html: null,\n          },\n        },\n      },\n      retry_policy: {\n        max_attempts: MAX_SEND_ATTEMPTS,\n        base_backoff_ms: BASE_BACKOFF_MS,\n        max_backoff_ms: MAX_BACKOFF_MS,\n        retry_after_cap_ms: RETRY_AFTER_CAP_MS,\n      },\n      classification_contract: 'classifySendOutcome',\n      reconciliation_contract: 'reconcileMatches',\n    },\n  };\n}\n\nfunction computeSendKey(item) {\n  const input = item || {};\n  const nes = input.nes || {};\n  const threading = nes.threading || {};\n  const decision = input.decision || {};\n\n  const inboundEmailId = threading.reply_to_uuid || null;\n  const sender = nes.eaccount || null;\n  const recipient = nes.lead_email || null;\n  const policyTemplateId = decision.reply_template_id || 'NO_TEMPLATE';\n\n  return {\n    ...input,\n    send_identity: {\n      inboundEmailId,\n      sender,\n      recipient,\n      policyTemplateId,\n      sendKey: deriveSendKey({ inboundEmailId, sender, recipient, policyTemplateId }),\n    },\n  };\n}\n\nreturn items.map(item => ({ json: computeSendKey(item.json || {}) }));"
+      }
+    },
+    {
+      "id": "node_e_http",
+      "name": "E. Acquire Send Ownership (hmz-send-state)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        -120
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "http://hmz-send-state:5681/v1/send/acquire",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { inboundEmailId: $json.send_identity.inboundEmailId, sender: $json.send_identity.sender, recipient: $json.send_identity.recipient, policyTemplateId: $json.send_identity.policyTemplateId } }}",
+        "options": {
+          "timeout": 5000
+        }
+      }
+    },
+    {
+      "id": "node_e2",
+      "name": "E2. Normalize Acquisition Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        -120
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nconst priorItems = $('D. Compute Stable Send Key').all();\n\n// HMZ_INJECT_BEGIN:SENDER_CONFIG\r\nconst SENDER_CONFIG = {\"OPERATING_MODE\":\"VALIDATION\",\"DRY_RUN\":true,\"LIVE_CAMPAIGNS\":[],\"LIVE_CREDENTIAL_READY\":true};\r\n// HMZ_INJECT_END:SENDER_CONFIG\n\nconst OPERATING_MODE = SENDER_CONFIG.OPERATING_MODE;\n\nconst DRY_RUN = SENDER_CONFIG.DRY_RUN;\n\nconst LIVE_CAMPAIGNS = SENDER_CONFIG.LIVE_CAMPAIGNS;\n\nconst LIVE_CREDENTIAL_READY = SENDER_CONFIG.LIVE_CREDENTIAL_READY;\n\nconst SEND_RESULT_STATES = {\"SENT\":\"SENT\",\"PERMANENT_FAILURE\":\"PERMANENT_FAILURE\",\"AUTH_OR_PLAN_FAILURE\":\"AUTH_OR_PLAN_FAILURE\",\"INVALID_REPLY_TARGET\":\"INVALID_REPLY_TARGET\",\"RETRY_EXHAUSTED\":\"RETRY_EXHAUSTED\",\"SEND_UNCERTAIN\":\"SEND_UNCERTAIN\"};\n\nconst MAX_SEND_ATTEMPTS = 3;\n\nconst BASE_BACKOFF_MS = 100;\n\nconst MAX_BACKOFF_MS = 2000;\n\nconst RETRY_AFTER_CAP_MS = 5000;\n\nconst RECONCILE_STATES = {\"SENT_RECONCILED\":\"SENT_RECONCILED\",\"HUMAN_REVIEW_ZERO_MATCHES\":\"HUMAN_REVIEW_ZERO_MATCHES\",\"HUMAN_REVIEW_MULTIPLE_MATCHES\":\"HUMAN_REVIEW_MULTIPLE_MATCHES\"};\n\nfunction normalizeEmail(value) {\n  return String(value ?? '').trim().toLowerCase();\n}\n\nfunction djb2Hash(str) {\n  let hash = 5381;\n  for (let i = 0; i < str.length; i++) {\n    hash = (hash << 5) + hash + str.charCodeAt(i);\n    hash = hash & 0xffffffff;\n  }\n  return (hash >>> 0).toString(16).padStart(8, '0');\n}\n\nfunction deriveSendKey({ inboundEmailId, sender, recipient, policyTemplateId }) {\n  const raw = [\n    'HMZ_PHASE4A_SEND',\n    String(inboundEmailId ?? '').trim(),\n    normalizeEmail(sender),\n    normalizeEmail(recipient),\n    String(policyTemplateId ?? '').trim(),\n  ].join('|');\n  return `send-${djb2Hash(raw)}`;\n}\n\nfunction isValidSentEmailObject(body, expected) {\n  const exp = expected || {};\n  const norm = (v) => String(v == null ? '' : v).trim().toLowerCase();\n  const isEmptyAddr = (v) => {\n    if (v === null || v === undefined) return true;\n    if (Array.isArray(v)) return v.length === 0;\n    if (typeof v === 'string') return v.trim().length === 0;\n    return false;\n  };\n  if (!body || typeof body !== 'object') return false;\n  if (typeof body.id !== 'string' || body.id.length === 0) return false;\n  if (typeof body.message_id !== 'string' || body.message_id.length === 0) return false;\n  if (typeof body.thread_id !== 'string' || body.thread_id.length === 0) return false;\n  if (exp.eaccount && body.eaccount !== exp.eaccount) return false;\n  if (exp.recipient) {\n    const recipients = Array.isArray(body.to_address_email_list)\n      ? body.to_address_email_list.map(norm)\n      : String(body.to_address_email_list || '').split(',').map(norm).filter(Boolean);\n    if (!recipients.includes(norm(exp.recipient))) return false;\n  }\n  if (exp.subject && body.subject !== exp.subject) return false;\n  if (!exp.ccBccApproved) {\n    if (!isEmptyAddr(body.cc_address_email_list)) return false;\n    if (!isEmptyAddr(body.bcc_address_email_list)) return false;\n  }\n  return true;\n}\n\nfunction deterministicJitter(attemptNumber) {\n  return (attemptNumber * 37) % 50;\n}\n\nfunction classifySendOutcome(outcome, expected) {\n  const out = outcome || {};\n\n  if (out.kind === 'http') {\n    const status = out.status;\n    const body = out.body;\n    const headers = out.headers || {};\n\n    if (status === 400) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.PERMANENT_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 401 || status === 402 || status === 403) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.AUTH_OR_PLAN_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 404) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.INVALID_REPLY_TARGET, ambiguousSideEffect: false };\n    }\n    if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {\n      const retryAfterRaw = headers['retry-after'] ?? headers['Retry-After'] ?? null;\n      const retryAfterSeconds = retryAfterRaw == null ? null : Number(retryAfterRaw);\n      const retryAfterMs =\n        status === 429 && Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0\n          ? retryAfterSeconds * 1000\n          : null;\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs,\n        ambiguousSideEffect: false,\n      };\n    }\n    if (status >= 200 && status < 300) {\n      if (isValidSentEmailObject(body, expected)) {\n        return { mode: 'terminal', state: SEND_RESULT_STATES.SENT, ambiguousSideEffect: false };\n      }\n      return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  if (out.kind === 'network-error') {\n    const retryablePhases = ['connection-refused', 'pre-submission'];\n    if (retryablePhases.includes(out.errorPhase)) {\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs: null,\n        ambiguousSideEffect: false,\n      };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n}\n\nfunction planSendAttempts(outcomes, options) {\n  const opts = options || {};\n  const jitter = opts.jitter || deterministicJitter;\n  const maxAttempts = opts.maxAttempts || MAX_SEND_ATTEMPTS;\n  const list = Array.isArray(outcomes) ? outcomes : [];\n\n  const attemptOutcomes = [];\n  const backoffDelaysRequested = [];\n  let postSubmissions = 0;\n  let retried = false;\n  let retryAfterHonoured = null;\n  let finalState = null;\n  let secondPostAfterUncertain = false;\n\n  for (let attempt = 1; attempt <= Math.min(maxAttempts, list.length || maxAttempts); attempt++) {\n    const outcome = list[attempt - 1] || { kind: 'network-error', errorPhase: 'pre-submission', serverReceived: false };\n    attemptOutcomes.push(outcome);\n    if (outcome.serverReceived) postSubmissions++;\n\n    const classification = classifySendOutcome(outcome);\n\n    if (classification.mode === 'terminal') {\n      finalState = classification.state;\n      if (finalState === SEND_RESULT_STATES.SEND_UNCERTAIN && attempt < list.length) {\n        secondPostAfterUncertain = true;\n      }\n      break;\n    }\n\n    if (attempt === maxAttempts || attempt === list.length) {\n      finalState = classification.exhaustedState;\n      break;\n    }\n\n    let delayMs;\n    if (classification.retryAfterMs != null) {\n      delayMs = Math.min(classification.retryAfterMs, RETRY_AFTER_CAP_MS);\n      if (retryAfterHonoured === null) retryAfterHonoured = true;\n    } else {\n      if (retryAfterHonoured === null) retryAfterHonoured = false;\n      const exponential = BASE_BACKOFF_MS * 2 ** (attempt - 1);\n      delayMs = Math.min(exponential + jitter(attempt), MAX_BACKOFF_MS);\n    }\n    backoffDelaysRequested.push(delayMs);\n    retried = true;\n  }\n\n  return {\n    finalState,\n    attempts: attemptOutcomes.length,\n    postSubmissions,\n    retried,\n    backoffDelaysRequested,\n    retryAfterHonoured,\n    secondPostAfterUncertain,\n    humanReviewRequired: finalState !== SEND_RESULT_STATES.SENT,\n  };\n}\n\nfunction reconcileMatches(checks, options) {\n  const opts = options || {};\n  const consecutiveRequired = opts.consecutiveRequired || 2;\n  const polls = Array.isArray(checks) ? checks : [];\n\n  let lastSingleMatchId = null;\n  let consecutiveSameSingleMatch = 0;\n\n  for (const matchIds of polls) {\n    const ids = Array.isArray(matchIds) ? matchIds : [];\n    if (ids.length > 1) {\n      return { state: RECONCILE_STATES.HUMAN_REVIEW_MULTIPLE_MATCHES, matchCount: ids.length, matchIds: ids };\n    }\n    if (ids.length === 1) {\n      const currentId = ids[0];\n      if (currentId === lastSingleMatchId) {\n        consecutiveSameSingleMatch += 1;\n      } else {\n        lastSingleMatchId = currentId;\n        consecutiveSameSingleMatch = 1;\n      }\n      if (consecutiveSameSingleMatch >= consecutiveRequired) {\n        return { state: RECONCILE_STATES.SENT_RECONCILED, matchCount: 1, matchId: currentId };\n      }\n    } else {\n      lastSingleMatchId = null;\n      consecutiveSameSingleMatch = 0;\n    }\n  }\n\n  return { state: RECONCILE_STATES.HUMAN_REVIEW_ZERO_MATCHES, matchCount: 0, matchIds: [] };\n}\n\nfunction liveAdapterContract(item) {\n  const input = item || {};\n  const nes = input.nes || {};\n  const threading = nes.threading || {};\n  const reply = nes.reply || {};\n  const draft = input.draft || {};\n\n  const subject = reply.subject || null;\n  const replySubject = subject ? (/^re:/i.test(subject) ? subject : `Re: ${subject}`) : null;\n\n  return {\n    ...input,\n    live_adapter_contract: {\n      reachable: false,\n      blocked: true,\n      reason: 'VALIDATION_MODE_LIVE_ADAPTER_UNREACHABLE',\n      // Verified V3 contract: POST /api/v2/emails/reply with eaccount,\n      // reply_to_uuid, subject, body.text/html. Never sent in Phase 4A.\n      request_contract: {\n        method: 'POST',\n        url: 'https://api.instantly.ai/api/v2/emails/reply',\n        body: {\n          eaccount: nes.eaccount || null,\n          reply_to_uuid: threading.reply_to_uuid || null,\n          subject: replySubject,\n          body: {\n            text: draft.draft_text || null,\n            html: null,\n          },\n        },\n      },\n      retry_policy: {\n        max_attempts: MAX_SEND_ATTEMPTS,\n        base_backoff_ms: BASE_BACKOFF_MS,\n        max_backoff_ms: MAX_BACKOFF_MS,\n        retry_after_cap_ms: RETRY_AFTER_CAP_MS,\n      },\n      classification_contract: 'classifySendOutcome',\n      reconciliation_contract: 'reconcileMatches',\n    },\n  };\n}\n\nfunction normalizeAcquisitionResult(priorItem, acquireResponse) {\n  const input = priorItem || {};\n  const response = acquireResponse || {};\n  const acquired = response.acquired === true;\n\n  return {\n    ...input,\n    acquisition: {\n      acquired,\n      blocked: !acquired,\n      reason: response.reason || null,\n      priorState: response.priorState || null,\n      sendKey: response.sendKey || (input.send_identity && input.send_identity.sendKey) || null,\n    },\n  };\n}\n\nreturn items.map((item, idx) => ({ json: normalizeAcquisitionResult((priorItems[idx] && priorItems[idx].json) || {}, item.json || {}) }));"
+      }
+    },
+    {
+      "id": "if_acq",
+      "name": "F. Acquisition Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1960,
+        -120
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-2",
+              "leftValue": "={{ $json.acquisition.acquired }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node_f2",
+      "name": "F2. Blocked Duplicate or Rerun Terminal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        100
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\n// HMZ_INJECT_BEGIN:SENDER_CONFIG\r\nconst SENDER_CONFIG = {\"OPERATING_MODE\":\"VALIDATION\",\"DRY_RUN\":true,\"LIVE_CAMPAIGNS\":[],\"LIVE_CREDENTIAL_READY\":true};\r\n// HMZ_INJECT_END:SENDER_CONFIG\n\nconst OPERATING_MODE = SENDER_CONFIG.OPERATING_MODE;\n\nconst DRY_RUN = SENDER_CONFIG.DRY_RUN;\n\nconst LIVE_CAMPAIGNS = SENDER_CONFIG.LIVE_CAMPAIGNS;\n\nconst LIVE_CREDENTIAL_READY = SENDER_CONFIG.LIVE_CREDENTIAL_READY;\n\nconst SEND_RESULT_STATES = {\"SENT\":\"SENT\",\"PERMANENT_FAILURE\":\"PERMANENT_FAILURE\",\"AUTH_OR_PLAN_FAILURE\":\"AUTH_OR_PLAN_FAILURE\",\"INVALID_REPLY_TARGET\":\"INVALID_REPLY_TARGET\",\"RETRY_EXHAUSTED\":\"RETRY_EXHAUSTED\",\"SEND_UNCERTAIN\":\"SEND_UNCERTAIN\"};\n\nconst MAX_SEND_ATTEMPTS = 3;\n\nconst BASE_BACKOFF_MS = 100;\n\nconst MAX_BACKOFF_MS = 2000;\n\nconst RETRY_AFTER_CAP_MS = 5000;\n\nconst RECONCILE_STATES = {\"SENT_RECONCILED\":\"SENT_RECONCILED\",\"HUMAN_REVIEW_ZERO_MATCHES\":\"HUMAN_REVIEW_ZERO_MATCHES\",\"HUMAN_REVIEW_MULTIPLE_MATCHES\":\"HUMAN_REVIEW_MULTIPLE_MATCHES\"};\n\nfunction normalizeEmail(value) {\n  return String(value ?? '').trim().toLowerCase();\n}\n\nfunction djb2Hash(str) {\n  let hash = 5381;\n  for (let i = 0; i < str.length; i++) {\n    hash = (hash << 5) + hash + str.charCodeAt(i);\n    hash = hash & 0xffffffff;\n  }\n  return (hash >>> 0).toString(16).padStart(8, '0');\n}\n\nfunction deriveSendKey({ inboundEmailId, sender, recipient, policyTemplateId }) {\n  const raw = [\n    'HMZ_PHASE4A_SEND',\n    String(inboundEmailId ?? '').trim(),\n    normalizeEmail(sender),\n    normalizeEmail(recipient),\n    String(policyTemplateId ?? '').trim(),\n  ].join('|');\n  return `send-${djb2Hash(raw)}`;\n}\n\nfunction isValidSentEmailObject(body, expected) {\n  const exp = expected || {};\n  const norm = (v) => String(v == null ? '' : v).trim().toLowerCase();\n  const isEmptyAddr = (v) => {\n    if (v === null || v === undefined) return true;\n    if (Array.isArray(v)) return v.length === 0;\n    if (typeof v === 'string') return v.trim().length === 0;\n    return false;\n  };\n  if (!body || typeof body !== 'object') return false;\n  if (typeof body.id !== 'string' || body.id.length === 0) return false;\n  if (typeof body.message_id !== 'string' || body.message_id.length === 0) return false;\n  if (typeof body.thread_id !== 'string' || body.thread_id.length === 0) return false;\n  if (exp.eaccount && body.eaccount !== exp.eaccount) return false;\n  if (exp.recipient) {\n    const recipients = Array.isArray(body.to_address_email_list)\n      ? body.to_address_email_list.map(norm)\n      : String(body.to_address_email_list || '').split(',').map(norm).filter(Boolean);\n    if (!recipients.includes(norm(exp.recipient))) return false;\n  }\n  if (exp.subject && body.subject !== exp.subject) return false;\n  if (!exp.ccBccApproved) {\n    if (!isEmptyAddr(body.cc_address_email_list)) return false;\n    if (!isEmptyAddr(body.bcc_address_email_list)) return false;\n  }\n  return true;\n}\n\nfunction deterministicJitter(attemptNumber) {\n  return (attemptNumber * 37) % 50;\n}\n\nfunction classifySendOutcome(outcome, expected) {\n  const out = outcome || {};\n\n  if (out.kind === 'http') {\n    const status = out.status;\n    const body = out.body;\n    const headers = out.headers || {};\n\n    if (status === 400) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.PERMANENT_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 401 || status === 402 || status === 403) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.AUTH_OR_PLAN_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 404) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.INVALID_REPLY_TARGET, ambiguousSideEffect: false };\n    }\n    if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {\n      const retryAfterRaw = headers['retry-after'] ?? headers['Retry-After'] ?? null;\n      const retryAfterSeconds = retryAfterRaw == null ? null : Number(retryAfterRaw);\n      const retryAfterMs =\n        status === 429 && Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0\n          ? retryAfterSeconds * 1000\n          : null;\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs,\n        ambiguousSideEffect: false,\n      };\n    }\n    if (status >= 200 && status < 300) {\n      if (isValidSentEmailObject(body, expected)) {\n        return { mode: 'terminal', state: SEND_RESULT_STATES.SENT, ambiguousSideEffect: false };\n      }\n      return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  if (out.kind === 'network-error') {\n    const retryablePhases = ['connection-refused', 'pre-submission'];\n    if (retryablePhases.includes(out.errorPhase)) {\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs: null,\n        ambiguousSideEffect: false,\n      };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n}\n\nfunction planSendAttempts(outcomes, options) {\n  const opts = options || {};\n  const jitter = opts.jitter || deterministicJitter;\n  const maxAttempts = opts.maxAttempts || MAX_SEND_ATTEMPTS;\n  const list = Array.isArray(outcomes) ? outcomes : [];\n\n  const attemptOutcomes = [];\n  const backoffDelaysRequested = [];\n  let postSubmissions = 0;\n  let retried = false;\n  let retryAfterHonoured = null;\n  let finalState = null;\n  let secondPostAfterUncertain = false;\n\n  for (let attempt = 1; attempt <= Math.min(maxAttempts, list.length || maxAttempts); attempt++) {\n    const outcome = list[attempt - 1] || { kind: 'network-error', errorPhase: 'pre-submission', serverReceived: false };\n    attemptOutcomes.push(outcome);\n    if (outcome.serverReceived) postSubmissions++;\n\n    const classification = classifySendOutcome(outcome);\n\n    if (classification.mode === 'terminal') {\n      finalState = classification.state;\n      if (finalState === SEND_RESULT_STATES.SEND_UNCERTAIN && attempt < list.length) {\n        secondPostAfterUncertain = true;\n      }\n      break;\n    }\n\n    if (attempt === maxAttempts || attempt === list.length) {\n      finalState = classification.exhaustedState;\n      break;\n    }\n\n    let delayMs;\n    if (classification.retryAfterMs != null) {\n      delayMs = Math.min(classification.retryAfterMs, RETRY_AFTER_CAP_MS);\n      if (retryAfterHonoured === null) retryAfterHonoured = true;\n    } else {\n      if (retryAfterHonoured === null) retryAfterHonoured = false;\n      const exponential = BASE_BACKOFF_MS * 2 ** (attempt - 1);\n      delayMs = Math.min(exponential + jitter(attempt), MAX_BACKOFF_MS);\n    }\n    backoffDelaysRequested.push(delayMs);\n    retried = true;\n  }\n\n  return {\n    finalState,\n    attempts: attemptOutcomes.length,\n    postSubmissions,\n    retried,\n    backoffDelaysRequested,\n    retryAfterHonoured,\n    secondPostAfterUncertain,\n    humanReviewRequired: finalState !== SEND_RESULT_STATES.SENT,\n  };\n}\n\nfunction reconcileMatches(checks, options) {\n  const opts = options || {};\n  const consecutiveRequired = opts.consecutiveRequired || 2;\n  const polls = Array.isArray(checks) ? checks : [];\n\n  let lastSingleMatchId = null;\n  let consecutiveSameSingleMatch = 0;\n\n  for (const matchIds of polls) {\n    const ids = Array.isArray(matchIds) ? matchIds : [];\n    if (ids.length > 1) {\n      return { state: RECONCILE_STATES.HUMAN_REVIEW_MULTIPLE_MATCHES, matchCount: ids.length, matchIds: ids };\n    }\n    if (ids.length === 1) {\n      const currentId = ids[0];\n      if (currentId === lastSingleMatchId) {\n        consecutiveSameSingleMatch += 1;\n      } else {\n        lastSingleMatchId = currentId;\n        consecutiveSameSingleMatch = 1;\n      }\n      if (consecutiveSameSingleMatch >= consecutiveRequired) {\n        return { state: RECONCILE_STATES.SENT_RECONCILED, matchCount: 1, matchId: currentId };\n      }\n    } else {\n      lastSingleMatchId = null;\n      consecutiveSameSingleMatch = 0;\n    }\n  }\n\n  return { state: RECONCILE_STATES.HUMAN_REVIEW_ZERO_MATCHES, matchCount: 0, matchIds: [] };\n}\n\nfunction liveAdapterContract(item) {\n  const input = item || {};\n  const nes = input.nes || {};\n  const threading = nes.threading || {};\n  const reply = nes.reply || {};\n  const draft = input.draft || {};\n\n  const subject = reply.subject || null;\n  const replySubject = subject ? (/^re:/i.test(subject) ? subject : `Re: ${subject}`) : null;\n\n  return {\n    ...input,\n    live_adapter_contract: {\n      reachable: false,\n      blocked: true,\n      reason: 'VALIDATION_MODE_LIVE_ADAPTER_UNREACHABLE',\n      // Verified V3 contract: POST /api/v2/emails/reply with eaccount,\n      // reply_to_uuid, subject, body.text/html. Never sent in Phase 4A.\n      request_contract: {\n        method: 'POST',\n        url: 'https://api.instantly.ai/api/v2/emails/reply',\n        body: {\n          eaccount: nes.eaccount || null,\n          reply_to_uuid: threading.reply_to_uuid || null,\n          subject: replySubject,\n          body: {\n            text: draft.draft_text || null,\n            html: null,\n          },\n        },\n      },\n      retry_policy: {\n        max_attempts: MAX_SEND_ATTEMPTS,\n        base_backoff_ms: BASE_BACKOFF_MS,\n        max_backoff_ms: MAX_BACKOFF_MS,\n        retry_after_cap_ms: RETRY_AFTER_CAP_MS,\n      },\n      classification_contract: 'classifySendOutcome',\n      reconciliation_contract: 'reconcileMatches',\n    },\n  };\n}\n\nfunction buildBlockedDuplicateTerminal(item) {\n  const input = item || {};\n  const acquisition = input.acquisition || {};\n  return {\n    ...input,\n    terminal: {\n      schema_version: '1.0',\n      result: 'BLOCKED',\n      send_state: 'BLOCKED',\n      reason: acquisition.reason || 'SEND_OWNERSHIP_NOT_ACQUIRED',\n      prior_state: acquisition.priorState || null,\n      send_key: acquisition.sendKey || null,\n      sent: false,\n    },\n  };\n}\n\nreturn items.map(item => ({ json: buildBlockedDuplicateTerminal(item.json || {}) }));"
+      }
+    },
+    {
+      "id": "node_g",
+      "name": "G. Suppression Actions (Mock Adapter)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        -200
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\n// HMZ_INJECT_BEGIN:SENDER_CONFIG\r\nconst SENDER_CONFIG = {\"OPERATING_MODE\":\"VALIDATION\",\"DRY_RUN\":true,\"LIVE_CAMPAIGNS\":[],\"LIVE_CREDENTIAL_READY\":true};\r\n// HMZ_INJECT_END:SENDER_CONFIG\n\nconst OPERATING_MODE = SENDER_CONFIG.OPERATING_MODE;\n\nconst DRY_RUN = SENDER_CONFIG.DRY_RUN;\n\nconst LIVE_CAMPAIGNS = SENDER_CONFIG.LIVE_CAMPAIGNS;\n\nconst LIVE_CREDENTIAL_READY = SENDER_CONFIG.LIVE_CREDENTIAL_READY;\n\nconst SEND_RESULT_STATES = {\"SENT\":\"SENT\",\"PERMANENT_FAILURE\":\"PERMANENT_FAILURE\",\"AUTH_OR_PLAN_FAILURE\":\"AUTH_OR_PLAN_FAILURE\",\"INVALID_REPLY_TARGET\":\"INVALID_REPLY_TARGET\",\"RETRY_EXHAUSTED\":\"RETRY_EXHAUSTED\",\"SEND_UNCERTAIN\":\"SEND_UNCERTAIN\"};\n\nconst MAX_SEND_ATTEMPTS = 3;\n\nconst BASE_BACKOFF_MS = 100;\n\nconst MAX_BACKOFF_MS = 2000;\n\nconst RETRY_AFTER_CAP_MS = 5000;\n\nconst RECONCILE_STATES = {\"SENT_RECONCILED\":\"SENT_RECONCILED\",\"HUMAN_REVIEW_ZERO_MATCHES\":\"HUMAN_REVIEW_ZERO_MATCHES\",\"HUMAN_REVIEW_MULTIPLE_MATCHES\":\"HUMAN_REVIEW_MULTIPLE_MATCHES\"};\n\nfunction normalizeEmail(value) {\n  return String(value ?? '').trim().toLowerCase();\n}\n\nfunction djb2Hash(str) {\n  let hash = 5381;\n  for (let i = 0; i < str.length; i++) {\n    hash = (hash << 5) + hash + str.charCodeAt(i);\n    hash = hash & 0xffffffff;\n  }\n  return (hash >>> 0).toString(16).padStart(8, '0');\n}\n\nfunction deriveSendKey({ inboundEmailId, sender, recipient, policyTemplateId }) {\n  const raw = [\n    'HMZ_PHASE4A_SEND',\n    String(inboundEmailId ?? '').trim(),\n    normalizeEmail(sender),\n    normalizeEmail(recipient),\n    String(policyTemplateId ?? '').trim(),\n  ].join('|');\n  return `send-${djb2Hash(raw)}`;\n}\n\nfunction isValidSentEmailObject(body, expected) {\n  const exp = expected || {};\n  const norm = (v) => String(v == null ? '' : v).trim().toLowerCase();\n  const isEmptyAddr = (v) => {\n    if (v === null || v === undefined) return true;\n    if (Array.isArray(v)) return v.length === 0;\n    if (typeof v === 'string') return v.trim().length === 0;\n    return false;\n  };\n  if (!body || typeof body !== 'object') return false;\n  if (typeof body.id !== 'string' || body.id.length === 0) return false;\n  if (typeof body.message_id !== 'string' || body.message_id.length === 0) return false;\n  if (typeof body.thread_id !== 'string' || body.thread_id.length === 0) return false;\n  if (exp.eaccount && body.eaccount !== exp.eaccount) return false;\n  if (exp.recipient) {\n    const recipients = Array.isArray(body.to_address_email_list)\n      ? body.to_address_email_list.map(norm)\n      : String(body.to_address_email_list || '').split(',').map(norm).filter(Boolean);\n    if (!recipients.includes(norm(exp.recipient))) return false;\n  }\n  if (exp.subject && body.subject !== exp.subject) return false;\n  if (!exp.ccBccApproved) {\n    if (!isEmptyAddr(body.cc_address_email_list)) return false;\n    if (!isEmptyAddr(body.bcc_address_email_list)) return false;\n  }\n  return true;\n}\n\nfunction deterministicJitter(attemptNumber) {\n  return (attemptNumber * 37) % 50;\n}\n\nfunction classifySendOutcome(outcome, expected) {\n  const out = outcome || {};\n\n  if (out.kind === 'http') {\n    const status = out.status;\n    const body = out.body;\n    const headers = out.headers || {};\n\n    if (status === 400) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.PERMANENT_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 401 || status === 402 || status === 403) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.AUTH_OR_PLAN_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 404) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.INVALID_REPLY_TARGET, ambiguousSideEffect: false };\n    }\n    if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {\n      const retryAfterRaw = headers['retry-after'] ?? headers['Retry-After'] ?? null;\n      const retryAfterSeconds = retryAfterRaw == null ? null : Number(retryAfterRaw);\n      const retryAfterMs =\n        status === 429 && Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0\n          ? retryAfterSeconds * 1000\n          : null;\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs,\n        ambiguousSideEffect: false,\n      };\n    }\n    if (status >= 200 && status < 300) {\n      if (isValidSentEmailObject(body, expected)) {\n        return { mode: 'terminal', state: SEND_RESULT_STATES.SENT, ambiguousSideEffect: false };\n      }\n      return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  if (out.kind === 'network-error') {\n    const retryablePhases = ['connection-refused', 'pre-submission'];\n    if (retryablePhases.includes(out.errorPhase)) {\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs: null,\n        ambiguousSideEffect: false,\n      };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n}\n\nfunction planSendAttempts(outcomes, options) {\n  const opts = options || {};\n  const jitter = opts.jitter || deterministicJitter;\n  const maxAttempts = opts.maxAttempts || MAX_SEND_ATTEMPTS;\n  const list = Array.isArray(outcomes) ? outcomes : [];\n\n  const attemptOutcomes = [];\n  const backoffDelaysRequested = [];\n  let postSubmissions = 0;\n  let retried = false;\n  let retryAfterHonoured = null;\n  let finalState = null;\n  let secondPostAfterUncertain = false;\n\n  for (let attempt = 1; attempt <= Math.min(maxAttempts, list.length || maxAttempts); attempt++) {\n    const outcome = list[attempt - 1] || { kind: 'network-error', errorPhase: 'pre-submission', serverReceived: false };\n    attemptOutcomes.push(outcome);\n    if (outcome.serverReceived) postSubmissions++;\n\n    const classification = classifySendOutcome(outcome);\n\n    if (classification.mode === 'terminal') {\n      finalState = classification.state;\n      if (finalState === SEND_RESULT_STATES.SEND_UNCERTAIN && attempt < list.length) {\n        secondPostAfterUncertain = true;\n      }\n      break;\n    }\n\n    if (attempt === maxAttempts || attempt === list.length) {\n      finalState = classification.exhaustedState;\n      break;\n    }\n\n    let delayMs;\n    if (classification.retryAfterMs != null) {\n      delayMs = Math.min(classification.retryAfterMs, RETRY_AFTER_CAP_MS);\n      if (retryAfterHonoured === null) retryAfterHonoured = true;\n    } else {\n      if (retryAfterHonoured === null) retryAfterHonoured = false;\n      const exponential = BASE_BACKOFF_MS * 2 ** (attempt - 1);\n      delayMs = Math.min(exponential + jitter(attempt), MAX_BACKOFF_MS);\n    }\n    backoffDelaysRequested.push(delayMs);\n    retried = true;\n  }\n\n  return {\n    finalState,\n    attempts: attemptOutcomes.length,\n    postSubmissions,\n    retried,\n    backoffDelaysRequested,\n    retryAfterHonoured,\n    secondPostAfterUncertain,\n    humanReviewRequired: finalState !== SEND_RESULT_STATES.SENT,\n  };\n}\n\nfunction reconcileMatches(checks, options) {\n  const opts = options || {};\n  const consecutiveRequired = opts.consecutiveRequired || 2;\n  const polls = Array.isArray(checks) ? checks : [];\n\n  let lastSingleMatchId = null;\n  let consecutiveSameSingleMatch = 0;\n\n  for (const matchIds of polls) {\n    const ids = Array.isArray(matchIds) ? matchIds : [];\n    if (ids.length > 1) {\n      return { state: RECONCILE_STATES.HUMAN_REVIEW_MULTIPLE_MATCHES, matchCount: ids.length, matchIds: ids };\n    }\n    if (ids.length === 1) {\n      const currentId = ids[0];\n      if (currentId === lastSingleMatchId) {\n        consecutiveSameSingleMatch += 1;\n      } else {\n        lastSingleMatchId = currentId;\n        consecutiveSameSingleMatch = 1;\n      }\n      if (consecutiveSameSingleMatch >= consecutiveRequired) {\n        return { state: RECONCILE_STATES.SENT_RECONCILED, matchCount: 1, matchId: currentId };\n      }\n    } else {\n      lastSingleMatchId = null;\n      consecutiveSameSingleMatch = 0;\n    }\n  }\n\n  return { state: RECONCILE_STATES.HUMAN_REVIEW_ZERO_MATCHES, matchCount: 0, matchIds: [] };\n}\n\nfunction liveAdapterContract(item) {\n  const input = item || {};\n  const nes = input.nes || {};\n  const threading = nes.threading || {};\n  const reply = nes.reply || {};\n  const draft = input.draft || {};\n\n  const subject = reply.subject || null;\n  const replySubject = subject ? (/^re:/i.test(subject) ? subject : `Re: ${subject}`) : null;\n\n  return {\n    ...input,\n    live_adapter_contract: {\n      reachable: false,\n      blocked: true,\n      reason: 'VALIDATION_MODE_LIVE_ADAPTER_UNREACHABLE',\n      // Verified V3 contract: POST /api/v2/emails/reply with eaccount,\n      // reply_to_uuid, subject, body.text/html. Never sent in Phase 4A.\n      request_contract: {\n        method: 'POST',\n        url: 'https://api.instantly.ai/api/v2/emails/reply',\n        body: {\n          eaccount: nes.eaccount || null,\n          reply_to_uuid: threading.reply_to_uuid || null,\n          subject: replySubject,\n          body: {\n            text: draft.draft_text || null,\n            html: null,\n          },\n        },\n      },\n      retry_policy: {\n        max_attempts: MAX_SEND_ATTEMPTS,\n        base_backoff_ms: BASE_BACKOFF_MS,\n        max_backoff_ms: MAX_BACKOFF_MS,\n        retry_after_cap_ms: RETRY_AFTER_CAP_MS,\n      },\n      classification_contract: 'classifySendOutcome',\n      reconciliation_contract: 'reconcileMatches',\n    },\n  };\n}\n\nfunction mockSuppressionAdapter(item) {\n  const input = item || {};\n  const decision = input.decision || {};\n\n  const required =\n    decision.address_suppression_intent === 'ORGANISATION_DNC' ||\n    decision.address_suppression_intent === 'GLOBAL_BLOCKLIST' ||\n    decision.durable_dnc_intent === true;\n\n  if (!required) {\n    return {\n      ...input,\n      suppression: {\n        required: false,\n        source_campaign_action: { performed: false, status: 'NOT_REQUIRED' },\n        workspace_blocklist_action: { performed: false, status: 'NOT_REQUIRED' },\n      },\n    };\n  }\n\n  // Deterministic mock adapter. test_overrides lets the offline harness\n  // exercise the partial-failure / escalation path without any network\n  // access.\n  const overrides = input.test_overrides || {};\n  const sourceStatus = overrides.source_campaign_action_status || 'VERIFIED';\n  const blocklistStatus = overrides.workspace_blocklist_action_status || 'VERIFIED';\n\n  return {\n    ...input,\n    suppression: {\n      required: true,\n      source_campaign_action: {\n        performed: true,\n        status: sourceStatus,\n        action: 'update_interest_status_and_remove_subsequence',\n      },\n      workspace_blocklist_action: {\n        performed: true,\n        status: blocklistStatus,\n        action: 'exact_email_blocklist_insert',\n      },\n    },\n  };\n}\n\nreturn items.map(item => ({ json: mockSuppressionAdapter(item.json || {}) }));"
+      }
+    },
+    {
+      "id": "node_h",
+      "name": "H. Verify Suppression Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2520,
+        -200
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\n// HMZ_INJECT_BEGIN:SENDER_CONFIG\r\nconst SENDER_CONFIG = {\"OPERATING_MODE\":\"VALIDATION\",\"DRY_RUN\":true,\"LIVE_CAMPAIGNS\":[],\"LIVE_CREDENTIAL_READY\":true};\r\n// HMZ_INJECT_END:SENDER_CONFIG\n\nconst OPERATING_MODE = SENDER_CONFIG.OPERATING_MODE;\n\nconst DRY_RUN = SENDER_CONFIG.DRY_RUN;\n\nconst LIVE_CAMPAIGNS = SENDER_CONFIG.LIVE_CAMPAIGNS;\n\nconst LIVE_CREDENTIAL_READY = SENDER_CONFIG.LIVE_CREDENTIAL_READY;\n\nconst SEND_RESULT_STATES = {\"SENT\":\"SENT\",\"PERMANENT_FAILURE\":\"PERMANENT_FAILURE\",\"AUTH_OR_PLAN_FAILURE\":\"AUTH_OR_PLAN_FAILURE\",\"INVALID_REPLY_TARGET\":\"INVALID_REPLY_TARGET\",\"RETRY_EXHAUSTED\":\"RETRY_EXHAUSTED\",\"SEND_UNCERTAIN\":\"SEND_UNCERTAIN\"};\n\nconst MAX_SEND_ATTEMPTS = 3;\n\nconst BASE_BACKOFF_MS = 100;\n\nconst MAX_BACKOFF_MS = 2000;\n\nconst RETRY_AFTER_CAP_MS = 5000;\n\nconst RECONCILE_STATES = {\"SENT_RECONCILED\":\"SENT_RECONCILED\",\"HUMAN_REVIEW_ZERO_MATCHES\":\"HUMAN_REVIEW_ZERO_MATCHES\",\"HUMAN_REVIEW_MULTIPLE_MATCHES\":\"HUMAN_REVIEW_MULTIPLE_MATCHES\"};\n\nfunction normalizeEmail(value) {\n  return String(value ?? '').trim().toLowerCase();\n}\n\nfunction djb2Hash(str) {\n  let hash = 5381;\n  for (let i = 0; i < str.length; i++) {\n    hash = (hash << 5) + hash + str.charCodeAt(i);\n    hash = hash & 0xffffffff;\n  }\n  return (hash >>> 0).toString(16).padStart(8, '0');\n}\n\nfunction deriveSendKey({ inboundEmailId, sender, recipient, policyTemplateId }) {\n  const raw = [\n    'HMZ_PHASE4A_SEND',\n    String(inboundEmailId ?? '').trim(),\n    normalizeEmail(sender),\n    normalizeEmail(recipient),\n    String(policyTemplateId ?? '').trim(),\n  ].join('|');\n  return `send-${djb2Hash(raw)}`;\n}\n\nfunction isValidSentEmailObject(body, expected) {\n  const exp = expected || {};\n  const norm = (v) => String(v == null ? '' : v).trim().toLowerCase();\n  const isEmptyAddr = (v) => {\n    if (v === null || v === undefined) return true;\n    if (Array.isArray(v)) return v.length === 0;\n    if (typeof v === 'string') return v.trim().length === 0;\n    return false;\n  };\n  if (!body || typeof body !== 'object') return false;\n  if (typeof body.id !== 'string' || body.id.length === 0) return false;\n  if (typeof body.message_id !== 'string' || body.message_id.length === 0) return false;\n  if (typeof body.thread_id !== 'string' || body.thread_id.length === 0) return false;\n  if (exp.eaccount && body.eaccount !== exp.eaccount) return false;\n  if (exp.recipient) {\n    const recipients = Array.isArray(body.to_address_email_list)\n      ? body.to_address_email_list.map(norm)\n      : String(body.to_address_email_list || '').split(',').map(norm).filter(Boolean);\n    if (!recipients.includes(norm(exp.recipient))) return false;\n  }\n  if (exp.subject && body.subject !== exp.subject) return false;\n  if (!exp.ccBccApproved) {\n    if (!isEmptyAddr(body.cc_address_email_list)) return false;\n    if (!isEmptyAddr(body.bcc_address_email_list)) return false;\n  }\n  return true;\n}\n\nfunction deterministicJitter(attemptNumber) {\n  return (attemptNumber * 37) % 50;\n}\n\nfunction classifySendOutcome(outcome, expected) {\n  const out = outcome || {};\n\n  if (out.kind === 'http') {\n    const status = out.status;\n    const body = out.body;\n    const headers = out.headers || {};\n\n    if (status === 400) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.PERMANENT_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 401 || status === 402 || status === 403) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.AUTH_OR_PLAN_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 404) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.INVALID_REPLY_TARGET, ambiguousSideEffect: false };\n    }\n    if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {\n      const retryAfterRaw = headers['retry-after'] ?? headers['Retry-After'] ?? null;\n      const retryAfterSeconds = retryAfterRaw == null ? null : Number(retryAfterRaw);\n      const retryAfterMs =\n        status === 429 && Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0\n          ? retryAfterSeconds * 1000\n          : null;\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs,\n        ambiguousSideEffect: false,\n      };\n    }\n    if (status >= 200 && status < 300) {\n      if (isValidSentEmailObject(body, expected)) {\n        return { mode: 'terminal', state: SEND_RESULT_STATES.SENT, ambiguousSideEffect: false };\n      }\n      return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  if (out.kind === 'network-error') {\n    const retryablePhases = ['connection-refused', 'pre-submission'];\n    if (retryablePhases.includes(out.errorPhase)) {\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs: null,\n        ambiguousSideEffect: false,\n      };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n}\n\nfunction planSendAttempts(outcomes, options) {\n  const opts = options || {};\n  const jitter = opts.jitter || deterministicJitter;\n  const maxAttempts = opts.maxAttempts || MAX_SEND_ATTEMPTS;\n  const list = Array.isArray(outcomes) ? outcomes : [];\n\n  const attemptOutcomes = [];\n  const backoffDelaysRequested = [];\n  let postSubmissions = 0;\n  let retried = false;\n  let retryAfterHonoured = null;\n  let finalState = null;\n  let secondPostAfterUncertain = false;\n\n  for (let attempt = 1; attempt <= Math.min(maxAttempts, list.length || maxAttempts); attempt++) {\n    const outcome = list[attempt - 1] || { kind: 'network-error', errorPhase: 'pre-submission', serverReceived: false };\n    attemptOutcomes.push(outcome);\n    if (outcome.serverReceived) postSubmissions++;\n\n    const classification = classifySendOutcome(outcome);\n\n    if (classification.mode === 'terminal') {\n      finalState = classification.state;\n      if (finalState === SEND_RESULT_STATES.SEND_UNCERTAIN && attempt < list.length) {\n        secondPostAfterUncertain = true;\n      }\n      break;\n    }\n\n    if (attempt === maxAttempts || attempt === list.length) {\n      finalState = classification.exhaustedState;\n      break;\n    }\n\n    let delayMs;\n    if (classification.retryAfterMs != null) {\n      delayMs = Math.min(classification.retryAfterMs, RETRY_AFTER_CAP_MS);\n      if (retryAfterHonoured === null) retryAfterHonoured = true;\n    } else {\n      if (retryAfterHonoured === null) retryAfterHonoured = false;\n      const exponential = BASE_BACKOFF_MS * 2 ** (attempt - 1);\n      delayMs = Math.min(exponential + jitter(attempt), MAX_BACKOFF_MS);\n    }\n    backoffDelaysRequested.push(delayMs);\n    retried = true;\n  }\n\n  return {\n    finalState,\n    attempts: attemptOutcomes.length,\n    postSubmissions,\n    retried,\n    backoffDelaysRequested,\n    retryAfterHonoured,\n    secondPostAfterUncertain,\n    humanReviewRequired: finalState !== SEND_RESULT_STATES.SENT,\n  };\n}\n\nfunction reconcileMatches(checks, options) {\n  const opts = options || {};\n  const consecutiveRequired = opts.consecutiveRequired || 2;\n  const polls = Array.isArray(checks) ? checks : [];\n\n  let lastSingleMatchId = null;\n  let consecutiveSameSingleMatch = 0;\n\n  for (const matchIds of polls) {\n    const ids = Array.isArray(matchIds) ? matchIds : [];\n    if (ids.length > 1) {\n      return { state: RECONCILE_STATES.HUMAN_REVIEW_MULTIPLE_MATCHES, matchCount: ids.length, matchIds: ids };\n    }\n    if (ids.length === 1) {\n      const currentId = ids[0];\n      if (currentId === lastSingleMatchId) {\n        consecutiveSameSingleMatch += 1;\n      } else {\n        lastSingleMatchId = currentId;\n        consecutiveSameSingleMatch = 1;\n      }\n      if (consecutiveSameSingleMatch >= consecutiveRequired) {\n        return { state: RECONCILE_STATES.SENT_RECONCILED, matchCount: 1, matchId: currentId };\n      }\n    } else {\n      lastSingleMatchId = null;\n      consecutiveSameSingleMatch = 0;\n    }\n  }\n\n  return { state: RECONCILE_STATES.HUMAN_REVIEW_ZERO_MATCHES, matchCount: 0, matchIds: [] };\n}\n\nfunction liveAdapterContract(item) {\n  const input = item || {};\n  const nes = input.nes || {};\n  const threading = nes.threading || {};\n  const reply = nes.reply || {};\n  const draft = input.draft || {};\n\n  const subject = reply.subject || null;\n  const replySubject = subject ? (/^re:/i.test(subject) ? subject : `Re: ${subject}`) : null;\n\n  return {\n    ...input,\n    live_adapter_contract: {\n      reachable: false,\n      blocked: true,\n      reason: 'VALIDATION_MODE_LIVE_ADAPTER_UNREACHABLE',\n      // Verified V3 contract: POST /api/v2/emails/reply with eaccount,\n      // reply_to_uuid, subject, body.text/html. Never sent in Phase 4A.\n      request_contract: {\n        method: 'POST',\n        url: 'https://api.instantly.ai/api/v2/emails/reply',\n        body: {\n          eaccount: nes.eaccount || null,\n          reply_to_uuid: threading.reply_to_uuid || null,\n          subject: replySubject,\n          body: {\n            text: draft.draft_text || null,\n            html: null,\n          },\n        },\n      },\n      retry_policy: {\n        max_attempts: MAX_SEND_ATTEMPTS,\n        base_backoff_ms: BASE_BACKOFF_MS,\n        max_backoff_ms: MAX_BACKOFF_MS,\n        retry_after_cap_ms: RETRY_AFTER_CAP_MS,\n      },\n      classification_contract: 'classifySendOutcome',\n      reconciliation_contract: 'reconcileMatches',\n    },\n  };\n}\n\nfunction verifySuppressionResults(item) {\n  const input = item || {};\n  const suppression = input.suppression || {};\n\n  if (!suppression.required) {\n    return {\n      ...input,\n      suppression_verification: {\n        verified: true,\n        escalate: false,\n        source_campaign_verified: true,\n        workspace_blocklist_verified: true,\n        reason: 'NOT_REQUIRED',\n      },\n    };\n  }\n\n  const sourceOk = (suppression.source_campaign_action || {}).status === 'VERIFIED';\n  const blocklistOk = (suppression.workspace_blocklist_action || {}).status === 'VERIFIED';\n  const verified = sourceOk && blocklistOk;\n\n  return {\n    ...input,\n    suppression_verification: {\n      verified,\n      escalate: !verified,\n      source_campaign_verified: sourceOk,\n      workspace_blocklist_verified: blocklistOk,\n      reason: verified ? 'BOTH_ACTIONS_VERIFIED' : 'PARTIAL_OR_FAILED_SUPPRESSION',\n    },\n  };\n}\n\nreturn items.map(item => ({ json: verifySuppressionResults(item.json || {}) }));"
+      }
+    },
+    {
+      "id": "if_supp",
+      "name": "I. Suppression Verified Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2800,
+        -200
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-3",
+              "leftValue": "={{ $json.suppression_verification.verified }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node_i2",
+      "name": "I2. Suppression Escalation Terminal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3080,
+        60
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\n// HMZ_INJECT_BEGIN:SENDER_CONFIG\r\nconst SENDER_CONFIG = {\"OPERATING_MODE\":\"VALIDATION\",\"DRY_RUN\":true,\"LIVE_CAMPAIGNS\":[],\"LIVE_CREDENTIAL_READY\":true};\r\n// HMZ_INJECT_END:SENDER_CONFIG\n\nconst OPERATING_MODE = SENDER_CONFIG.OPERATING_MODE;\n\nconst DRY_RUN = SENDER_CONFIG.DRY_RUN;\n\nconst LIVE_CAMPAIGNS = SENDER_CONFIG.LIVE_CAMPAIGNS;\n\nconst LIVE_CREDENTIAL_READY = SENDER_CONFIG.LIVE_CREDENTIAL_READY;\n\nconst SEND_RESULT_STATES = {\"SENT\":\"SENT\",\"PERMANENT_FAILURE\":\"PERMANENT_FAILURE\",\"AUTH_OR_PLAN_FAILURE\":\"AUTH_OR_PLAN_FAILURE\",\"INVALID_REPLY_TARGET\":\"INVALID_REPLY_TARGET\",\"RETRY_EXHAUSTED\":\"RETRY_EXHAUSTED\",\"SEND_UNCERTAIN\":\"SEND_UNCERTAIN\"};\n\nconst MAX_SEND_ATTEMPTS = 3;\n\nconst BASE_BACKOFF_MS = 100;\n\nconst MAX_BACKOFF_MS = 2000;\n\nconst RETRY_AFTER_CAP_MS = 5000;\n\nconst RECONCILE_STATES = {\"SENT_RECONCILED\":\"SENT_RECONCILED\",\"HUMAN_REVIEW_ZERO_MATCHES\":\"HUMAN_REVIEW_ZERO_MATCHES\",\"HUMAN_REVIEW_MULTIPLE_MATCHES\":\"HUMAN_REVIEW_MULTIPLE_MATCHES\"};\n\nfunction normalizeEmail(value) {\n  return String(value ?? '').trim().toLowerCase();\n}\n\nfunction djb2Hash(str) {\n  let hash = 5381;\n  for (let i = 0; i < str.length; i++) {\n    hash = (hash << 5) + hash + str.charCodeAt(i);\n    hash = hash & 0xffffffff;\n  }\n  return (hash >>> 0).toString(16).padStart(8, '0');\n}\n\nfunction deriveSendKey({ inboundEmailId, sender, recipient, policyTemplateId }) {\n  const raw = [\n    'HMZ_PHASE4A_SEND',\n    String(inboundEmailId ?? '').trim(),\n    normalizeEmail(sender),\n    normalizeEmail(recipient),\n    String(policyTemplateId ?? '').trim(),\n  ].join('|');\n  return `send-${djb2Hash(raw)}`;\n}\n\nfunction isValidSentEmailObject(body, expected) {\n  const exp = expected || {};\n  const norm = (v) => String(v == null ? '' : v).trim().toLowerCase();\n  const isEmptyAddr = (v) => {\n    if (v === null || v === undefined) return true;\n    if (Array.isArray(v)) return v.length === 0;\n    if (typeof v === 'string') return v.trim().length === 0;\n    return false;\n  };\n  if (!body || typeof body !== 'object') return false;\n  if (typeof body.id !== 'string' || body.id.length === 0) return false;\n  if (typeof body.message_id !== 'string' || body.message_id.length === 0) return false;\n  if (typeof body.thread_id !== 'string' || body.thread_id.length === 0) return false;\n  if (exp.eaccount && body.eaccount !== exp.eaccount) return false;\n  if (exp.recipient) {\n    const recipients = Array.isArray(body.to_address_email_list)\n      ? body.to_address_email_list.map(norm)\n      : String(body.to_address_email_list || '').split(',').map(norm).filter(Boolean);\n    if (!recipients.includes(norm(exp.recipient))) return false;\n  }\n  if (exp.subject && body.subject !== exp.subject) return false;\n  if (!exp.ccBccApproved) {\n    if (!isEmptyAddr(body.cc_address_email_list)) return false;\n    if (!isEmptyAddr(body.bcc_address_email_list)) return false;\n  }\n  return true;\n}\n\nfunction deterministicJitter(attemptNumber) {\n  return (attemptNumber * 37) % 50;\n}\n\nfunction classifySendOutcome(outcome, expected) {\n  const out = outcome || {};\n\n  if (out.kind === 'http') {\n    const status = out.status;\n    const body = out.body;\n    const headers = out.headers || {};\n\n    if (status === 400) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.PERMANENT_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 401 || status === 402 || status === 403) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.AUTH_OR_PLAN_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 404) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.INVALID_REPLY_TARGET, ambiguousSideEffect: false };\n    }\n    if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {\n      const retryAfterRaw = headers['retry-after'] ?? headers['Retry-After'] ?? null;\n      const retryAfterSeconds = retryAfterRaw == null ? null : Number(retryAfterRaw);\n      const retryAfterMs =\n        status === 429 && Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0\n          ? retryAfterSeconds * 1000\n          : null;\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs,\n        ambiguousSideEffect: false,\n      };\n    }\n    if (status >= 200 && status < 300) {\n      if (isValidSentEmailObject(body, expected)) {\n        return { mode: 'terminal', state: SEND_RESULT_STATES.SENT, ambiguousSideEffect: false };\n      }\n      return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  if (out.kind === 'network-error') {\n    const retryablePhases = ['connection-refused', 'pre-submission'];\n    if (retryablePhases.includes(out.errorPhase)) {\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs: null,\n        ambiguousSideEffect: false,\n      };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n}\n\nfunction planSendAttempts(outcomes, options) {\n  const opts = options || {};\n  const jitter = opts.jitter || deterministicJitter;\n  const maxAttempts = opts.maxAttempts || MAX_SEND_ATTEMPTS;\n  const list = Array.isArray(outcomes) ? outcomes : [];\n\n  const attemptOutcomes = [];\n  const backoffDelaysRequested = [];\n  let postSubmissions = 0;\n  let retried = false;\n  let retryAfterHonoured = null;\n  let finalState = null;\n  let secondPostAfterUncertain = false;\n\n  for (let attempt = 1; attempt <= Math.min(maxAttempts, list.length || maxAttempts); attempt++) {\n    const outcome = list[attempt - 1] || { kind: 'network-error', errorPhase: 'pre-submission', serverReceived: false };\n    attemptOutcomes.push(outcome);\n    if (outcome.serverReceived) postSubmissions++;\n\n    const classification = classifySendOutcome(outcome);\n\n    if (classification.mode === 'terminal') {\n      finalState = classification.state;\n      if (finalState === SEND_RESULT_STATES.SEND_UNCERTAIN && attempt < list.length) {\n        secondPostAfterUncertain = true;\n      }\n      break;\n    }\n\n    if (attempt === maxAttempts || attempt === list.length) {\n      finalState = classification.exhaustedState;\n      break;\n    }\n\n    let delayMs;\n    if (classification.retryAfterMs != null) {\n      delayMs = Math.min(classification.retryAfterMs, RETRY_AFTER_CAP_MS);\n      if (retryAfterHonoured === null) retryAfterHonoured = true;\n    } else {\n      if (retryAfterHonoured === null) retryAfterHonoured = false;\n      const exponential = BASE_BACKOFF_MS * 2 ** (attempt - 1);\n      delayMs = Math.min(exponential + jitter(attempt), MAX_BACKOFF_MS);\n    }\n    backoffDelaysRequested.push(delayMs);\n    retried = true;\n  }\n\n  return {\n    finalState,\n    attempts: attemptOutcomes.length,\n    postSubmissions,\n    retried,\n    backoffDelaysRequested,\n    retryAfterHonoured,\n    secondPostAfterUncertain,\n    humanReviewRequired: finalState !== SEND_RESULT_STATES.SENT,\n  };\n}\n\nfunction reconcileMatches(checks, options) {\n  const opts = options || {};\n  const consecutiveRequired = opts.consecutiveRequired || 2;\n  const polls = Array.isArray(checks) ? checks : [];\n\n  let lastSingleMatchId = null;\n  let consecutiveSameSingleMatch = 0;\n\n  for (const matchIds of polls) {\n    const ids = Array.isArray(matchIds) ? matchIds : [];\n    if (ids.length > 1) {\n      return { state: RECONCILE_STATES.HUMAN_REVIEW_MULTIPLE_MATCHES, matchCount: ids.length, matchIds: ids };\n    }\n    if (ids.length === 1) {\n      const currentId = ids[0];\n      if (currentId === lastSingleMatchId) {\n        consecutiveSameSingleMatch += 1;\n      } else {\n        lastSingleMatchId = currentId;\n        consecutiveSameSingleMatch = 1;\n      }\n      if (consecutiveSameSingleMatch >= consecutiveRequired) {\n        return { state: RECONCILE_STATES.SENT_RECONCILED, matchCount: 1, matchId: currentId };\n      }\n    } else {\n      lastSingleMatchId = null;\n      consecutiveSameSingleMatch = 0;\n    }\n  }\n\n  return { state: RECONCILE_STATES.HUMAN_REVIEW_ZERO_MATCHES, matchCount: 0, matchIds: [] };\n}\n\nfunction liveAdapterContract(item) {\n  const input = item || {};\n  const nes = input.nes || {};\n  const threading = nes.threading || {};\n  const reply = nes.reply || {};\n  const draft = input.draft || {};\n\n  const subject = reply.subject || null;\n  const replySubject = subject ? (/^re:/i.test(subject) ? subject : `Re: ${subject}`) : null;\n\n  return {\n    ...input,\n    live_adapter_contract: {\n      reachable: false,\n      blocked: true,\n      reason: 'VALIDATION_MODE_LIVE_ADAPTER_UNREACHABLE',\n      // Verified V3 contract: POST /api/v2/emails/reply with eaccount,\n      // reply_to_uuid, subject, body.text/html. Never sent in Phase 4A.\n      request_contract: {\n        method: 'POST',\n        url: 'https://api.instantly.ai/api/v2/emails/reply',\n        body: {\n          eaccount: nes.eaccount || null,\n          reply_to_uuid: threading.reply_to_uuid || null,\n          subject: replySubject,\n          body: {\n            text: draft.draft_text || null,\n            html: null,\n          },\n        },\n      },\n      retry_policy: {\n        max_attempts: MAX_SEND_ATTEMPTS,\n        base_backoff_ms: BASE_BACKOFF_MS,\n        max_backoff_ms: MAX_BACKOFF_MS,\n        retry_after_cap_ms: RETRY_AFTER_CAP_MS,\n      },\n      classification_contract: 'classifySendOutcome',\n      reconciliation_contract: 'reconcileMatches',\n    },\n  };\n}\n\nfunction buildSuppressionEscalationTerminal(item) {\n  const input = item || {};\n  return {\n    ...input,\n    terminal: {\n      schema_version: '1.0',\n      result: 'ESCALATED',\n      send_state: 'BLOCKED',\n      reason: 'suppression_verification_failed',\n      details: input.suppression_verification || {},\n      sent: false,\n    },\n  };\n}\n\nreturn items.map(item => ({ json: buildSuppressionEscalationTerminal(item.json || {}) }));"
+      }
+    },
+    {
+      "id": "if_dryrun",
+      "name": "J. DRY_RUN Gate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3080,
+        -280
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-4",
+              "leftValue": "={{ $json.gates.dry_run_gate_passed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node_k_http",
+      "name": "K. Transition to DRY_RUN_OK (hmz-send-state)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3360,
+        -280
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "http://hmz-send-state:5681/v1/send/transition",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { sendKey: $json.acquisition.sendKey, toState: 'DRY_RUN_OK', details: { category: $json.decision.category, intakeId: $json.nes.intake_id, reason: 'dry_run_validation' } } }}",
+        "options": {
+          "timeout": 5000
+        }
+      }
+    },
+    {
+      "id": "node_k2",
+      "name": "K2. Build DRY_RUN Terminal Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3640,
+        -280
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nconst priorItems = $('H. Verify Suppression Results').all();\n\n// HMZ_INJECT_BEGIN:SENDER_CONFIG\r\nconst SENDER_CONFIG = {\"OPERATING_MODE\":\"VALIDATION\",\"DRY_RUN\":true,\"LIVE_CAMPAIGNS\":[],\"LIVE_CREDENTIAL_READY\":true};\r\n// HMZ_INJECT_END:SENDER_CONFIG\n\nconst OPERATING_MODE = SENDER_CONFIG.OPERATING_MODE;\n\nconst DRY_RUN = SENDER_CONFIG.DRY_RUN;\n\nconst LIVE_CAMPAIGNS = SENDER_CONFIG.LIVE_CAMPAIGNS;\n\nconst LIVE_CREDENTIAL_READY = SENDER_CONFIG.LIVE_CREDENTIAL_READY;\n\nconst SEND_RESULT_STATES = {\"SENT\":\"SENT\",\"PERMANENT_FAILURE\":\"PERMANENT_FAILURE\",\"AUTH_OR_PLAN_FAILURE\":\"AUTH_OR_PLAN_FAILURE\",\"INVALID_REPLY_TARGET\":\"INVALID_REPLY_TARGET\",\"RETRY_EXHAUSTED\":\"RETRY_EXHAUSTED\",\"SEND_UNCERTAIN\":\"SEND_UNCERTAIN\"};\n\nconst MAX_SEND_ATTEMPTS = 3;\n\nconst BASE_BACKOFF_MS = 100;\n\nconst MAX_BACKOFF_MS = 2000;\n\nconst RETRY_AFTER_CAP_MS = 5000;\n\nconst RECONCILE_STATES = {\"SENT_RECONCILED\":\"SENT_RECONCILED\",\"HUMAN_REVIEW_ZERO_MATCHES\":\"HUMAN_REVIEW_ZERO_MATCHES\",\"HUMAN_REVIEW_MULTIPLE_MATCHES\":\"HUMAN_REVIEW_MULTIPLE_MATCHES\"};\n\nfunction normalizeEmail(value) {\n  return String(value ?? '').trim().toLowerCase();\n}\n\nfunction djb2Hash(str) {\n  let hash = 5381;\n  for (let i = 0; i < str.length; i++) {\n    hash = (hash << 5) + hash + str.charCodeAt(i);\n    hash = hash & 0xffffffff;\n  }\n  return (hash >>> 0).toString(16).padStart(8, '0');\n}\n\nfunction deriveSendKey({ inboundEmailId, sender, recipient, policyTemplateId }) {\n  const raw = [\n    'HMZ_PHASE4A_SEND',\n    String(inboundEmailId ?? '').trim(),\n    normalizeEmail(sender),\n    normalizeEmail(recipient),\n    String(policyTemplateId ?? '').trim(),\n  ].join('|');\n  return `send-${djb2Hash(raw)}`;\n}\n\nfunction isValidSentEmailObject(body, expected) {\n  const exp = expected || {};\n  const norm = (v) => String(v == null ? '' : v).trim().toLowerCase();\n  const isEmptyAddr = (v) => {\n    if (v === null || v === undefined) return true;\n    if (Array.isArray(v)) return v.length === 0;\n    if (typeof v === 'string') return v.trim().length === 0;\n    return false;\n  };\n  if (!body || typeof body !== 'object') return false;\n  if (typeof body.id !== 'string' || body.id.length === 0) return false;\n  if (typeof body.message_id !== 'string' || body.message_id.length === 0) return false;\n  if (typeof body.thread_id !== 'string' || body.thread_id.length === 0) return false;\n  if (exp.eaccount && body.eaccount !== exp.eaccount) return false;\n  if (exp.recipient) {\n    const recipients = Array.isArray(body.to_address_email_list)\n      ? body.to_address_email_list.map(norm)\n      : String(body.to_address_email_list || '').split(',').map(norm).filter(Boolean);\n    if (!recipients.includes(norm(exp.recipient))) return false;\n  }\n  if (exp.subject && body.subject !== exp.subject) return false;\n  if (!exp.ccBccApproved) {\n    if (!isEmptyAddr(body.cc_address_email_list)) return false;\n    if (!isEmptyAddr(body.bcc_address_email_list)) return false;\n  }\n  return true;\n}\n\nfunction deterministicJitter(attemptNumber) {\n  return (attemptNumber * 37) % 50;\n}\n\nfunction classifySendOutcome(outcome, expected) {\n  const out = outcome || {};\n\n  if (out.kind === 'http') {\n    const status = out.status;\n    const body = out.body;\n    const headers = out.headers || {};\n\n    if (status === 400) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.PERMANENT_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 401 || status === 402 || status === 403) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.AUTH_OR_PLAN_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 404) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.INVALID_REPLY_TARGET, ambiguousSideEffect: false };\n    }\n    if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {\n      const retryAfterRaw = headers['retry-after'] ?? headers['Retry-After'] ?? null;\n      const retryAfterSeconds = retryAfterRaw == null ? null : Number(retryAfterRaw);\n      const retryAfterMs =\n        status === 429 && Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0\n          ? retryAfterSeconds * 1000\n          : null;\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs,\n        ambiguousSideEffect: false,\n      };\n    }\n    if (status >= 200 && status < 300) {\n      if (isValidSentEmailObject(body, expected)) {\n        return { mode: 'terminal', state: SEND_RESULT_STATES.SENT, ambiguousSideEffect: false };\n      }\n      return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  if (out.kind === 'network-error') {\n    const retryablePhases = ['connection-refused', 'pre-submission'];\n    if (retryablePhases.includes(out.errorPhase)) {\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs: null,\n        ambiguousSideEffect: false,\n      };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n}\n\nfunction planSendAttempts(outcomes, options) {\n  const opts = options || {};\n  const jitter = opts.jitter || deterministicJitter;\n  const maxAttempts = opts.maxAttempts || MAX_SEND_ATTEMPTS;\n  const list = Array.isArray(outcomes) ? outcomes : [];\n\n  const attemptOutcomes = [];\n  const backoffDelaysRequested = [];\n  let postSubmissions = 0;\n  let retried = false;\n  let retryAfterHonoured = null;\n  let finalState = null;\n  let secondPostAfterUncertain = false;\n\n  for (let attempt = 1; attempt <= Math.min(maxAttempts, list.length || maxAttempts); attempt++) {\n    const outcome = list[attempt - 1] || { kind: 'network-error', errorPhase: 'pre-submission', serverReceived: false };\n    attemptOutcomes.push(outcome);\n    if (outcome.serverReceived) postSubmissions++;\n\n    const classification = classifySendOutcome(outcome);\n\n    if (classification.mode === 'terminal') {\n      finalState = classification.state;\n      if (finalState === SEND_RESULT_STATES.SEND_UNCERTAIN && attempt < list.length) {\n        secondPostAfterUncertain = true;\n      }\n      break;\n    }\n\n    if (attempt === maxAttempts || attempt === list.length) {\n      finalState = classification.exhaustedState;\n      break;\n    }\n\n    let delayMs;\n    if (classification.retryAfterMs != null) {\n      delayMs = Math.min(classification.retryAfterMs, RETRY_AFTER_CAP_MS);\n      if (retryAfterHonoured === null) retryAfterHonoured = true;\n    } else {\n      if (retryAfterHonoured === null) retryAfterHonoured = false;\n      const exponential = BASE_BACKOFF_MS * 2 ** (attempt - 1);\n      delayMs = Math.min(exponential + jitter(attempt), MAX_BACKOFF_MS);\n    }\n    backoffDelaysRequested.push(delayMs);\n    retried = true;\n  }\n\n  return {\n    finalState,\n    attempts: attemptOutcomes.length,\n    postSubmissions,\n    retried,\n    backoffDelaysRequested,\n    retryAfterHonoured,\n    secondPostAfterUncertain,\n    humanReviewRequired: finalState !== SEND_RESULT_STATES.SENT,\n  };\n}\n\nfunction reconcileMatches(checks, options) {\n  const opts = options || {};\n  const consecutiveRequired = opts.consecutiveRequired || 2;\n  const polls = Array.isArray(checks) ? checks : [];\n\n  let lastSingleMatchId = null;\n  let consecutiveSameSingleMatch = 0;\n\n  for (const matchIds of polls) {\n    const ids = Array.isArray(matchIds) ? matchIds : [];\n    if (ids.length > 1) {\n      return { state: RECONCILE_STATES.HUMAN_REVIEW_MULTIPLE_MATCHES, matchCount: ids.length, matchIds: ids };\n    }\n    if (ids.length === 1) {\n      const currentId = ids[0];\n      if (currentId === lastSingleMatchId) {\n        consecutiveSameSingleMatch += 1;\n      } else {\n        lastSingleMatchId = currentId;\n        consecutiveSameSingleMatch = 1;\n      }\n      if (consecutiveSameSingleMatch >= consecutiveRequired) {\n        return { state: RECONCILE_STATES.SENT_RECONCILED, matchCount: 1, matchId: currentId };\n      }\n    } else {\n      lastSingleMatchId = null;\n      consecutiveSameSingleMatch = 0;\n    }\n  }\n\n  return { state: RECONCILE_STATES.HUMAN_REVIEW_ZERO_MATCHES, matchCount: 0, matchIds: [] };\n}\n\nfunction liveAdapterContract(item) {\n  const input = item || {};\n  const nes = input.nes || {};\n  const threading = nes.threading || {};\n  const reply = nes.reply || {};\n  const draft = input.draft || {};\n\n  const subject = reply.subject || null;\n  const replySubject = subject ? (/^re:/i.test(subject) ? subject : `Re: ${subject}`) : null;\n\n  return {\n    ...input,\n    live_adapter_contract: {\n      reachable: false,\n      blocked: true,\n      reason: 'VALIDATION_MODE_LIVE_ADAPTER_UNREACHABLE',\n      // Verified V3 contract: POST /api/v2/emails/reply with eaccount,\n      // reply_to_uuid, subject, body.text/html. Never sent in Phase 4A.\n      request_contract: {\n        method: 'POST',\n        url: 'https://api.instantly.ai/api/v2/emails/reply',\n        body: {\n          eaccount: nes.eaccount || null,\n          reply_to_uuid: threading.reply_to_uuid || null,\n          subject: replySubject,\n          body: {\n            text: draft.draft_text || null,\n            html: null,\n          },\n        },\n      },\n      retry_policy: {\n        max_attempts: MAX_SEND_ATTEMPTS,\n        base_backoff_ms: BASE_BACKOFF_MS,\n        max_backoff_ms: MAX_BACKOFF_MS,\n        retry_after_cap_ms: RETRY_AFTER_CAP_MS,\n      },\n      classification_contract: 'classifySendOutcome',\n      reconciliation_contract: 'reconcileMatches',\n    },\n  };\n}\n\nfunction buildDryRunTerminal(priorItem, transitionResponse) {\n  const input = priorItem || {};\n  const response = transitionResponse || {};\n  const decision = input.decision || {};\n  const suppressionVerification = input.suppression_verification || { verified: true };\n\n  // T7 unsubscribe confirmation may be transmitted (even in a later live\n  // phase) only once both suppression actions are verified.\n  const replyPermittedAfterSuppression =\n    decision.reply_permitted === true && suppressionVerification.verified === true;\n\n  const acquisition = input.acquisition || {};\n\n  return {\n    ...input,\n    terminal: {\n      schema_version: '1.0',\n      result: 'DRY_RUN_OK',\n      send_state: response.state || 'DRY_RUN_OK',\n      operating_mode: SENDER_CONFIG.OPERATING_MODE,\n      dry_run: SENDER_CONFIG.DRY_RUN,\n      send_key: acquisition.sendKey || (input.send_identity && input.send_identity.sendKey) || null,\n      category: decision.category || null,\n      reply_permitted_after_suppression: replyPermittedAfterSuppression,\n      transport: 'NONE',\n      sent: false,\n      reason: 'DRY_RUN=true: no transport attempted; ownership acquired and recorded as DRY_RUN_OK.',\n    },\n  };\n}\n\nreturn items.map((item, idx) => ({ json: buildDryRunTerminal((priorItems[idx] && priorItems[idx].json) || {}, item.json || {}) }));"
+      }
+    },
+    {
+      "id": "node_n",
+      "name": "N. Live Adapter Contract (Validation-Only, Unreachable)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        60
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\n// HMZ_INJECT_BEGIN:SENDER_CONFIG\r\nconst SENDER_CONFIG = {\"OPERATING_MODE\":\"VALIDATION\",\"DRY_RUN\":true,\"LIVE_CAMPAIGNS\":[],\"LIVE_CREDENTIAL_READY\":true};\r\n// HMZ_INJECT_END:SENDER_CONFIG\n\nconst OPERATING_MODE = SENDER_CONFIG.OPERATING_MODE;\n\nconst DRY_RUN = SENDER_CONFIG.DRY_RUN;\n\nconst LIVE_CAMPAIGNS = SENDER_CONFIG.LIVE_CAMPAIGNS;\n\nconst LIVE_CREDENTIAL_READY = SENDER_CONFIG.LIVE_CREDENTIAL_READY;\n\nconst SEND_RESULT_STATES = {\"SENT\":\"SENT\",\"PERMANENT_FAILURE\":\"PERMANENT_FAILURE\",\"AUTH_OR_PLAN_FAILURE\":\"AUTH_OR_PLAN_FAILURE\",\"INVALID_REPLY_TARGET\":\"INVALID_REPLY_TARGET\",\"RETRY_EXHAUSTED\":\"RETRY_EXHAUSTED\",\"SEND_UNCERTAIN\":\"SEND_UNCERTAIN\"};\n\nconst MAX_SEND_ATTEMPTS = 3;\n\nconst BASE_BACKOFF_MS = 100;\n\nconst MAX_BACKOFF_MS = 2000;\n\nconst RETRY_AFTER_CAP_MS = 5000;\n\nconst RECONCILE_STATES = {\"SENT_RECONCILED\":\"SENT_RECONCILED\",\"HUMAN_REVIEW_ZERO_MATCHES\":\"HUMAN_REVIEW_ZERO_MATCHES\",\"HUMAN_REVIEW_MULTIPLE_MATCHES\":\"HUMAN_REVIEW_MULTIPLE_MATCHES\"};\n\nfunction normalizeEmail(value) {\n  return String(value ?? '').trim().toLowerCase();\n}\n\nfunction djb2Hash(str) {\n  let hash = 5381;\n  for (let i = 0; i < str.length; i++) {\n    hash = (hash << 5) + hash + str.charCodeAt(i);\n    hash = hash & 0xffffffff;\n  }\n  return (hash >>> 0).toString(16).padStart(8, '0');\n}\n\nfunction deriveSendKey({ inboundEmailId, sender, recipient, policyTemplateId }) {\n  const raw = [\n    'HMZ_PHASE4A_SEND',\n    String(inboundEmailId ?? '').trim(),\n    normalizeEmail(sender),\n    normalizeEmail(recipient),\n    String(policyTemplateId ?? '').trim(),\n  ].join('|');\n  return `send-${djb2Hash(raw)}`;\n}\n\nfunction isValidSentEmailObject(body, expected) {\n  const exp = expected || {};\n  const norm = (v) => String(v == null ? '' : v).trim().toLowerCase();\n  const isEmptyAddr = (v) => {\n    if (v === null || v === undefined) return true;\n    if (Array.isArray(v)) return v.length === 0;\n    if (typeof v === 'string') return v.trim().length === 0;\n    return false;\n  };\n  if (!body || typeof body !== 'object') return false;\n  if (typeof body.id !== 'string' || body.id.length === 0) return false;\n  if (typeof body.message_id !== 'string' || body.message_id.length === 0) return false;\n  if (typeof body.thread_id !== 'string' || body.thread_id.length === 0) return false;\n  if (exp.eaccount && body.eaccount !== exp.eaccount) return false;\n  if (exp.recipient) {\n    const recipients = Array.isArray(body.to_address_email_list)\n      ? body.to_address_email_list.map(norm)\n      : String(body.to_address_email_list || '').split(',').map(norm).filter(Boolean);\n    if (!recipients.includes(norm(exp.recipient))) return false;\n  }\n  if (exp.subject && body.subject !== exp.subject) return false;\n  if (!exp.ccBccApproved) {\n    if (!isEmptyAddr(body.cc_address_email_list)) return false;\n    if (!isEmptyAddr(body.bcc_address_email_list)) return false;\n  }\n  return true;\n}\n\nfunction deterministicJitter(attemptNumber) {\n  return (attemptNumber * 37) % 50;\n}\n\nfunction classifySendOutcome(outcome, expected) {\n  const out = outcome || {};\n\n  if (out.kind === 'http') {\n    const status = out.status;\n    const body = out.body;\n    const headers = out.headers || {};\n\n    if (status === 400) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.PERMANENT_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 401 || status === 402 || status === 403) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.AUTH_OR_PLAN_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 404) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.INVALID_REPLY_TARGET, ambiguousSideEffect: false };\n    }\n    if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {\n      const retryAfterRaw = headers['retry-after'] ?? headers['Retry-After'] ?? null;\n      const retryAfterSeconds = retryAfterRaw == null ? null : Number(retryAfterRaw);\n      const retryAfterMs =\n        status === 429 && Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0\n          ? retryAfterSeconds * 1000\n          : null;\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs,\n        ambiguousSideEffect: false,\n      };\n    }\n    if (status >= 200 && status < 300) {\n      if (isValidSentEmailObject(body, expected)) {\n        return { mode: 'terminal', state: SEND_RESULT_STATES.SENT, ambiguousSideEffect: false };\n      }\n      return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  if (out.kind === 'network-error') {\n    const retryablePhases = ['connection-refused', 'pre-submission'];\n    if (retryablePhases.includes(out.errorPhase)) {\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs: null,\n        ambiguousSideEffect: false,\n      };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n}\n\nfunction planSendAttempts(outcomes, options) {\n  const opts = options || {};\n  const jitter = opts.jitter || deterministicJitter;\n  const maxAttempts = opts.maxAttempts || MAX_SEND_ATTEMPTS;\n  const list = Array.isArray(outcomes) ? outcomes : [];\n\n  const attemptOutcomes = [];\n  const backoffDelaysRequested = [];\n  let postSubmissions = 0;\n  let retried = false;\n  let retryAfterHonoured = null;\n  let finalState = null;\n  let secondPostAfterUncertain = false;\n\n  for (let attempt = 1; attempt <= Math.min(maxAttempts, list.length || maxAttempts); attempt++) {\n    const outcome = list[attempt - 1] || { kind: 'network-error', errorPhase: 'pre-submission', serverReceived: false };\n    attemptOutcomes.push(outcome);\n    if (outcome.serverReceived) postSubmissions++;\n\n    const classification = classifySendOutcome(outcome);\n\n    if (classification.mode === 'terminal') {\n      finalState = classification.state;\n      if (finalState === SEND_RESULT_STATES.SEND_UNCERTAIN && attempt < list.length) {\n        secondPostAfterUncertain = true;\n      }\n      break;\n    }\n\n    if (attempt === maxAttempts || attempt === list.length) {\n      finalState = classification.exhaustedState;\n      break;\n    }\n\n    let delayMs;\n    if (classification.retryAfterMs != null) {\n      delayMs = Math.min(classification.retryAfterMs, RETRY_AFTER_CAP_MS);\n      if (retryAfterHonoured === null) retryAfterHonoured = true;\n    } else {\n      if (retryAfterHonoured === null) retryAfterHonoured = false;\n      const exponential = BASE_BACKOFF_MS * 2 ** (attempt - 1);\n      delayMs = Math.min(exponential + jitter(attempt), MAX_BACKOFF_MS);\n    }\n    backoffDelaysRequested.push(delayMs);\n    retried = true;\n  }\n\n  return {\n    finalState,\n    attempts: attemptOutcomes.length,\n    postSubmissions,\n    retried,\n    backoffDelaysRequested,\n    retryAfterHonoured,\n    secondPostAfterUncertain,\n    humanReviewRequired: finalState !== SEND_RESULT_STATES.SENT,\n  };\n}\n\nfunction reconcileMatches(checks, options) {\n  const opts = options || {};\n  const consecutiveRequired = opts.consecutiveRequired || 2;\n  const polls = Array.isArray(checks) ? checks : [];\n\n  let lastSingleMatchId = null;\n  let consecutiveSameSingleMatch = 0;\n\n  for (const matchIds of polls) {\n    const ids = Array.isArray(matchIds) ? matchIds : [];\n    if (ids.length > 1) {\n      return { state: RECONCILE_STATES.HUMAN_REVIEW_MULTIPLE_MATCHES, matchCount: ids.length, matchIds: ids };\n    }\n    if (ids.length === 1) {\n      const currentId = ids[0];\n      if (currentId === lastSingleMatchId) {\n        consecutiveSameSingleMatch += 1;\n      } else {\n        lastSingleMatchId = currentId;\n        consecutiveSameSingleMatch = 1;\n      }\n      if (consecutiveSameSingleMatch >= consecutiveRequired) {\n        return { state: RECONCILE_STATES.SENT_RECONCILED, matchCount: 1, matchId: currentId };\n      }\n    } else {\n      lastSingleMatchId = null;\n      consecutiveSameSingleMatch = 0;\n    }\n  }\n\n  return { state: RECONCILE_STATES.HUMAN_REVIEW_ZERO_MATCHES, matchCount: 0, matchIds: [] };\n}\n\nfunction liveAdapterContract(item) {\n  const input = item || {};\n  const nes = input.nes || {};\n  const threading = nes.threading || {};\n  const reply = nes.reply || {};\n  const draft = input.draft || {};\n\n  const subject = reply.subject || null;\n  const replySubject = subject ? (/^re:/i.test(subject) ? subject : `Re: ${subject}`) : null;\n\n  return {\n    ...input,\n    live_adapter_contract: {\n      reachable: false,\n      blocked: true,\n      reason: 'VALIDATION_MODE_LIVE_ADAPTER_UNREACHABLE',\n      // Verified V3 contract: POST /api/v2/emails/reply with eaccount,\n      // reply_to_uuid, subject, body.text/html. Never sent in Phase 4A.\n      request_contract: {\n        method: 'POST',\n        url: 'https://api.instantly.ai/api/v2/emails/reply',\n        body: {\n          eaccount: nes.eaccount || null,\n          reply_to_uuid: threading.reply_to_uuid || null,\n          subject: replySubject,\n          body: {\n            text: draft.draft_text || null,\n            html: null,\n          },\n        },\n      },\n      // Additional verified V2 contracts (reconciliation and pre-send\n      // safety actions). All remain unreachable in VALIDATION mode.\n      additional_contracts: {\n        update_interest_status: {\n          method: 'POST',\n          url: 'https://api.instantly.ai/api/v2/leads/update-interest-status',\n          body: { campaign_id: (nes.campaign_context || {}).campaign_id || null, lead_email: nes.lead_email || null, interest_status: null },\n        },\n        remove_subsequence: {\n          method: 'POST',\n          url: 'https://api.instantly.ai/api/v2/leads/subsequence/remove',\n          body: { campaign_id: (nes.campaign_context || {}).campaign_id || null, lead_email: nes.lead_email || null },\n        },\n        add_to_blocklist: {\n          method: 'POST',\n          url: 'https://api.instantly.ai/api/v2/blocklist',\n          body: { entries: [nes.lead_email || null] },\n        },\n        get_email: {\n          method: 'GET',\n          url: `https://api.instantly.ai/api/v2/emails/${threading.reply_to_uuid || '{id}'}`,\n        },\n        list_emails: {\n          method: 'POST',\n          url: 'https://api.instantly.ai/api/v2/emails/list',\n          body: { eaccount: nes.eaccount || null, lead_email: nes.lead_email || null },\n        },\n      },\n      retry_policy: {\n        max_attempts: MAX_SEND_ATTEMPTS,\n        base_backoff_ms: BASE_BACKOFF_MS,\n        max_backoff_ms: MAX_BACKOFF_MS,\n        retry_after_cap_ms: RETRY_AFTER_CAP_MS,\n      },\n      classification_contract: 'classifySendOutcome',\n      reconciliation_contract: 'reconcileMatches',\n    },\n  };\n}\n\nfunction buildLiveAdapterTerminal(item) {\n  const withContract = liveAdapterContract(item);\n  return {\n    ...withContract,\n    terminal: {\n      schema_version: '1.0',\n      result: 'BLOCKED',\n      send_state: 'BLOCKED',\n      reason: 'LIVE_ADAPTER_UNREACHABLE_IN_VALIDATION',\n      live_adapter_contract: withContract.live_adapter_contract,\n      sent: false,\n    },\n  };\n}\n\nreturn items.map(item => ({ json: buildLiveAdapterTerminal(item.json || {}) }));"
+      }
+    },
+    {
+      "id": "sticky_sidecar",
+      "name": "Send Ownership & Suppression (notes)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        340
+      ],
+      "parameters": {
+        "content": "## D-I. Send Key, Ownership, Suppression\n\nD computes a stable send key from the canonical inbound Email ID, sender, recipient and the resolved reply_template_id - never from a random body marker. E POSTs to hmz-send-state /v1/send/acquire (internal Docker network only). A concurrent second acquisition for the same identity returns acquired=false, reason=LOCK_ALREADY_HELD; a later sequential rerun returns reason=DURABLE_STATE_EXISTS. F routes blocked results to a terminal no-send result (F2) without any further action.\n\nG runs only a mock suppression adapter (source-campaign action plus exact workspace email block-list action) - no live Instantly call. H verifies both actions; any partial/uncertain result escalates (I2) and is never sent as an unsubscribe confirmation.",
+        "height": 420,
+        "width": 940,
+        "color": 5
+      }
+    },
+    {
+      "id": "sticky_dryrun",
+      "name": "DRY_RUN Gate & Live Adapter Contract (notes)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3060,
+        340
+      ],
+      "parameters": {
+        "content": "## J-N. DRY_RUN Gate and Live Adapter Contract\n\nJ checks gates.dry_run_gate_passed, which is true only when SENDER_CONFIG.DRY_RUN === true (hardcoded). K transitions the hmz-send-state record from LOCKED to DRY_RUN_OK (a terminal state) and K2 returns one structured terminal object with sent=false, transport=NONE.\n\nN (Live Adapter Contract) is wired only to the J \"false\" branch, which is never taken because DRY_RUN is hardcoded true - it documents the verified V3 POST /api/v2/emails/reply contract (eaccount, reply_to_uuid, subject, body.text/html) plus the V5 retry/classification (classifySendOutcome, planSendAttempts) and read-only reconciliation (reconcileMatches) contracts as deterministic code, without binding credentials or making any HTTP request. LIVE_CREDENTIAL_READY=false and LIVE_CAMPAIGNS=[] additionally block it if it were ever reached.",
+        "height": 420,
+        "width": 760,
+        "color": 6
+      }
+    },
+    {
+      "id": "node_o",
+      "name": "O. Live Send Gate Evaluation (14 Gates)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3700,
+        60
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\n// Fixed launch profile (policy-HMZ-1.2). Every value below is the\n// shipped, safe default. config/business-ready.config.json carries the\n// owner-editable copy of allowlists/* and reviewer_allowlist; this\n// embedded snapshot mirrors that file as of the offline build and must\n// be kept in sync by the apply step before any of these 14 gates can\n// ever evaluate to all-true.\n// HMZ_INJECT_BEGIN:LAUNCH_PROFILE\r\nconst LAUNCH_PROFILE = {\"required_operating_mode\":\"SUPERVISED_VALIDATION\",\"operating_mode\":\"VALIDATION\",\"dry_run\":true,\"live_campaigns\":[],\"campaign_allowlist\":[\"bcda01f7-21c9-4e12-9849-0a375b548467\"],\"workspace_id\":\"c7f84f11-4a1a-42dc-9a74-a417e44cb87e\",\"workspace_allowlist\":[\"c7f84f11-4a1a-42dc-9a74-a417e44cb87e\"],\"connected_sender_eaccounts\":[\"hamzah@gethmzautomation.com\",\"hamzah@gethmzautomations.com\",\"hamzah@hmzautomation.com\",\"hamzah@hmzautomations.com\",\"hamzah@hubhmzautomation.com\",\"hamzah@hubhmzautomations.com\",\"hamzah@labshmzautomation.com\",\"hamzah@labshmzautomations.com\",\"hamzah@onehmzautomation.com\",\"hamzah@onehmzautomations.com\",\"hamzah@teamhmzautomation.org\",\"hamzah@teamhmzautomations.com\",\"zahid@gethmzautomation.com\",\"zahid@gethmzautomations.com\",\"zahid@hmzautomation.com\",\"zahid@hmzautomations.com\",\"zahid@hubhmzautomation.com\",\"zahid@hubhmzautomations.com\",\"zahid@labshmzautomation.com\",\"zahid@labshmzautomations.com\",\"zahid@onehmzautomation.com\",\"zahid@onehmzautomations.com\",\"zahid@teamhmzautomation.org\",\"zahid@teamhmzautomations.com\"],\"live_credential_readiness\":{\"instantly\":true,\"ready_for_controlled_live_test\":true},\"reviewer_allowlist\":[\"humza@hmzaiautomation.com\"]};\r\n// HMZ_INJECT_END:LAUNCH_PROFILE\n\nconst TERMINAL_SEND_STATES = [\n  'SENT', 'SENT_RECONCILED', 'PERMANENT_FAILURE', 'AUTH_OR_PLAN_FAILURE',\n  'SEND_UNCERTAIN', 'RETRY_EXHAUSTED',\n];\n\nfunction evaluateLiveSendGates(item) {\n  const input = item || {};\n  const nes = input.nes || {};\n  const threading = nes.threading || {};\n  const gatesB = input.gates || {};\n  const approval = input.approval || {};\n  const acquisition = input.acquisition || {};\n  const suppressionVerification = input.suppression_verification || {};\n\n  const campaignId = nes.campaign_id || (nes.campaign_context && nes.campaign_context.campaign_id) || null;\n  const workspaceId = nes.workspace_id || null;\n  const eaccount = nes.eaccount || null;\n\n  const gates = [];\n  function gate(id, name, passed, reason) {\n    gates.push({ id, name, passed: !!passed, reason: passed ? null : reason });\n  }\n\n  gate('operating_mode', 'Operating mode is SUPERVISED_VALIDATION',\n    LAUNCH_PROFILE.operating_mode === LAUNCH_PROFILE.required_operating_mode,\n    'OPERATING_MODE_NOT_SUPERVISED_VALIDATION');\n\n  gate('dry_run_disabled', 'DRY_RUN is false',\n    LAUNCH_PROFILE.dry_run === false,\n    'DRY_RUN_STILL_TRUE');\n\n  const workspaceAllowlisted =\n    !!workspaceId && !!LAUNCH_PROFILE.workspace_id && workspaceId === LAUNCH_PROFILE.workspace_id && LAUNCH_PROFILE.workspace_allowlist.includes(workspaceId);\n\n  gate('workspace_allowlisted', 'Exact workspace is allow-listed',\n    workspaceAllowlisted,\n    'WORKSPACE_NOT_ALLOWLISTED');\n\n  // A missing/blank campaign workspace_id can never be allowlisted: this\n  // gate is gated ON workspace_allowlisted so an empty/absent workspace_id\n  // cannot be satisfied by campaign membership alone.\n  gate('campaign_in_live_campaigns', 'Exact campaign is declared in live_campaigns and allow-listed for the allow-listed workspace',\n    workspaceAllowlisted && !!campaignId && LAUNCH_PROFILE.live_campaigns.includes(campaignId) && LAUNCH_PROFILE.campaign_allowlist.includes(campaignId),\n    'CAMPAIGN_NOT_IN_LIVE_CAMPAIGNS_OR_NOT_ALLOWLISTED_OR_WORKSPACE_NOT_ALLOWLISTED');\n\n  gate('sender_eaccount_allowlisted', 'Inbound eaccount is a connected, allow-listed sender and matches the retrieved inbound Email',\n    !!eaccount && LAUNCH_PROFILE.connected_sender_eaccounts.includes(eaccount) && !!threading.reply_to_uuid,\n    'SENDER_EACCOUNT_NOT_ALLOWLISTED_OR_INBOUND_EMAIL_UNRESOLVED');\n\n  gate('instantly_credential_ready', 'live_credential_readiness.instantly is true',\n    LAUNCH_PROFILE.live_credential_readiness.instantly === true,\n    'INSTANTLY_CREDENTIAL_NOT_READY');\n\n  gate('controlled_live_ready', 'live_credential_readiness.ready_for_controlled_live_test is true',\n    LAUNCH_PROFILE.live_credential_readiness.ready_for_controlled_live_test === true,\n    'NOT_READY_FOR_CONTROLLED_LIVE_TEST');\n\n  gate('durable_approval_present', 'A durable human-approval case record is present and approved',\n    approval.approved === true && !!approval.case_id,\n    'APPROVAL_RECORD_MISSING_OR_NOT_APPROVED');\n\n  gate('approval_token_consumed', 'Approval was reached via the one-time-token-consuming review handoff',\n    approval.approved === true && !!approval.approved_at && !!approval.case_id,\n    'APPROVAL_TOKEN_NOT_CONSUMED_OR_HANDOFF_MISSING');\n\n  gate('reviewer_identity_allowlisted', 'The approving reviewer identity is on reviewer_allowlist',\n    !!approval.approver_identity && LAUNCH_PROFILE.reviewer_allowlist.includes(approval.approver_identity),\n    'REVIEWER_IDENTITY_NOT_ALLOWLISTED');\n\n  gate('no_unresolved_variables', 'Approved draft has no unresolved template variables',\n    gatesB.draft_variable_gate_passed === true,\n    'UNRESOLVED_TEMPLATE_VARIABLES');\n\n  gate('send_lock_acquired', 'Atomic send-ownership lock was acquired for this send key',\n    acquisition.acquired === true,\n    'SEND_LOCK_NOT_ACQUIRED');\n\n  gate('suppression_verified_or_not_required', 'Required suppression actions are verified, or none are required',\n    suppressionVerification.verified === true,\n    'SUPPRESSION_NOT_VERIFIED');\n\n  gate('no_prior_terminal_send_state', 'No prior terminal send state exists for this send key',\n    !TERMINAL_SEND_STATES.includes(acquisition.priorState),\n    'PRIOR_TERMINAL_SEND_STATE_EXISTS');\n\n  const allPassed = gates.every((g) => g.passed);\n\n  return {\n    ...input,\n    live_send_gates: {\n      schema_version: '1.0',\n      launch_profile: LAUNCH_PROFILE,\n      gates,\n      all_passed: allPassed,\n      failed_gate_ids: gates.filter((g) => !g.passed).map((g) => g.id),\n    },\n  };\n}\n\nreturn items.map((item) => ({ json: evaluateLiveSendGates(item.json || {}) }));"
+      }
+    },
+    {
+      "id": "if_p",
+      "name": "P. Live Send Gate Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        4040,
+        60
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-p1",
+              "leftValue": "={{ $json.live_send_gates.all_passed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node_p2",
+      "name": "P2. Live Send Blocked Terminal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4380,
+        220
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nreturn items.map((item) => {\n  const input = item.json || {};\n  const gates = input.live_send_gates || {};\n  return {\n    json: {\n      ...input,\n      terminal: {\n        schema_version: '1.0',\n        result: 'BLOCKED',\n        send_state: 'BLOCKED',\n        reason: 'LIVE_SEND_GATES_NOT_SATISFIED',\n        failed_gate_ids: gates.failed_gate_ids || [],\n        live_adapter_contract: input.live_adapter_contract || null,\n        sent: false,\n      },\n    },\n  };\n});"
+      }
+    },
+    {
+      "id": "node_q_http",
+      "name": "Q. POST Reply to Instantly (Gated)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4380,
+        -100
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.instantly.ai/api/v2/emails/reply",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { eaccount: $json.nes.eaccount, reply_to_uuid: $json.nes.threading.reply_to_uuid, subject: ($json.nes.reply && $json.nes.reply.subject && /^re:/i.test($json.nes.reply.subject)) ? $json.nes.reply.subject : ('Re: ' + (($json.nes.reply && $json.nes.reply.subject) || '')), body: { text: $json.draft.draft_text, html: ($json.acquisition && $json.acquisition.sendKey) ? ('<!-- hmz-send-key:' + $json.acquisition.sendKey + ' -->') : null } } }}",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "jWeATGMoMGyXl7yK",
+          "name": "hmzInstantlyApi"
+        }
+      }
+    },
+    {
+      "id": "node_r",
+      "name": "R. Classify Send Attempt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4720,
+        -100
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nconst SEND_RESULT_STATES = {\"SENT\":\"SENT\",\"PERMANENT_FAILURE\":\"PERMANENT_FAILURE\",\"AUTH_OR_PLAN_FAILURE\":\"AUTH_OR_PLAN_FAILURE\",\"INVALID_REPLY_TARGET\":\"INVALID_REPLY_TARGET\",\"RETRY_EXHAUSTED\":\"RETRY_EXHAUSTED\",\"SEND_UNCERTAIN\":\"SEND_UNCERTAIN\"};\nconst RECONCILE_STATES = {\"SENT_RECONCILED\":\"SENT_RECONCILED\",\"HUMAN_REVIEW_ZERO_MATCHES\":\"HUMAN_REVIEW_ZERO_MATCHES\",\"HUMAN_REVIEW_MULTIPLE_MATCHES\":\"HUMAN_REVIEW_MULTIPLE_MATCHES\"};\nconst MAX_SEND_ATTEMPTS = 3;\nconst BASE_BACKOFF_MS = 100;\nconst MAX_BACKOFF_MS = 2000;\nconst RETRY_AFTER_CAP_MS = 5000;\n\nfunction isValidSentEmailObject(body, expected) {\n  const exp = expected || {};\n  const norm = (v) => String(v == null ? '' : v).trim().toLowerCase();\n  const isEmptyAddr = (v) => {\n    if (v === null || v === undefined) return true;\n    if (Array.isArray(v)) return v.length === 0;\n    if (typeof v === 'string') return v.trim().length === 0;\n    return false;\n  };\n  if (!body || typeof body !== 'object') return false;\n  if (typeof body.id !== 'string' || body.id.length === 0) return false;\n  if (typeof body.message_id !== 'string' || body.message_id.length === 0) return false;\n  if (typeof body.thread_id !== 'string' || body.thread_id.length === 0) return false;\n  if (exp.eaccount && body.eaccount !== exp.eaccount) return false;\n  if (exp.recipient) {\n    const recipients = Array.isArray(body.to_address_email_list)\n      ? body.to_address_email_list.map(norm)\n      : String(body.to_address_email_list || '').split(',').map(norm).filter(Boolean);\n    if (!recipients.includes(norm(exp.recipient))) return false;\n  }\n  if (exp.subject && body.subject !== exp.subject) return false;\n  if (!exp.ccBccApproved) {\n    if (!isEmptyAddr(body.cc_address_email_list)) return false;\n    if (!isEmptyAddr(body.bcc_address_email_list)) return false;\n  }\n  return true;\n}\n\nfunction deterministicJitter(attemptNumber) {\n  return (attemptNumber * 37) % 50;\n}\n\nfunction classifySendOutcome(outcome, expected) {\n  const out = outcome || {};\n\n  if (out.kind === 'http') {\n    const status = out.status;\n    const body = out.body;\n    const headers = out.headers || {};\n\n    if (status === 400) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.PERMANENT_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 401 || status === 402 || status === 403) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.AUTH_OR_PLAN_FAILURE, ambiguousSideEffect: false };\n    }\n    if (status === 404) {\n      return { mode: 'terminal', state: SEND_RESULT_STATES.INVALID_REPLY_TARGET, ambiguousSideEffect: false };\n    }\n    if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {\n      const retryAfterRaw = headers['retry-after'];\n      const retryAfterMs = retryAfterRaw != null ? Number(retryAfterRaw) * 1000 : null;\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs: Number.isFinite(retryAfterMs) ? retryAfterMs : null,\n        ambiguousSideEffect: false,\n      };\n    }\n    if (status >= 200 && status < 300) {\n      if (isValidSentEmailObject(body, expected)) {\n        return { mode: 'terminal', state: SEND_RESULT_STATES.SENT, ambiguousSideEffect: false };\n      }\n      return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  if (out.kind === 'network-error') {\n    const retryablePhases = ['connection-refused', 'pre-submission'];\n    if (retryablePhases.includes(out.errorPhase)) {\n      return {\n        mode: 'retryable',\n        exhaustedState: SEND_RESULT_STATES.RETRY_EXHAUSTED,\n        retryAfterMs: null,\n        ambiguousSideEffect: false,\n      };\n    }\n    return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n  }\n\n  return { mode: 'terminal', state: SEND_RESULT_STATES.SEND_UNCERTAIN, ambiguousSideEffect: true };\n}\n\nfunction reconcileMatches(checks, options) {\n  const opts = options || {};\n  const consecutiveRequired = opts.consecutiveRequired || 2;\n  const polls = Array.isArray(checks) ? checks : [];\n\n  let lastSingleMatchId = null;\n  let consecutiveSameSingleMatch = 0;\n\n  for (const matchIds of polls) {\n    const ids = Array.isArray(matchIds) ? matchIds : [];\n    if (ids.length > 1) {\n      return { state: RECONCILE_STATES.HUMAN_REVIEW_MULTIPLE_MATCHES, matchCount: ids.length, matchIds: ids };\n    }\n    if (ids.length === 1) {\n      const currentId = ids[0];\n      if (currentId === lastSingleMatchId) {\n        consecutiveSameSingleMatch += 1;\n      } else {\n        lastSingleMatchId = currentId;\n        consecutiveSameSingleMatch = 1;\n      }\n      if (consecutiveSameSingleMatch >= consecutiveRequired) {\n        return { state: RECONCILE_STATES.SENT_RECONCILED, matchCount: 1, matchId: currentId };\n      }\n    } else {\n      lastSingleMatchId = null;\n      consecutiveSameSingleMatch = 0;\n    }\n  }\n\n  return { state: RECONCILE_STATES.HUMAN_REVIEW_ZERO_MATCHES, matchCount: 0, matchIds: [] };\n}\n\nfunction buildOutcomeFromHttpResponse(resp) {\n  const r = resp || {};\n  const status = r.statusCode != null ? r.statusCode : (r.status != null ? r.status : null);\n  return { kind: 'http', status, headers: r.headers || {}, body: r.body, serverReceived: true };\n}\n\nreturn items.map((item) => {\n  const httpResp = item.json || {};\n  let prior = {};\n  try {\n    prior = $('O. Live Send Gate Evaluation (14 Gates)').item.json || {};\n  } catch (e) {\n    prior = {};\n  }\n  const carried = Array.isArray(httpResp.live_send_attempts) ? httpResp : prior;\n  const priorAttempts = Array.isArray(carried.live_send_attempts) ? carried.live_send_attempts : [];\n\n  const nes = (carried.nes) || {};\n  const reply = nes.reply || {};\n  const decision = (carried.decision) || {};\n  const rawSubject = reply.subject || '';\n  const expectedSubject = rawSubject ? (/^re:/i.test(rawSubject) ? rawSubject : `Re: ${rawSubject}`) : null;\n  const expected = {\n    eaccount: nes.eaccount || null,\n    recipient: nes.lead_email || null,\n    subject: expectedSubject,\n    ccBccApproved: decision.cc_bcc_approved === true,\n  };\n\n  const outcome = buildOutcomeFromHttpResponse(httpResp);\n  const classification = classifySendOutcome(outcome, expected);\n  const attemptNumber = priorAttempts.length + 1;\n\n  const nowIso = new Date().toISOString();\n  const priorWindow = (carried.send_classification && carried.send_classification.reconciliation_window) || null;\n  const reconciliationWindow = priorWindow || {\n    min_timestamp_created: new Date(Date.now() - 5 * 60 * 1000).toISOString(),\n    max_timestamp_created_base: nowIso,\n  };\n  const attempts = [...priorAttempts, { attempt: attemptNumber, outcome, classification }];\n\n  let nextDelayMs = null;\n  if (classification.mode === 'retryable' && attemptNumber < MAX_SEND_ATTEMPTS) {\n    nextDelayMs = classification.retryAfterMs != null\n      ? Math.min(classification.retryAfterMs, RETRY_AFTER_CAP_MS)\n      : Math.min(BASE_BACKOFF_MS * 2 ** (attemptNumber - 1) + deterministicJitter(attemptNumber), MAX_BACKOFF_MS);\n  }\n\n  let finalState = null;\n  if (classification.mode === 'terminal') {\n    finalState = classification.state;\n  } else if (attemptNumber >= MAX_SEND_ATTEMPTS) {\n    finalState = classification.exhaustedState;\n  }\n\n  return {\n    json: {\n      ...prior,\n      live_send_attempts: attempts,\n      send_classification: {\n        mode: classification.mode,\n        final_state: finalState,\n        retryable: classification.mode === 'retryable' && attemptNumber < MAX_SEND_ATTEMPTS && finalState === null,\n        next_delay_ms: nextDelayMs,\n        ambiguous_side_effect: !!classification.ambiguousSideEffect,\n        attempt_number: attemptNumber,\n        last_outcome: outcome,\n        expected,\n        reconciliation_window: {\n          min_timestamp_created: reconciliationWindow.min_timestamp_created,\n          max_timestamp_created: new Date(Date.now() + 5 * 60 * 1000).toISOString(),\n        },\n      },\n    },\n  };\n});"
+      }
+    },
+    {
+      "id": "if_s",
+      "name": "S. Retry Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        5060,
+        -100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-s1",
+              "leftValue": "={{ $json.send_classification.retryable === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "wait_t",
+      "name": "T. Retry Backoff Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        5060,
+        80
+      ],
+      "parameters": {
+        "resume": "timeInterval",
+        "unit": "seconds",
+        "amount": "={{ Math.max(1, Math.ceil((($json.send_classification && $json.send_classification.next_delay_ms) || 100) / 1000)) }}"
+      },
+      "webhookId": "5c0f115a-3a57-4472-87e0-2bad1d83ec45"
+    },
+    {
+      "id": "if_u",
+      "name": "U. Send Outcome Router (SENT?)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        5400,
+        -100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-u1",
+              "leftValue": "={{ $json.send_classification.final_state === 'SENT' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node_x_http",
+      "name": "X. Persist SENT Result (hmz-send-state)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5740,
+        -260
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "http://hmz-send-state:5681/v1/send/transition",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { sendKey: $json.acquisition.sendKey, state: 'SENT', emailId: ($json.send_classification.last_outcome.body && $json.send_classification.last_outcome.body.id) || null, messageId: ($json.send_classification.last_outcome.body && $json.send_classification.last_outcome.body.message_id) || null, threadId: ($json.send_classification.last_outcome.body && $json.send_classification.last_outcome.body.thread_id) || null } }}",
+        "options": {
+          "timeout": 5000
+        }
+      }
+    },
+    {
+      "id": "node_x2",
+      "name": "X2. Build SENT Terminal Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6080,
+        -260
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nreturn items.map((item) => {\n  let prior = {};\n  try {\n    prior = $('R. Classify Send Attempt').item.json || {};\n  } catch (e) {\n    prior = item.json || {};\n  }\n  const sc = prior.send_classification || {};\n  const lastOutcome = sc.last_outcome || {};\n  const body = lastOutcome.body || {};\n  return {\n    json: {\n      ...prior,\n      terminal: {\n        schema_version: '1.0',\n        result: 'SENT',\n        send_state: 'SENT',\n        reason: 'LIVE_SEND_COMPLETED',\n        email_id: body.id || null,\n        message_id: body.message_id || null,\n        thread_id: body.thread_id || null,\n        confirmed_cross_checks: {\n          eaccount: body.eaccount || null,\n          subject: body.subject || null,\n          cc_address_email_list: body.cc_address_email_list || null,\n          bcc_address_email_list: body.bcc_address_email_list || null,\n        },\n        sent: true,\n      },\n    },\n  };\n});"
+      }
+    },
+    {
+      "id": "if_u2",
+      "name": "U2. Send Outcome Router (SEND_UNCERTAIN?)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        5740,
+        60
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-u2",
+              "leftValue": "={{ $json.send_classification.final_state === 'SEND_UNCERTAIN' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node_u3",
+      "name": "U3. Finalize Failure Terminal Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6080,
+        220
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nreturn items.map((item) => {\n  const input = item.json || {};\n  const sc = input.send_classification || {};\n  return {\n    json: {\n      ...input,\n      terminal: {\n        schema_version: '1.0',\n        result: 'FAILED',\n        send_state: sc.final_state || 'RETRY_EXHAUSTED',\n        reason: 'LIVE_SEND_TERMINAL_FAILURE',\n        classification: sc,\n        sent: false,\n      },\n    },\n  };\n});"
+      }
+    },
+    {
+      "id": "node_v_http",
+      "name": "V. Reconciliation Poll (list_emails, Gated)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6080,
+        60
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.instantly.ai/api/v2/emails",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "search",
+              "value": "={{ 'thread:' + (($json.nes.threading && ($json.nes.threading.thread_id || $json.nes.threading.reply_to_uuid)) || '') }}"
+            },
+            {
+              "name": "eaccount",
+              "value": "={{ $json.nes.eaccount }}"
+            },
+            {
+              "name": "lead",
+              "value": "={{ $json.nes.lead_email }}"
+            },
+            {
+              "name": "email_type",
+              "value": "sent"
+            },
+            {
+              "name": "min_timestamp_created",
+              "value": "={{ ($json.send_classification && $json.send_classification.reconciliation_window && $json.send_classification.reconciliation_window.min_timestamp_created) || '' }}"
+            },
+            {
+              "name": "max_timestamp_created",
+              "value": "={{ ($json.send_classification && $json.send_classification.reconciliation_window && $json.send_classification.reconciliation_window.max_timestamp_created) || '' }}"
+            },
+            {
+              "name": "preview_only",
+              "value": "false"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "jWeATGMoMGyXl7yK",
+          "name": "hmzInstantlyApi"
+        }
+      }
+    },
+    {
+      "id": "node_w",
+      "name": "W. Process Reconciliation Poll",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6420,
+        60
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nconst RECONCILE_STATES = {\"SENT_RECONCILED\":\"SENT_RECONCILED\",\"HUMAN_REVIEW_ZERO_MATCHES\":\"HUMAN_REVIEW_ZERO_MATCHES\",\"HUMAN_REVIEW_MULTIPLE_MATCHES\":\"HUMAN_REVIEW_MULTIPLE_MATCHES\"};\nconst MAX_RECONCILIATION_POLLS = 2;\n\nfunction reconcileMatches(checks, options) {\n  const opts = options || {};\n  const consecutiveRequired = opts.consecutiveRequired || 2;\n  const polls = Array.isArray(checks) ? checks : [];\n\n  let lastSingleMatchId = null;\n  let consecutiveSameSingleMatch = 0;\n\n  for (const matchIds of polls) {\n    const ids = Array.isArray(matchIds) ? matchIds : [];\n    if (ids.length > 1) {\n      return { state: RECONCILE_STATES.HUMAN_REVIEW_MULTIPLE_MATCHES, matchCount: ids.length, matchIds: ids };\n    }\n    if (ids.length === 1) {\n      const currentId = ids[0];\n      if (currentId === lastSingleMatchId) {\n        consecutiveSameSingleMatch += 1;\n      } else {\n        lastSingleMatchId = currentId;\n        consecutiveSameSingleMatch = 1;\n      }\n      if (consecutiveSameSingleMatch >= consecutiveRequired) {\n        return { state: RECONCILE_STATES.SENT_RECONCILED, matchCount: 1, matchId: currentId };\n      }\n    } else {\n      lastSingleMatchId = null;\n      consecutiveSameSingleMatch = 0;\n    }\n  }\n\n  return { state: RECONCILE_STATES.HUMAN_REVIEW_ZERO_MATCHES, matchCount: 0, matchIds: [] };\n}\n\nreturn items.map((item) => {\n  const httpResp = item.json || {};\n  let prior = {};\n  try {\n    prior = $('R. Classify Send Attempt').item.json || {};\n  } catch (e) {\n    prior = {};\n  }\n  const body = (httpResp.body !== undefined) ? httpResp.body : httpResp;\n  const itemsArr = Array.isArray((body || {}).items) ? body.items : [];\n\n  const nes = prior.nes || {};\n  const reply = nes.reply || {};\n  const sc = prior.send_classification || {};\n  const expected = sc.expected || {};\n  const window = sc.reconciliation_window || {};\n  const sendKey = (prior.acquisition && prior.acquisition.sendKey) || null;\n  const expectedThread = (nes.threading && (nes.threading.thread_id || nes.threading.reply_to_uuid)) || null;\n\n  function norm(v) { return String(v == null ? '' : v).trim().toLowerCase(); }\n\n  function matchesItem(e) {\n    if (!e) return false;\n    if (expectedThread && e.thread_id !== expectedThread) return false;\n    if (expected.eaccount && e.eaccount !== expected.eaccount) return false;\n    const recipients = Array.isArray(e.to_address_email_list)\n      ? e.to_address_email_list.map(norm)\n      : String(e.to_address_email_list || '').split(',').map(norm).filter(Boolean);\n    if (expected.recipient && !recipients.includes(norm(expected.recipient))) return false;\n    if (expected.subject && e.subject !== expected.subject) return false;\n    if (window.min_timestamp_created && e.timestamp_created && e.timestamp_created < window.min_timestamp_created) return false;\n    if (window.max_timestamp_created && e.timestamp_created && e.timestamp_created > window.max_timestamp_created) return false;\n    if (sendKey) {\n      const html = (e.body && e.body.html) ? String(e.body.html) : '';\n      if (!html.includes(sendKey)) return false;\n    }\n    return true;\n  }\n\n  const matchIds = itemsArr.filter(matchesItem).map((e) => e.id).filter(Boolean);\n  const priorPolls = Array.isArray(prior.reconciliation_polls) ? prior.reconciliation_polls : [];\n  const polls = [...priorPolls, matchIds];\n  const reconciliation = reconcileMatches(polls, { consecutiveRequired: 2 });\n\n  return {\n    json: {\n      ...prior,\n      reconciliation_polls: polls,\n      reconciliation: {\n        ...reconciliation,\n        polls_taken: polls.length,\n        max_polls: MAX_RECONCILIATION_POLLS,\n      },\n    },\n  };\n});"
+      }
+    },
+    {
+      "id": "if_w",
+      "name": "W2. Reconciliation Continue Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        6760,
+        60
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-w1",
+              "leftValue": "={{ $json.reconciliation.state !== 'SENT_RECONCILED' && $json.reconciliation.state !== 'HUMAN_REVIEW_MULTIPLE_MATCHES' && $json.reconciliation.polls_taken < $json.reconciliation.max_polls }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "wait_w",
+      "name": "W3. Reconciliation Poll Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        6760,
+        220
+      ],
+      "parameters": {
+        "resume": "timeInterval",
+        "unit": "seconds",
+        "amount": 2
+      },
+      "webhookId": "835df063-1ba5-46d6-b9b9-19bbf958d7d9"
+    },
+    {
+      "id": "node_w4",
+      "name": "W4. Build Reconciliation Terminal Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7100,
+        -60
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nreturn items.map((item) => {\n  const input = item.json || {};\n  const rec = input.reconciliation || {};\n  let result;\n  let sendState;\n  let reason;\n  if (rec.state === 'SENT_RECONCILED') {\n    result = 'SENT';\n    sendState = 'SENT_RECONCILED';\n    reason = 'RECONCILED_SINGLE_CONSISTENT_MATCH';\n  } else if (rec.state === 'HUMAN_REVIEW_MULTIPLE_MATCHES') {\n    result = 'HUMAN_REVIEW';\n    sendState = 'SEND_UNCERTAIN';\n    reason = 'RECONCILIATION_MULTIPLE_MATCHES_NO_SECOND_POST';\n  } else {\n    result = 'HUMAN_REVIEW';\n    sendState = 'SEND_UNCERTAIN';\n    reason = 'RECONCILIATION_ZERO_MATCHES_NO_SECOND_POST';\n  }\n  return {\n    json: {\n      ...input,\n      terminal: {\n        schema_version: '1.0',\n        result,\n        send_state: sendState,\n        reason,\n        reconciliation: rec,\n        second_post_performed: false,\n        sent: rec.state === 'SENT_RECONCILED',\n      },\n    },\n  };\n});"
+      }
+    }
+  ],
+  "connections": {
+    "When Called With Decision Engine Output": {
+      "main": [
+        [
+          {
+            "node": "A. Validate Decision Engine Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A. Validate Decision Engine Output": {
+      "main": [
+        [
+          {
+            "node": "B. Re-run Send & Suppression Gates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B. Re-run Send & Suppression Gates": {
+      "main": [
+        [
+          {
+            "node": "C. Send Gates Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "C. Send Gates Router": {
+      "main": [
+        [
+          {
+            "node": "D. Compute Stable Send Key",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "C2. Gate Rejection Terminal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "D. Compute Stable Send Key": {
+      "main": [
+        [
+          {
+            "node": "E. Acquire Send Ownership (hmz-send-state)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "E. Acquire Send Ownership (hmz-send-state)": {
+      "main": [
+        [
+          {
+            "node": "E2. Normalize Acquisition Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "E2. Normalize Acquisition Result": {
+      "main": [
+        [
+          {
+            "node": "F. Acquisition Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "F. Acquisition Router": {
+      "main": [
+        [
+          {
+            "node": "G. Suppression Actions (Mock Adapter)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "F2. Blocked Duplicate or Rerun Terminal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "G. Suppression Actions (Mock Adapter)": {
+      "main": [
+        [
+          {
+            "node": "H. Verify Suppression Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "H. Verify Suppression Results": {
+      "main": [
+        [
+          {
+            "node": "I. Suppression Verified Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "I. Suppression Verified Router": {
+      "main": [
+        [
+          {
+            "node": "J. DRY_RUN Gate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "I2. Suppression Escalation Terminal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "J. DRY_RUN Gate": {
+      "main": [
+        [
+          {
+            "node": "K. Transition to DRY_RUN_OK (hmz-send-state)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "N. Live Adapter Contract (Validation-Only, Unreachable)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "K. Transition to DRY_RUN_OK (hmz-send-state)": {
+      "main": [
+        [
+          {
+            "node": "K2. Build DRY_RUN Terminal Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "N. Live Adapter Contract (Validation-Only, Unreachable)": {
+      "main": [
+        [
+          {
+            "node": "O. Live Send Gate Evaluation (14 Gates)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "O. Live Send Gate Evaluation (14 Gates)": {
+      "main": [
+        [
+          {
+            "node": "P. Live Send Gate Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "P. Live Send Gate Router": {
+      "main": [
+        [
+          {
+            "node": "Q. POST Reply to Instantly (Gated)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "P2. Live Send Blocked Terminal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Q. POST Reply to Instantly (Gated)": {
+      "main": [
+        [
+          {
+            "node": "R. Classify Send Attempt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "R. Classify Send Attempt": {
+      "main": [
+        [
+          {
+            "node": "S. Retry Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "S. Retry Router": {
+      "main": [
+        [
+          {
+            "node": "T. Retry Backoff Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "U. Send Outcome Router (SENT?)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "T. Retry Backoff Wait": {
+      "main": [
+        [
+          {
+            "node": "Q. POST Reply to Instantly (Gated)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "U. Send Outcome Router (SENT?)": {
+      "main": [
+        [
+          {
+            "node": "X. Persist SENT Result (hmz-send-state)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "U2. Send Outcome Router (SEND_UNCERTAIN?)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "X. Persist SENT Result (hmz-send-state)": {
+      "main": [
+        [
+          {
+            "node": "X2. Build SENT Terminal Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "U2. Send Outcome Router (SEND_UNCERTAIN?)": {
+      "main": [
+        [
+          {
+            "node": "V. Reconciliation Poll (list_emails, Gated)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "U3. Finalize Failure Terminal Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "V. Reconciliation Poll (list_emails, Gated)": {
+      "main": [
+        [
+          {
+            "node": "W. Process Reconciliation Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "W. Process Reconciliation Poll": {
+      "main": [
+        [
+          {
+            "node": "W2. Reconciliation Continue Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "W2. Reconciliation Continue Router": {
+      "main": [
+        [
+          {
+            "node": "W3. Reconciliation Poll Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "W4. Build Reconciliation Terminal Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "W3. Reconciliation Poll Wait": {
+      "main": [
+        [
+          {
+            "node": "V. Reconciliation Poll (list_emails, Gated)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "errorWorkflow": "2PR9YEkG4KyGdowa"
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": null,
+  "versionId": "fe4275da-58de-4268-a0f7-fadffdb01d60",
+  "activeVersionId": null,
+  "versionCounter": 21,
+  "triggerCount": 0,
+  "sourceWorkflowId": null,
+  "shared": [
+    {
+      "updatedAt": "2026-06-17T18:29:52.561Z",
+      "createdAt": "2026-06-17T18:29:52.561Z",
+      "role": "workflow:owner",
+      "workflowId": "ePS5uBBxKxhFCYgU",
+      "projectId": "wczOkcRaHDWk4Ffs",
+      "project": {
+        "updatedAt": "2026-06-17T07:02:32.299Z",
+        "createdAt": "2026-06-17T06:55:32.963Z",
+        "id": "wczOkcRaHDWk4Ffs",
+        "name": "Hamzah Zahid <hamzahzahidsales@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "c36de550-8f81-4842-a501-1a1e33f7d4b8"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": null
+}

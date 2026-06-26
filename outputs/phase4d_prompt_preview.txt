@@ -1,0 +1,28 @@
+=== SL-PHASE-4D AUGMENTED PROMPT PREVIEW ===
+Generated: 2026-06-23T12:23:22Z
+Mode: SIMULATION ONLY — not applied to production
+
+Safe rules (2):
+  - 55844bf1-a36c-4a03-9832-98b08c50e557: Classify as INFORMATION_REQUEST/PROOF_REQUEST: see correction_reason...
+  - 1a779d95-beaf-4d2e-8c70-73721a11b02d: Classify as PRICING_OR_COMMERCIAL_NEGOTIATION/PRICING_REQUEST: see correction_re...
+
+Blocked rules (0):
+
+--- PRICING_REQUEST case augmented section ---
+
+---
+## Human-approved guidance (active rules — injected by SL-PHASE-4D)
+The following guidance has been reviewed and approved by the account owner.
+Apply it to your draft where relevant. It does NOT override safety gates.
+Do not invent prices, results, case studies, guarantees, or compliance claims.
+Human approval is still required before any reply is sent.
+
+### Rule 1 (rule_id: 1a779d95-beaf-4d2e-8c70-73721a11b02d)
+Scope: PRICING_OR_COMMERCIAL_NEGOTIATION / PRICING_REQUEST
+Instruction: Classify as PRICING_OR_COMMERCIAL_NEGOTIATION/PRICING_REQUEST: see correction_reason
+
+---
+
+
+--- SMALL_SCALE_PILOT_REQUEST case augmented section ---
+

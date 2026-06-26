@@ -1,0 +1,164 @@
+{
+  "generatedAt": "2026-06-15T17:27:07.248Z",
+  "nodeVersion": "v24.15.0",
+  "total": 31,
+  "passed": 31,
+  "failed": 0,
+  "results": [
+    {
+      "id": "fixtures-matrix-complete",
+      "description": "The Phase 4 fixture matrix has exactly 60 synthetic fixtures across the required groups",
+      "status": "pass"
+    },
+    {
+      "id": "harness-core-fixture-matrix-all-pass",
+      "description": "runFixtureMatrix() passes every fixture against the deterministic core modules",
+      "status": "pass"
+    },
+    {
+      "id": "wf-json-parses",
+      "description": "Both generated workflow files parse as valid JSON",
+      "status": "pass"
+    },
+    {
+      "id": "wf-names",
+      "description": "Workflows have the required names",
+      "status": "pass"
+    },
+    {
+      "id": "wf-inactive",
+      "description": "Both workflows are inactive",
+      "status": "pass"
+    },
+    {
+      "id": "wf-no-credentials",
+      "description": "No node in either workflow has a credentials object",
+      "status": "pass"
+    },
+    {
+      "id": "wf-no-secret-values",
+      "description": "Neither workflow JSON contains secret-like literal values",
+      "status": "pass"
+    },
+    {
+      "id": "wf-no-live-external-request",
+      "description": "Every httpRequest node targets only the internal hmz-send-state sidecar",
+      "status": "pass"
+    },
+    {
+      "id": "wf-no-real-notification-service",
+      "description": "Neither workflow references a real notification surface; placeholder only",
+      "status": "pass"
+    },
+    {
+      "id": "wf-hardcoded-validation-mode",
+      "description": "Both workflows hardcode validation_mode/synthetic in generated Code nodes",
+      "status": "pass"
+    },
+    {
+      "id": "wf-code-validator-return-shape-compatible",
+      "description": "Generated Code nodes contain no helper-level bare return-object pattern that n8n misclassifies as node output",
+      "status": "pass"
+    },
+    {
+      "id": "wf-generated-code-compiles",
+      "description": "Every generated Code node compiles as standalone n8n JavaScript",
+      "status": "pass"
+    },
+    {
+      "id": "wf-no-continue-on-error",
+      "description": "Phase 4B workflows stop on Code/HTTP failures instead of producing successful-looking output",
+      "status": "pass"
+    },
+    {
+      "id": "watchdog-rejects-malformed-sidecar-responses",
+      "description": "Watchdog merge helpers reject malformed sidecar responses instead of silently treating them as empty/successful",
+      "status": "pass"
+    },
+    {
+      "id": "wf05-generated-runtime-smoke",
+      "description": "Generated SLA Watchdog Code nodes evaluate a synthetic warning record end to end",
+      "status": "pass"
+    },
+    {
+      "id": "wf06-generated-runtime-smoke",
+      "description": "Generated Full Test Harness Code node runs the embedded fixture matrix end to end",
+      "status": "pass"
+    },
+    {
+      "id": "watchdog-classify-send-record-categories",
+      "description": "classifySendRecord() maps every non-terminal send state to the right watchdog category",
+      "status": "pass"
+    },
+    {
+      "id": "watchdog-classify-error-record-categories",
+      "description": "classifyErrorRecord() maps error records to the right watchdog category",
+      "status": "pass"
+    },
+    {
+      "id": "watchdog-sla-thresholds-boundary",
+      "description": "statusForAge() applies the 180s warning / 300s breach thresholds at their exact boundaries",
+      "status": "pass"
+    },
+    {
+      "id": "watchdog-transmission-slo-only-send-uncertain",
+      "description": "Only SEND_UNCERTAIN belongs to the Transmission SLO; everything else (including HUMAN_REVIEW) is Processing",
+      "status": "pass"
+    },
+    {
+      "id": "watchdog-processing-age-does-not-reset-on-transition",
+      "description": "Processing SLO age uses durable createdAt rather than the latest transition time",
+      "status": "pass"
+    },
+    {
+      "id": "watchdog-alert-key-stable-and-sanitised",
+      "description": "buildAlertKey() is stable and contains no message bodies or raw email addresses",
+      "status": "pass"
+    },
+    {
+      "id": "sidecar-phase4a-regression-acquire-and-lock",
+      "description": "Phase 4A acquire/lock/forward-only state machine still works unchanged",
+      "status": "pass"
+    },
+    {
+      "id": "sidecar-created-at-persists-and-details-merge",
+      "description": "Send state preserves createdAt and prior safe details across transitions",
+      "status": "pass"
+    },
+    {
+      "id": "sidecar-redacts-content-and-raw-email-values",
+      "description": "Sidecar sanitisation blocks raw bodies, subjects, and email addresses in arbitrary records",
+      "status": "pass"
+    },
+    {
+      "id": "sidecar-unfinished-listing-excludes-terminal",
+      "description": "listUnfinishedSends() returns only non-terminal records (LOCKED/SUBMITTING/SENT/SEND_UNCERTAIN)",
+      "status": "pass"
+    },
+    {
+      "id": "sidecar-resolved-error-record-excluded",
+      "description": "A resolved error record is excluded from listUnresolvedErrors()",
+      "status": "pass"
+    },
+    {
+      "id": "sidecar-alert-dedupe-atomic",
+      "description": "recordAlertOnce() records an alertKey at most once (atomic open('wx'))",
+      "status": "pass"
+    },
+    {
+      "id": "sidecar-phase4b-result-roundtrip",
+      "description": "writePhase4bResult()/readPhase4bResult() round-trip a sanitised result with a 16-hex resultId",
+      "status": "pass"
+    },
+    {
+      "id": "server-http-endpoints-end-to-end",
+      "description": "hmz-send-state HTTP endpoints (Phase 4A + Phase 4B) work end to end on an ephemeral local port",
+      "status": "pass"
+    },
+    {
+      "id": "compose-no-host-port-for-sidecar",
+      "description": "docker-compose.yml does not publish a host port for hmz-send-state",
+      "status": "pass"
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "fixture_id": "phase3_10_duplicate_event",
+  "description": "Duplicate event detection. The same payload (same event_id, email_id, campaign_id, email_account, lead_email -> same idempotency_key) is POSTed twice. The first execution proceeds normally; the second execution must be detected as a duplicate by Workflow 1 Section E3 (idempotency.is_duplicate=true), which makes Workflow 2 Section A set opFlags.is_duplicate_event=true, noop_match=true, and route to the NOOP plan with no repeated downstream action.",
+  "input": {
+    "intake_id": "phase3-fixture-10-duplicate-event",
+    "event_id": "evt-phase3-010",
+    "email_id": "email-phase3-010",
+    "event_type": "reply_received",
+    "lead_email": "robin.shaw@prospectco.test",
+    "from_address_email": "robin.shaw@prospectco.test",
+    "email_account": "outbound1@hmzvalidation.test",
+    "reply_subject": "Re: Quick question about your sales pipeline",
+    "reply_text": "Yes, I'm interested - happy to chat further.",
+    "reply_text_snippet": "Yes, I'm interested - happy to chat further.",
+    "timestamp": "2026-06-09T11:00:00Z",
+    "campaign_id": "campaign-validation-001",
+    "validation_cell": "CELL_1_SAAS_SALES_HIRING",
+    "workspace": "hmz-workspace-dev",
+    "campaign_name": "US B2B Validation Sprint - Cell 1",
+    "step": 2,
+    "variant": 1,
+    "is_first": true,
+    "thread_id": "thread-phase3-010",
+    "message_id": "<msg-phase3-010@instantly.test>",
+    "unibox_url": "https://app.instantly.test/unibox/thread-phase3-010"
+  },
+  "expected": {
+    "how_to_test": "POST this exact input to the dev webhook twice in sequence (same payload both times). The idempotency_key is event_id:email_id:campaign_id:email_account:lead_email, all of which are identical across both submissions, so both submissions hash to the same key regardless of intake_id.",
+    "first_submission": {
+      "payload_status": "COMPLETE",
+      "idempotency": {
+        "is_duplicate": false,
+        "key_scheme": "full_identity"
+      },
+      "deterministic": {
+        "deterministic_match": false,
+        "noop_match": false,
+        "category": null,
+        "rule_id": null
+      },
+      "classifier": {
+        "category": "POSITIVE_INTEREST",
+        "confidence": 0.75,
+        "interest_stage": "VALIDATION_SPRINT_INTEREST"
+      },
+      "decision": {
+        "category": "POSITIVE_INTEREST",
+        "confidence": 0.75,
+        "confidence_overridden": false,
+        "stop_active_sequence": true,
+        "durable_dnc_intent": false,
+        "address_suppression_intent": "NONE",
+        "review_hold": false,
+        "human_review_required": true,
+        "reply_permitted": true,
+        "reply_template_id": "T1_SCENARIO_C_UNCLEAR_INTEREST",
+        "reply_draft_status": "DRAFT_PENDING_REVIEW",
+        "external_action_status": "NOT_PERFORMED",
+        "follow_up_date": null,
+        "interest_stage": "VALIDATION_SPRINT_INTEREST",
+        "terminal_status": "REVIEW_HOLD"
+      }
+    },
+    "second_submission": {
+      "idempotency": {
+        "is_duplicate": true,
+        "idempotency_key": "evt-phase3-010:email-phase3-010:campaign-validation-001:outbound1@hmzvalidation.test:robin.shaw@prospectco.test"
+      },
+      "terminal_status": "COMPLETED_NO_SEND",
+      "processing_halted": true,
+      "external_action_status": "NOOP",
+      "stop_active_sequence": false,
+      "reason_contains": "Duplicate event detected for idempotency key \"evt-phase3-010:email-phase3-010:campaign-validation-001:outbound1@hmzvalidation.test:robin.shaw@prospectco.test\"",
+      "must_be_absent": ["prefilter", "deterministic", "classifier", "decision", "draft", "validation", "validation_learning"]
+    },
+    "notes": "PROVISIONAL: idempotency.is_duplicate is computed in Workflow 1 Section E3 by comparing the Data Table row's createdAt vs updatedAt after an upsert keyed on idempotency_key (n8n Data Table id xUlD0Zhoek6mU5I2, table hmz_validation_reply_intake_idempotency). Whether n8n's Data Table 'upsert' operation returns row-level createdAt/updatedAt timestamps that differ between insert and update was not independently confirmed before this build (duplicate_detection_status='PROVISIONAL', logged in reports/UNRESOLVED_ITEMS.md U1). On the second submission, E4. Duplicate Event Router (Phase 3.1A Repair 4) reads idempotency.is_duplicate=true and routes directly to E5. Duplicate Event Terminal instead of F. Deterministic Prefilter - Workflow 2 (Sections A-E) never runs for the second submission, so prefilter/deterministic/classifier/decision/draft/validation/validation_learning are all absent from the result (see must_be_absent above), and E5 alone sets terminal_status=COMPLETED_NO_SEND, external_action_status=NOOP, stop_active_sequence=false, and a reason referencing the duplicated idempotency_key. If createdAt/updatedAt are not returned by the real Data Table as expected, is_duplicate may always read false and the second_submission expectations above would not be met against the live n8n instance - this remains PROVISIONAL pending live confirmation."
+  }
+}

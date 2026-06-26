@@ -1,0 +1,69 @@
+[
+  {
+    "id": "sla-watchdog-temporary-activation-breach-alert",
+    "group": "sla_watchdog",
+    "synthetic": true,
+    "description": "Temporary-controlled-activation acceptance scenario: the SLA Watchdog workflow (05) is invoked once via its 'Execute Workflow Trigger (Synthetic Test Entry)' while the hmz-send-state sidecar reports one unfinished send aged past the breach threshold. The run is performed in the same temporary-activation window used by run-local-runtime-acceptance.ps1 (Reply Sender / Error Handler / Human Approval) and the workflow is restored to active=false in the finally block regardless of outcome. config.review.google_chat_configured remains false in this profile, so the notification step must fail closed without attempting an external POST.",
+    "check": "watchdog_evaluation_and_notification",
+    "input": {
+      "synthetic": true,
+      "now": "2026-06-15T12:00:00.000Z",
+      "unfinished": {
+        "sends": [
+          {
+            "sendKey": "b000000000000000000000000000000000000000000000000000000000000b",
+            "state": "SUBMITTING",
+            "updatedAt": "2026-06-15T11:54:00.000Z"
+          }
+        ],
+        "errors": []
+      },
+      "config": {
+        "review": { "google_chat_configured": false }
+      }
+    },
+    "expected": {
+      "records.0.category": "API_RETRY",
+      "records.0.sloType": "PROCESSING",
+      "records.0.status": "BREACH",
+      "alert_count": 1,
+      "notification.delivered": false,
+      "notification.fail_closed_reason": "WATCHDOG_NOTIFICATION_FAILED",
+      "watchdog_result.persisted": true
+    }
+  },
+  {
+    "id": "sla-watchdog-temporary-activation-dedupe-second-run",
+    "group": "sla_watchdog",
+    "synthetic": true,
+    "description": "Immediately re-running the same temporary-activation invocation with the identical unresolved sendKey must be deduplicated by the F. Dedupe Alerts (hmz-send-state) step: the alert is recognised as already raised and is not re-counted as a new alert, proving the watchdog does not produce duplicate notifications across repeated polls within its dedupe window.",
+    "check": "watchdog_dedupe_second_poll",
+    "input": {
+      "synthetic": true,
+      "now": "2026-06-15T12:00:30.000Z",
+      "unfinished": {
+        "sends": [
+          {
+            "sendKey": "b000000000000000000000000000000000000000000000000000000000000b",
+            "state": "SUBMITTING",
+            "updatedAt": "2026-06-15T11:54:00.000Z"
+          }
+        ],
+        "errors": []
+      },
+      "config": {
+        "review": { "google_chat_configured": false }
+      },
+      "previous_run_alert_keys": [
+        "b000000000000000000000000000000000000000000000000000000000000b:API_RETRY:BREACH"
+      ]
+    },
+    "expected": {
+      "records.0.status": "BREACH",
+      "alert_count": 0,
+      "dedupe.new_alert_count": 0,
+      "dedupe.already_alerted_count": 1,
+      "notification.delivered": false
+    }
+  }
+]

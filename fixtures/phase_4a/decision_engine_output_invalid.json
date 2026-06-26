@@ -1,0 +1,32 @@
+{
+  "nes": {
+    "intake_id": "",
+    "eaccount": "UNKNOWN",
+    "lead_email": "UNKNOWN",
+    "campaign_id": null,
+    "threading": {
+      "reply_to_uuid": ""
+    },
+    "reply": {
+      "subject": "Re: thread"
+    }
+  },
+  "decision": {
+    "reply_permitted": true,
+    "human_review_required": false,
+    "category": "INTERESTED",
+    "reply_template_id": "template-abc",
+    "address_suppression_intent": "NONE",
+    "durable_dnc_intent": false
+  },
+  "validation": {
+    "valid": false
+  },
+  "draft": {
+    "draft_text": "Hi there."
+  },
+  "approval": {
+    "approved": false
+  },
+  "random_marker": "marker-CCCC"
+}

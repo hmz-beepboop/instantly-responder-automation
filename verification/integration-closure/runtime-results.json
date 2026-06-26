@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "2.0",
+  "generatedAtUtc": "2026-06-14T23:14:00.1813460+00:00",
+  "synthetic": true,
+  "liveInstantlyCallPermitted": false,
+  "allWorkflowsInactive": true,
+  "allWorkflowsInactiveInitially": true,
+  "temporarilyActivatedWorkflowIds": [
+    "OzYLWuCF6DoU7Iw9",
+    "koyKIaY2ExF3yhx7"
+  ],
+  "allWorkflowsInactiveAfter": true,
+  "remoteReferencesVerified": true,
+  "intakePathExpectedOutcome": "BLOCKED_PENDING_DURABLE_APPROVAL",
+  "directApprovedSender": {
+    "terminalResult": "DRY_RUN_OK",
+    "sendState": "DRY_RUN_OK",
+    "sent": false,
+    "transport": "NONE",
+    "passed": true
+  },
+  "directErrorHandler": {
+    "sendState": "SEND_UNCERTAIN",
+    "errorClass": "SEND_UNCERTAIN",
+    "retryable": false,
+    "notificationSurface": "PLACEHOLDER_NOT_CONFIGURED",
+    "notificationDelivered": false,
+    "errorIdPresent": true,
+    "passed": true
+  },
+  "automaticErrorWorkflowRoute": "STATICALLY_CONFIGURED_NOT_RUNTIME_EXERCISED",
+  "fullHarness": {
+    "overallResult": "PASS",
+    "integrationResult": "PASS",
+    "executionExitCode": 0,
+    "outputHash": "F41EEABDCAB0F79FFAF7E8622BE5C8E2D33F70FD5533B9CA42524D52967BB54A",
+    "passed": true
+  },
+  "n8nRestartedAndReady": true,
+  "sidecarRunning": true,
+  "overallResult": "PASS"
+}

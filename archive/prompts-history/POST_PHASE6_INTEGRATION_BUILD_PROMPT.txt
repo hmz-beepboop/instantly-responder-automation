@@ -1,0 +1,226 @@
+# Post-Phase-6 Integration Closure — Offline Build Only
+
+## Objective
+
+Close only the missing six-workflow integration and runtime-test preparation.
+
+Do not update operator documentation in this session.
+Do not access n8n.
+Do not use MCP.
+Do not access Instantly.
+Do not request credentials.
+Do not make any live external call.
+Do not begin Skill construction.
+
+## Source files you may read
+
+Read only:
+
+- `workflows/01_reply_intake_validation.json`
+- `workflows/02_reply_decision_engine_validation.json`
+- `workflows/03_reply_sender_validation.json`
+- `workflows/04_reply_error_handler_validation.json`
+- `workflows/05_reply_sla_watchdog_validation.json`
+- `workflows/06_reply_full_test_harness_validation.json`
+- `verification/phase4a/sender-core.mjs`
+- `verification/phase4a/error-core.mjs`
+- `verification/phase4b/harness-core.mjs`
+- `infrastructure/send-state/server.mjs`
+- `infrastructure/send-state/state-store.mjs`
+- `infrastructure/local-n8n/docker-compose.yml`
+- `reports/VALIDATION_REPORT.md`
+- `reports/PHASE_5_MECHANICAL_AUDIT.md`
+- `docs/STATE_AND_IDEMPOTENCY.md`
+- `docs/NORMALIZED_EVENT_SCHEMA.md`
+
+Do not scan the repository.
+Do not read DOCX files.
+Do not use web search.
+
+## Fixed defects to close
+
+1. Reply Intake calls the Decision Engine but never calls Reply Sender.
+2. The Error Handler is not assigned as the error workflow for the applicable workflows.
+3. The Full Test Harness does not execute the real Sender or Error Handler workflows.
+4. Execute Sub-workflow IDs are current-instance IDs and need safe remapping after a fresh import.
+
+## Hard file scope
+
+You may create or modify only:
+
+- the six JSON files under `workflows/`
+- `verification/integration-closure/build-integration.mjs`
+- `verification/integration-closure/run-offline-tests.mjs`
+- `verification/integration-closure/offline-test-results.json`
+- `verification/integration-closure/apply-integration-closure.ps1`
+- `verification/integration-closure/run-n8n-runtime-tests.ps1`
+- files under `fixtures/integration_closure/`
+- `reports/INTEGRATION_CLOSURE_OFFLINE_BUILD.md`
+
+Do not modify any documentation, configuration example, report, sidecar source,
+Docker Compose file, Phase 3/4/5 test file, or existing evidence file.
+
+## Efficiency limits
+
+- No agents.
+- Node.js built-ins only.
+- No npm install.
+- No Docker or n8n command in this session.
+- One initial full test run.
+- One repair pass only for a proven defect.
+- One final full run only after repair.
+- Do not print workflow JSON.
+- Final response under 250 words.
+
+## Required workflow integration
+
+### Reply Intake
+
+After `G. Decision Engine Handoff`, add one Execute Sub-workflow node that calls
+the Reply Sender and passes through the Decision Engine result.
+
+Requirements:
+
+- It runs only for accepted, non-duplicate events that reached the Decision Engine.
+- Configuration rejection and duplicate terminal branches cannot reach it.
+- The Sender remains the authoritative pre-send gate.
+- Expected validation outcome is a no-send result such as `DRY_RUN_OK` or a
+  safe blocked/review state.
+
+### Error Handler assignment
+
+Configure the Error Handler as the error workflow for:
+
+- Reply Intake
+- Decision Engine
+- Reply Sender
+- SLA Watchdog
+- Full Test Harness
+
+Do not assign it to itself.
+
+The apply script must use the actual discovered Error Handler ID.
+
+### Full Test Harness integration path
+
+Extend the Full Test Harness with a synthetic integration route that:
+
+1. Calls the real Reply Sender workflow with a valid synthetic Decision Engine output.
+2. Asserts:
+   - Sender ran inside n8n
+   - terminal result is `DRY_RUN_OK`
+   - `sent=false`
+   - `transport=NONE`
+   - no external Instantly request occurred
+3. Calls the real Error Handler synthetic entry with a forced sanitised error.
+4. Asserts:
+   - Error Handler ran inside n8n
+   - a sanitised sidecar error record was created
+   - `SEND_UNCERTAIN` is not retryable
+   - notification is placeholder-only
+
+Use unique synthetic identifiers per normal harness run, plus a separate stable
+fixture for sequential-rerun blocking.
+
+## ID-safe apply script
+
+Create:
+
+`verification/integration-closure/apply-integration-closure.ps1`
+
+Requirements:
+
+- PowerShell 7
+- Require `HMZ_N8N_API_KEY` in the current process
+- Use `http://127.0.0.1:5678`
+- Refuse to run unless offline tests passed
+- Discover workflows by exact canonical name
+- Refuse duplicate exact-name matches
+- Support both existing and fresh local instances
+- Fresh-create dependency order:
+  1. Decision Engine
+  2. Error Handler
+  3. Sender
+  4. SLA Watchdog
+  5. Full Test Harness
+  6. Intake
+- Capture actual returned IDs
+- Patch every Execute Sub-workflow target to actual IDs
+- Patch applicable `settings.errorWorkflow` values to the actual Error Handler ID
+- Update existing workflows in place when exactly one canonical match exists
+- Keep every workflow inactive
+- Add no credentials
+- Refuse any reachable non-sidecar HTTP Request target
+- Report partial state and never auto-delete
+- Clear key-bearing variables in `finally`
+
+## Actual n8n runtime test script
+
+Create:
+
+`verification/integration-closure/run-n8n-runtime-tests.ps1`
+
+Requirements:
+
+- PowerShell 7
+- Require `HMZ_N8N_API_KEY`
+- Confirm all six workflows inactive
+- Confirm remote/local match after normalising environment-specific IDs
+- Keep `DRY_RUN=true` and `LIVE_CAMPAIGNS=[]`
+- Stop the main n8n service only when needed for the port-5679 CLI conflict
+- Keep `hmz-send-state` running
+- Execute the Full Test Harness in a one-off n8n container
+- Prove actual Sender and Error Handler sub-executions succeeded
+- Verify Sender result `DRY_RUN_OK`, `sent=false`, `transport=NONE`
+- Verify one sanitised Error Handler record
+- Verify no external Instantly request occurred
+- Restart n8n in `finally` and confirm API readiness
+- Write:
+  - `verification/integration-closure/runtime-results.json`
+  - `reports/INTEGRATION_CLOSURE_RUNTIME.md`
+- Never activate workflows
+- Never bind credentials
+- Never contact Instantly
+
+Do not run this script in the offline Claude session.
+
+## Offline tests
+
+Test at minimum:
+
+- all six workflow JSON files parse
+- all remain inactive
+- no credentials
+- no reachable external HTTP target
+- Intake has exactly one Decision Engine call and one Sender call
+- Sender call follows Decision Engine on the accepted path
+- reject/duplicate branches cannot reach Sender
+- five applicable workflows identify Error Handler in settings
+- Error Handler does not identify itself
+- Full Harness contains actual Sender and Error Handler sub-workflow calls
+- workflow ID references are patchable
+- fresh-install dependency order is correct
+- apply script is idempotent by exact name
+- embedded Code nodes compile
+- Phase 4A 42/42 regression passes
+- Phase 4B 31/31 regression passes
+
+## Report
+
+Create `reports/INTEGRATION_CLOSURE_OFFLINE_BUILD.md` with:
+
+- files changed
+- exact integration graph
+- offline tests
+- fresh-install ID remapping strategy
+- runtime script safety controls
+- limitations
+- verdict
+
+Use exactly one verdict:
+
+- `INTEGRATION_CLOSURE_OFFLINE_READY`
+- `INTEGRATION_CLOSURE_OFFLINE_FAILED`
+- `INTEGRATION_CLOSURE_OFFLINE_BLOCKED`
+
+Stop after the offline build. Do not apply or execute it.

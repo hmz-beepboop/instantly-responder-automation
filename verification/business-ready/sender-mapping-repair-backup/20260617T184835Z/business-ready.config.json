@@ -1,0 +1,173 @@
+{
+  "config_version": "business-ready-1.1",
+  "generated_by": "verification/business-ready (offline build)",
+  "owner_inputs_status": "COMPLETE",
+  "operating_mode": "VALIDATION",
+  "launch_profile": {
+    "name": "SUPERVISED_VALIDATION",
+    "description": "Fixed launch profile for the live path: mandatory durable human approval for every prospect-facing reply, one exact campaign allowlist, one exact workspace allowlist, a connected-sender allowlist, English-only deterministic classification with human fallback, no unattended auto-send, no PROVEN mode. operating_mode/dry_run/live_campaigns above remain the live embedded switches; this block documents the gate-evaluation target state mirrored by workflows/03 node O (Live Send Gate Evaluation) and workflows/01 node F1 (Production Security & Allowlist Gate).",
+    "required_operating_mode": "SUPERVISED_VALIDATION",
+    "unattended_auto_send": false,
+    "proven_mode": false
+  },
+  "dry_run": true,
+  "live_campaigns": [],
+  "workspace_allowlist": [
+    "c7f84f11-4a1a-42dc-9a74-a417e44cb87e"
+  ],
+  "allowlists": {
+    "workspace_id": "c7f84f11-4a1a-42dc-9a74-a417e44cb87e",
+    "campaign_ids": [
+      "bcda01f7-21c9-4e12-9849-0a375b548467"
+    ],
+    "connected_sender_eaccounts": [
+      "hamzah@teamhmzautomations.com"
+    ],
+    "note": "Mirrors workspace_allowlist/live_campaigns/sender_mapping for the new gate-evaluation nodes (workflows/03 node O, workflows/01 node F1). All three arrays/values are placeholders until the owner supplies them; the apply step must re-embed these exact values into LAUNCH_PROFILE / ALLOWLISTS constants in those nodes."
+  },
+  "reviewer_allowlist": [
+    "humza@hmzaiautomation.com"
+  ],
+  "sender_mapping": {
+    "hamzah@teamhmzautomations.com": {
+      "sender_name": "Hamza",
+      "booking_link": "https://calendar.app.google/qtTHURBWvZKcDxeY7"
+    }
+  },
+  "policy_version": "policy-HMZ-1.2",
+  "kb_version": "KB-1.0-DRAFT",
+  "kb_approved_for_runtime": false,
+  "classifier_version": "deterministic-heuristic-1.0",
+  "template_registry_version": "T-REGISTRY-1.0",
+  "review": {
+    "destination_status": "CONFIGURED",
+    "google_chat_credential_name": "ENV:GOOGLE_CHAT_WEBHOOK_URL",
+    "google_chat_configured": true,
+    "review_base_url": "https://n8n.hmzaiautomation.com/webhook/reply-review",
+    "review_token_ttl_minutes": 60,
+    "review_token_ttl_minutes_default": 60,
+    "fail_closed_state": "REVIEW_NOTIFICATION_FAILED",
+    "production_review_form_path": "reply-review/review",
+    "production_review_submit_path": "reply-review/submit",
+    "review_basic_auth_credential_name": "hmzReviewBasicAuth"
+  },
+  "live_credential_readiness": {
+    "instantly_api_key_bound": true,
+    "instantly_credential_name": "hmzInstantlyApi",
+    "instantly": true,
+    "n8n_api_key_bound": true,
+    "n8n_api_credential_name": "hmzN8nApi",
+    "review_basic_auth_bound": true,
+    "review_basic_auth": true,
+    "ready_for_controlled_live_test": true,
+    "note": "instantly mirrors instantly_api_key_bound for the new live-send gate evaluation (workflows/03 node O, gate 'instantly_credential_ready'); both must be true, set only after the owner binds hmzInstantlyApi AND hmzInstantlyWebhookToken (both httpHeaderAuth) out of band. review_basic_auth gates binding of hmzReviewBasicAuth (httpBasicAuth) on the production review-form/submit webhooks (workflow 07) and is independent of the instantly flags; it must never be resolved via the Instantly credential map."
+  },
+  "suppression_action_enablement": {
+    "source_campaign_stop_enabled": false,
+    "interest_status_update_enabled": false,
+    "subsequence_removal_enabled": false,
+    "exact_email_blocklist_enabled": false,
+    "note": "Each remains false until its own separate live-safety gate is explicitly enabled by the owner. Required suppression actions (T7/T12/T13) still execute idempotently in DRY_RUN against the validation-only adapter contract; only the real HTTP call is gated by these flags."
+  },
+  "instantly_api": {
+    "base_url": "https://api.instantly.ai",
+    "version": "v2",
+    "reply_credential_name": "hmzInstantlyApi",
+    "webhook_token_credential_name": "hmzInstantlyWebhookToken",
+    "endpoints": {
+      "get_email": {
+        "method": "GET",
+        "path": "/api/v2/emails/{id}"
+      },
+      "reply_to_email": {
+        "method": "POST",
+        "path": "/api/v2/emails/reply"
+      },
+      "list_emails": {
+        "method": "GET",
+        "path": "/api/v2/emails"
+      },
+      "update_interest_status": {
+        "method": "POST",
+        "path": "/api/v2/leads/update-interest-status"
+      },
+      "remove_subsequence": {
+        "method": "POST",
+        "path": "/api/v2/leads/subsequence/remove"
+      },
+      "get_lead": {
+        "method": "POST",
+        "path": "/api/v2/leads/list"
+      },
+      "add_to_blocklist": {
+        "method": "POST",
+        "path": "/api/v2/block-lists-entries/bulk-create"
+      },
+      "list_block_list_entries": {
+        "method": "GET",
+        "path": "/api/v2/block-lists-entries"
+      }
+    }
+  },
+  "webhook_protection": {
+    "dev_path": "hmz-validation-reply-intake-dev",
+    "production_path": "instantly-reply",
+    "shared_secret_header_name": "X-HMZ-Webhook-Token",
+    "shared_secret_credential_name": "hmzInstantlyWebhookToken",
+    "rate_limit_endpoint": "http://hmz-send-state:5681/v1/webhook/ratelimit",
+    "campaign_allowlist_required": true,
+    "sender_allowlist_required": true,
+    "api_side_email_id_refetch_required": true,
+    "rate_limit_per_minute": 60,
+    "duplicate_window_seconds": 300
+  },
+  "slo": {
+    "processing_warning_seconds": 180,
+    "processing_breach_seconds": 300,
+    "transmission_target_seconds": 300
+  },
+  "retention": {
+    "review_case_retention_days": 90,
+    "review_case_retention_days_default": 90,
+    "send_state_retention_days": 90,
+    "send_state_retention_days_default": 90,
+    "error_record_retention_days": 90,
+    "error_record_retention_days_default": 90
+  },
+  "retry": {
+    "max_total_attempts": 3,
+    "retryable_status_codes": [
+      429,
+      500,
+      502,
+      503,
+      504
+    ],
+    "honour_retry_after_header": true,
+    "send_uncertain_blind_retry": false
+  },
+  "reconciliation": {
+    "enabled": true,
+    "match_fields": [
+      "thread",
+      "sender",
+      "recipient",
+      "exact_subject",
+      "timestamp_window",
+      "unique_marker"
+    ],
+    "single_match_result": "SENT_RECONCILED",
+    "zero_match_result": "HUMAN_REVIEW_ZERO_MATCHES",
+    "multiple_match_result": "HUMAN_REVIEW_MULTIPLE_MATCHES",
+    "second_post_on_zero_or_multiple_matches": false
+  },
+  "workflow_inventory": {
+    "HMZ - Instantly Reply Intake - Validation": "01_reply_intake_validation.json",
+    "HMZ - Reply Decision Engine - Validation": "02_reply_decision_engine_validation.json",
+    "HMZ - Instantly Reply Sender - Validation": "03_reply_sender_validation.json",
+    "HMZ - Reply Error Handler - Validation": "04_reply_error_handler_validation.json",
+    "HMZ - Reply SLA Watchdog - Validation": "05_reply_sla_watchdog_validation.json",
+    "HMZ - Reply Full Test Harness - Validation": "06_reply_full_test_harness_validation.json",
+    "HMZ - Reply Human Approval - Validation": "07_reply_human_approval_validation.json"
+  }
+}

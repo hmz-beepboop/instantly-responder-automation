@@ -1,0 +1,23 @@
+# HMZ_BUSINESS_LIVE_HOSTING reverse-proxy configuration (Caddy 2).
+#
+# Terminates HTTPS for {$N8N_HOST} (automatic Let's Encrypt certificate,
+# renewed automatically by Caddy) and forwards everything to n8n on the
+# internal compose network. Contains no secrets - {$N8N_HOST} and
+# {$ACME_EMAIL} are read from the .env file in this directory.
+#
+# n8n is the only upstream. Do not add the hmz-send-state sidecar here -
+# it must remain unreachable from outside the compose network.
+
+{$N8N_HOST} {
+	tls {$ACME_EMAIL}
+
+	reverse_proxy n8n:5678
+
+	encode gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+	}
+}

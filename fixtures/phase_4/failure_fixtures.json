@@ -1,0 +1,184 @@
+[
+  {
+    "id": "failure-http-400",
+    "group": "failure",
+    "synthetic": true,
+    "description": "400 -> terminal PERMANENT_FAILURE, no ambiguous side effect",
+    "check": "send_outcome",
+    "input": { "outcome": { "kind": "http", "status": 400, "body": { "error": "bad_request" }, "headers": {} } },
+    "expected": { "mode": "terminal", "state": "PERMANENT_FAILURE", "ambiguousSideEffect": false }
+  },
+  {
+    "id": "failure-http-401",
+    "group": "failure",
+    "synthetic": true,
+    "description": "401 -> terminal AUTH_OR_PLAN_FAILURE",
+    "check": "send_outcome",
+    "input": { "outcome": { "kind": "http", "status": 401, "body": { "error": "unauthorized" }, "headers": {} } },
+    "expected": { "mode": "terminal", "state": "AUTH_OR_PLAN_FAILURE", "ambiguousSideEffect": false }
+  },
+  {
+    "id": "failure-http-402",
+    "group": "failure",
+    "synthetic": true,
+    "description": "402 -> terminal AUTH_OR_PLAN_FAILURE",
+    "check": "send_outcome",
+    "input": { "outcome": { "kind": "http", "status": 402, "body": { "error": "payment_required" }, "headers": {} } },
+    "expected": { "mode": "terminal", "state": "AUTH_OR_PLAN_FAILURE", "ambiguousSideEffect": false }
+  },
+  {
+    "id": "failure-http-403",
+    "group": "failure",
+    "synthetic": true,
+    "description": "403 -> terminal AUTH_OR_PLAN_FAILURE",
+    "check": "send_outcome",
+    "input": { "outcome": { "kind": "http", "status": 403, "body": { "error": "forbidden" }, "headers": {} } },
+    "expected": { "mode": "terminal", "state": "AUTH_OR_PLAN_FAILURE", "ambiguousSideEffect": false }
+  },
+  {
+    "id": "failure-http-404-invalid-reply-target",
+    "group": "failure",
+    "synthetic": true,
+    "description": "404 -> terminal INVALID_REPLY_TARGET",
+    "check": "send_outcome",
+    "input": { "outcome": { "kind": "http", "status": 404, "body": { "error": "not_found" }, "headers": {} } },
+    "expected": { "mode": "terminal", "state": "INVALID_REPLY_TARGET", "ambiguousSideEffect": false }
+  },
+  {
+    "id": "failure-http-429-with-retry-after",
+    "group": "failure",
+    "synthetic": true,
+    "description": "429 with Retry-After header -> retryable, retryAfterMs honoured (capped)",
+    "check": "send_outcome",
+    "input": { "outcome": { "kind": "http", "status": 429, "body": { "error": "rate_limited" }, "headers": { "retry-after": "30" } } },
+    "expected": { "mode": "retryable", "exhaustedState": "RETRY_EXHAUSTED", "retryAfterMs": 30000, "ambiguousSideEffect": false }
+  },
+  {
+    "id": "failure-http-429-without-retry-after",
+    "group": "failure",
+    "synthetic": true,
+    "description": "429 with no Retry-After header -> retryable, falls back to exponential backoff",
+    "check": "send_outcome",
+    "input": { "outcome": { "kind": "http", "status": 429, "body": { "error": "rate_limited" }, "headers": {} } },
+    "expected": { "mode": "retryable", "exhaustedState": "RETRY_EXHAUSTED", "retryAfterMs": null, "ambiguousSideEffect": false }
+  },
+  {
+    "id": "failure-http-500",
+    "group": "failure",
+    "synthetic": true,
+    "description": "500 -> retryable, exponential backoff",
+    "check": "send_outcome",
+    "input": { "outcome": { "kind": "http", "status": 500, "body": { "error": "internal" }, "headers": {} } },
+    "expected": { "mode": "retryable", "exhaustedState": "RETRY_EXHAUSTED", "retryAfterMs": null, "ambiguousSideEffect": false }
+  },
+  {
+    "id": "failure-http-502",
+    "group": "failure",
+    "synthetic": true,
+    "description": "502 -> retryable, exponential backoff",
+    "check": "send_outcome",
+    "input": { "outcome": { "kind": "http", "status": 502, "body": { "error": "bad_gateway" }, "headers": {} } },
+    "expected": { "mode": "retryable", "exhaustedState": "RETRY_EXHAUSTED", "retryAfterMs": null, "ambiguousSideEffect": false }
+  },
+  {
+    "id": "failure-http-503",
+    "group": "failure",
+    "synthetic": true,
+    "description": "503 -> retryable, exponential backoff",
+    "check": "send_outcome",
+    "input": { "outcome": { "kind": "http", "status": 503, "body": { "error": "unavailable" }, "headers": {} } },
+    "expected": { "mode": "retryable", "exhaustedState": "RETRY_EXHAUSTED", "retryAfterMs": null, "ambiguousSideEffect": false }
+  },
+  {
+    "id": "failure-http-504",
+    "group": "failure",
+    "synthetic": true,
+    "description": "504 -> retryable, exponential backoff",
+    "check": "send_outcome",
+    "input": { "outcome": { "kind": "http", "status": 504, "body": { "error": "gateway_timeout" }, "headers": {} } },
+    "expected": { "mode": "retryable", "exhaustedState": "RETRY_EXHAUSTED", "retryAfterMs": null, "ambiguousSideEffect": false }
+  },
+  {
+    "id": "failure-pre-submission-network-failure",
+    "group": "failure",
+    "synthetic": true,
+    "description": "Network error before the request reached the server -> retryable, no ambiguous side effect",
+    "check": "send_outcome",
+    "input": { "outcome": { "kind": "network-error", "errorPhase": "pre-submission", "serverReceived": false } },
+    "expected": { "mode": "retryable", "exhaustedState": "RETRY_EXHAUSTED", "retryAfterMs": null, "ambiguousSideEffect": false }
+  },
+  {
+    "id": "failure-uncertain-connection-reset",
+    "group": "failure",
+    "synthetic": true,
+    "description": "Connection reset after the request may have reached the server -> terminal SEND_UNCERTAIN, ambiguous side effect",
+    "check": "send_outcome",
+    "input": { "outcome": { "kind": "network-error", "errorPhase": "connection-reset", "serverReceived": true } },
+    "expected": { "mode": "terminal", "state": "SEND_UNCERTAIN", "ambiguousSideEffect": true }
+  },
+  {
+    "id": "failure-post-submission-timeout",
+    "group": "failure",
+    "synthetic": true,
+    "description": "Timeout waiting for a response after submission -> terminal SEND_UNCERTAIN, ambiguous side effect",
+    "check": "send_outcome",
+    "input": { "outcome": { "kind": "network-error", "errorPhase": "post-submission-timeout", "serverReceived": true } },
+    "expected": { "mode": "terminal", "state": "SEND_UNCERTAIN", "ambiguousSideEffect": true }
+  },
+  {
+    "id": "failure-malformed-2xx",
+    "group": "failure",
+    "synthetic": true,
+    "description": "2xx response that does not match the verified sent contract -> terminal SEND_UNCERTAIN, ambiguous side effect",
+    "check": "send_outcome",
+    "input": { "outcome": { "kind": "http", "status": 200, "body": { "unexpected": "shape" }, "headers": {} } },
+    "expected": { "mode": "terminal", "state": "SEND_UNCERTAIN", "ambiguousSideEffect": true }
+  },
+  {
+    "id": "failure-reconcile-zero-matches",
+    "group": "failure",
+    "synthetic": true,
+    "description": "No matching sent message found across all polls -> HUMAN_REVIEW_ZERO_MATCHES",
+    "check": "reconcile",
+    "input": { "checks": [[], [], []], "options": {} },
+    "expected": { "state": "HUMAN_REVIEW_ZERO_MATCHES", "matchCount": 0, "matchIds": [] }
+  },
+  {
+    "id": "failure-reconcile-multiple-matches",
+    "group": "failure",
+    "synthetic": true,
+    "description": "A poll returns more than one candidate match -> HUMAN_REVIEW_MULTIPLE_MATCHES, escalate",
+    "check": "reconcile",
+    "input": { "checks": [["sent-msg-a", "sent-msg-b"]], "options": {} },
+    "expected": { "state": "HUMAN_REVIEW_MULTIPLE_MATCHES", "matchCount": 2, "matchIds": ["sent-msg-a", "sent-msg-b"] }
+  },
+  {
+    "id": "failure-reconcile-stable-repeated-match",
+    "group": "failure",
+    "synthetic": true,
+    "description": "Same single match seen on two consecutive polls -> SENT_RECONCILED",
+    "check": "reconcile",
+    "input": { "checks": [["sent-msg-x"], ["sent-msg-x"]], "options": {} },
+    "expected": { "state": "SENT_RECONCILED", "matchCount": 1, "matchId": "sent-msg-x" }
+  },
+  {
+    "id": "failure-no-second-post-after-uncertain",
+    "group": "failure",
+    "synthetic": true,
+    "description": "Ambiguous 2xx on the first (and only) attempt -> SEND_UNCERTAIN, no second POST issued",
+    "check": "plan_attempts",
+    "input": {
+      "outcomes": [
+        { "kind": "http", "status": 200, "body": { "unexpected": "shape" }, "headers": {}, "serverReceived": true }
+      ],
+      "options": {}
+    },
+    "expected": {
+      "finalState": "SEND_UNCERTAIN",
+      "attempts": 1,
+      "postSubmissions": 1,
+      "secondPostAfterUncertain": false,
+      "humanReviewRequired": true
+    }
+  }
+]

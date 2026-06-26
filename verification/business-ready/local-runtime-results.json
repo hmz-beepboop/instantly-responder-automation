@@ -1,0 +1,44 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAtUtc": "2026-06-16T05:38:49.8873496+00:00",
+  "synthetic": true,
+  "liveInstantlyCallPermitted": false,
+  "allWorkflowsInactiveInitially": true,
+  "safeStoredConfigurationVerified": true,
+  "approvedCredentialBindingsVerified": true,
+  "approvedCredentialBindingCount": 11,
+  "gatedHttpTargetsVerified": true,
+  "temporarilyActivatedWorkflowIds": [
+    "OzYLWuCF6DoU7Iw9",
+    "koyKIaY2ExF3yhx7",
+    "oFWMDcLAtj7Wyrhn",
+    "37p0OPzfDxlPvYQo"
+  ],
+  "allWorkflowsInactiveAfter": true,
+  "remoteReferencesVerified": true,
+  "fullHarness": {
+    "senderPassed": true,
+    "errorHandlerPassed": true,
+    "harnessPassed": true,
+    "fixtureTotal": 60,
+    "fixturePassed": 60,
+    "fixtureFailed": 0,
+    "failedFixtureIds": [],
+    "combinedHarnessOverall": "FAIL",
+    "embeddedIntegrationOverall": "FAIL",
+    "executionExitCode": 0
+  },
+  "errorTriggerAcceptance": {
+    "executed": true,
+    "exitCode": 0,
+    "passed": true
+  },
+  "slaWatchdogAcceptance": {
+    "executed": true,
+    "exitCode": 0,
+    "passed": true
+  },
+  "n8nRestartedAndReady": true,
+  "sidecarRunning": true,
+  "overallResult": "PASS"
+}

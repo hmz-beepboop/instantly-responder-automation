@@ -1,0 +1,32 @@
+{
+  "nes": {
+    "intake_id": "intake-0004",
+    "eaccount": "sender@example.com",
+    "lead_email": "lead3@example.com",
+    "campaign_id": "campaign-123",
+    "threading": {
+      "reply_to_uuid": "44444444-4444-4444-4444-444444444444"
+    },
+    "reply": {
+      "subject": "Question about pricing"
+    }
+  },
+  "decision": {
+    "reply_permitted": true,
+    "human_review_required": true,
+    "category": "INTERESTED",
+    "reply_template_id": "template-abc",
+    "address_suppression_intent": "NONE",
+    "durable_dnc_intent": false
+  },
+  "validation": {
+    "valid": true
+  },
+  "draft": {
+    "draft_text": "Hi Sam, thanks for your reply."
+  },
+  "approval": {
+    "approved": false
+  },
+  "random_marker": "marker-EEEE"
+}

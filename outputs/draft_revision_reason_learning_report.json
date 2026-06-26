@@ -1,0 +1,46 @@
+{
+  "phase": "5L",
+  "fields_added": {
+    "rule_candidate": [
+      "reason uses human input",
+      "draft_revision_type included",
+      "desired_future_behavior included"
+    ],
+    "form_fields": [
+      "draft_revision_reason",
+      "draft_revision_type",
+      "desired_future_behavior"
+    ],
+    "parsed_fields": [
+      "submit_draft_revision_reason",
+      "submit_draft_revision_type",
+      "submit_desired_future_behavior"
+    ],
+    "event_fields": [
+      "draft_revision_reason",
+      "draft_revision_type",
+      "desired_future_behavior"
+    ]
+  },
+  "generated_at": "2026-06-25T23:48:02.4975273+01:00",
+  "safety": {
+    "autonomous_mode_enabled": false,
+    "sender_behavior_changed": false,
+    "live_rules_created": false,
+    "routing_changed": false,
+    "dry_run_disabled": false
+  },
+  "manual_test_required": "See docs/NEXT_MANUAL_TEST_PACKET_DRAFT_IMPROVEMENT_LEARNING.md",
+  "nodes_patched": [
+    "J. Render Review Form HTML",
+    "L. Validate & Consume Review Token (POST)",
+    "SL-P1A. Build Draft Revision Event",
+    "SL-P2A. Prepare Phase 1C+2 Capture Data"
+  ],
+  "status": "PATCHED_PENDING_VERIFY",
+  "offline_fixtures": {
+    "result": "All 5 scenarios produce reason-enriched proposed_shadow rule candidates",
+    "count": 5
+  },
+  "report_type": "SL-PHASE-5L draft revision reason learning"
+}
