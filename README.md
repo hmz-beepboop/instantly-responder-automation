@@ -1,163 +1,160 @@
-# Instantly Responder Automation (Validation Stage)
+# HMZ Instantly Responder Automation
+
+> **This README is a stable project overview.** For operational current state, see [OPERATION_HANDOFF.md](OPERATION_HANDOFF.md). For the latest single-agent session context, see [NEXT_SESSION_HANDOFF.md](NEXT_SESSION_HANDOFF.md) (treat OPERATION_HANDOFF.md as the durable multi-agent source of truth).
+
+---
 
 ## Purpose
 
-This project implements an n8n-based automated responder for inbound Instantly
-prospect replies, for HMZ's own initial US B2B validation campaign only. It
-classifies replies, applies a deterministic safety prefilter and mock
-semantic classifier, produces a structured action plan, manages send
-ownership/idempotency through an internal sidecar, and (in later phases,
-once approved) sends approved replies via the Instantly API.
+n8n-based automated responder for inbound Instantly.ai prospect replies, built for **HMZ's own initial US B2B validation campaign only**. It classifies replies, applies deterministic safety rules, produces a structured action plan, routes substantive replies for **human approval** (not auto-send), and captures reviewer learning to improve future drafts.
 
-## Current readiness
+This is a **single-tenant, validation-stage** system. It is not a reusable client responder and must not be treated as part of an operating client-delivery platform.
 
-**System verdict: `READY_FOR_DRY_RUN`**
+---
 
-- This system is **not production-ready**.
-- It is **not ready for unrestricted or controlled live sending yet**.
-- `OPERATING_MODE=VALIDATION`
-- `DRY_RUN=true`
-- `LIVE_CAMPAIGNS=[]`
-- No live Instantly credential is bound to any workflow.
-- All six workflows below remain **inactive**.
+## Status
 
-## Six-workflow inventory
+| Layer | State |
+|---|---|
+| Core supervised responder | **COMPLETE** — human-approved send path working |
+| Self-improvement — classification | **VERIFIED** — classification loop proven (98%) |
+| Self-improvement — draft behavioural | **FAILED/UNPROVEN** — capture/UI installed; live evidence (case-759e58d7 → case-d099e6f3) shows improvement did not propagate to next similar draft; SL-PHASE-5Q required |
+| Review reopen / learning amendments | **INSTALLED** (SL-PHASE-5P) — manual tests 2/3/4 pending |
+| approve_learning_only | **INSTALLED** — no-send learning capture working |
+| approve_and_send_followup | **PARTIAL** — metadata captured; auto-send blocked pending SL-PHASE-5R Sender idempotency audit |
+| Autonomous layer design | **COMPLETE** — not enabled |
+| Autonomous layer live (shadow) | **active=false** — Gate 1 executed 2026-06-24 |
+| Gate 2 autonomous pilot | **NOT APPROVED** — requires 14-day shadow review + owner sign-off |
+| Overall build | ~99% |
 
-| # | Workflow | n8n Workflow ID | Nodes |
+**Operating mode:** `VALIDATION` — `DRY_RUN=true` — `autonomous_enabled=false`
+
+---
+
+## Warnings
+
+> **No secrets in repo.** Do not commit `.env`, credentials, API keys, tokens, webhook secrets, cookies, or private keys. These are excluded by `.gitignore`. If you find any, remove before pushing.
+
+> **Do not activate autonomous/live send paths** without explicit owner approval and Gate 2 completion. Shadow evaluator must remain `active=false`.
+
+> **Do not use n8n-mcp** unless explicitly needed for a narrowly targeted task. It has previously caused unnecessary usage consumption. Prefer local workflow JSON inspection and the n8n REST API.
+
+> **Agents must update OPERATION_HANDOFF.md** at the end of every session.
+
+---
+
+## Production Workflows (n8n Cloud)
+
+| # | Name | n8n Workflow ID | Last versionId |
 |---|---|---|---|
-| 1 | HMZ - Instantly Reply Intake - Validation | `cCcpFfi6iovWS94T` | 22 |
-| 2 | HMZ - Reply Decision Engine - Validation | `NJcnNQoJ5nSIWYte` | 12 |
-| 3 | HMZ - Instantly Reply Sender - Validation | `OzYLWuCF6DoU7Iw9` | 21 |
-| 4 | HMZ - Reply Error Handler - Validation | `koyKIaY2ExF3yhx7` | 9 |
-| 5 | HMZ - Reply SLA Watchdog - Validation | `37p0OPzfDxlPvYQo` | 14 |
-| 6 | HMZ - Reply Full Test Harness - Validation | `gu9Ede8IM5cHGtKK` | 7 |
+| 1 | HMZ - Decision Engine | `tgYmY97CG4Bm8snI` | `85f51eb4` |
+| 2 | HMZ - Human Approval | `9aPrt92jFhoYFxbs` | `9c71882f` (SL-PHASE-5P, 2026-06-26) |
+| 3 | HMZ - Proxy | `seB6ZmlyomhC4QWU` | `47dbb8bd` |
+| 4 | Shadow Evaluator | `aHzLtQiv6G8h1bqD` | `ae13bf4e` — **active=false** |
 
-These IDs belong to the current local n8n instance and are
-**environment-specific, not portable** to a fresh instance. Local exports
-under `workflows/` retain placeholder sub-workflow/error-workflow IDs;
-`verification/integration-closure/apply-integration-closure.ps1` discovers
-each workflow by canonical name on a fresh instance and remaps the
-placeholders to the real IDs. Local exports of all six live under
-`workflows/`.
+> Production n8n API base: `https://n8n.hmzaiautomation.com/api/v1`
+> Run `scripts/assert-hmz-production-target.ps1` before any n8n operation.
 
-## Architecture overview
+---
 
-```
-Instantly reply webhook
-       │
-       ▼
-1. Reply Intake  ──normalized event (NES)──▶ 2. Reply Decision Engine
-   (auth/compensate,                            (deterministic prefilter →
-    schema validate,                             mock classifier →
-    idempotency via                              structured action plan)
-    n8n Data Table)
-       │                                              │
-       ▼                                              ▼
-                                          3. Reply Sender ──▶ hmz-send-state
-                                             (DRY_RUN gate,    sidecar
-                                              send-key, lock,  (ownership,
-                                              reconciliation)   durable state,
-                                                                error records,
-4. Reply Error Handler ◀── sanitised errors ──        alert dedupe)
-       │
-       ▼
-5. SLA Watchdog ──reads /v1/unfinished──▶ alerts (placeholder surface)
+## System Components
 
-6. Full Test Harness ── runs the 60-fixture matrix against sender-core,
-                         error-core, watchdog-core, harness-core
-```
+- **Decision Engine** — deterministic prefilter → AI micro-intent classifier → structured action plan (stop/pause/send flags, reply type, human-review flags)
+- **Human Approval workflow** — renders review form, validates token, processes reviewer action, captures learning fields (revision reason, improvement scope, target classifications)
+- **Proxy** — token-refresh retry, de-dup, connection between workflows
+- **Shadow Evaluator** — autonomous evaluation layer (shadow-only, not live)
+- **Instantly API integration** — webhook intake; send via Instantly API (DRY_RUN gate)
+- **Self-improvement layer** — classification + draft rule candidates written to shadow store; active policy injection via Decision node
 
-Send ownership and error persistence use the internal `hmz-send-state`
-sidecar (exclusive lock-file creation + durable state files + sanitised
-`/v1/error` records) — **not** a relational `sends` or `errors` table. The
-implemented reconciled state is `SENT_RECONCILED`.
+---
 
-## Project directory map
+## Folder Structure
 
 ```
-workflows/                 Six n8n workflow JSON exports (inactive)
-docs/                       Architecture, policy, field-map, setup docs
-reports/                    Validation/audit/security/failure-mode reports
-verification/               Phase 4A/4B/5 offline test suites and audit JSON
-fixtures/                   Synthetic fixture matrices (phase_3, phase_4)
-infrastructure/local-n8n/   docker-compose.yml (n8n + hmz-send-state)
-infrastructure/send-state/  hmz-send-state sidecar source
-config/                      config.example.json (validation defaults)
-.env.example                 Environment variable placeholders
+Instantly_Responder_Automation/
+├── workflows/          # Local n8n workflow JSON exports
+├── docs/               # Architecture, policies, phase work logs, patch docs
+├── scripts/            # PowerShell automation, apply/verify scripts
+├── schemas/            # Data schemas / event formats
+├── fixtures/           # Test payloads
+├── sources/            # Source business/strategy documents
+├── config/             # Non-secret configuration
+├── outputs/            # Generated outputs (gitignored)
+├── reports/            # Verification/test reports
+├── verification/       # Integration closure + test harnesses
+├── archive/            # Archived/superseded material (do not read unless instructed)
+├── backups/            # Workflow backups before patches (gitignored)
+├── CLAUDE.md           # Agent workflow rules (read first)
+├── OPERATION_HANDOFF.md # Multi-agent operational log (read before every session)
+├── NEXT_SESSION_HANDOFF.md # Latest single-session context
+└── PROJECT_MANIFEST.md # Folder inventory
 ```
 
-## Fastest safe installation path
+---
 
-1. Read `docs/SETUP_GUIDE.md` end to end first.
-2. Copy `.env.example` to `.env` and `config/config.example.json` to your
-   local config; keep all validation defaults (`DRY_RUN=true`,
-   `LIVE_CAMPAIGNS=[]`).
-3. `docker compose -f infrastructure/local-n8n/docker-compose.yml up -d`.
-4. Confirm the `hmz-send-state` sidecar health endpoint responds.
-5. Import the six workflows from `workflows/` in the documented order,
-   leaving every one **inactive**.
-6. Run the Phase 4A/4B offline test suites and the Phase 5 mechanical audit
-   to reproduce the validation evidence.
-7. Read `reports/VALIDATION_REPORT.md` for the final verdict before any
-   further step.
+## Key Docs
 
-## Validation evidence summary
+| Doc | Purpose |
+|---|---|
+| `CLAUDE.md` | Agent rules, production target guard, safety rules |
+| `OPERATION_HANDOFF.md` | Multi-agent current state + session log |
+| `NEXT_SESSION_HANDOFF.md` | Latest session-specific context |
+| `docs/SOURCE_PRIORITY.md` | Business fact source hierarchy |
+| `docs/HMZ_APPROVED_REPLY_RULES.md` | Approved reply policy |
+| `docs/HMZ_APPROVED_KNOWLEDGE_BASE.md` | Approved runtime facts |
+| `docs/PHASE_5_AUTONOMOUS_WORK_LOG.md` | Autonomous layer design log |
+| `docs/PHASE_5J_GATE_2_READINESS_SUMMARY.md` | Gate 2 blockers |
+| `docs/NEXT_MANUAL_TEST_PACKET_*.md` | Manual test procedures for pending verifications |
+| `docs/HMZ_PRODUCTION_TARGET_GUARD.md` | Production target guard policy |
 
-- All six workflows: inactive, credential-free, zero external HTTP targets
-  (sidecar only), remote logic matches local exports.
-- Phase 4A: 42/42 offline tests passed. Phase 4B: 31/31 offline tests +
-  60-fixture matrix passed. Integration Closure offline suite: 16/16 passed.
-- Actual n8n runtime execution succeeded for the **Full Test Harness** and
-  **SLA Watchdog** (exit 0, success markers observed).
-- **Integration Closure runtime test (Phase 6) PASSED**
-  (`reports/INTEGRATION_CLOSURE_RUNTIME.md`,
-  `verification/integration-closure/runtime-results.json`): Intake now hands
-  off to the Decision Engine and then to the Reply Sender on the accepted,
-  non-duplicate path only. The normal path terminates
-  `BLOCKED_PENDING_DURABLE_APPROVAL`. A separately approved synthetic Sender
-  input reached `DRY_RUN_OK` (`sent=false`, `transport=NONE`), and a forced
-  synthetic Error Handler entry persisted a sanitised, non-retryable
-  `SEND_UNCERTAIN` record. All six workflows were returned to `active: false`
-  afterward.
-- Project secret/PII scan: 0 real-email hits, 0 unexpected secret-pattern
-  hits.
-- Instantly V1-V5 live-evidence items verified: genuine `reply_received`
-  webhook, `email_id`→`reply_to_uuid` mapping, thread/subject preservation,
-  `update-interest-status`, `subsequence/remove`, exact email-level
-  Blocklist (workspace-wide), campaign-local ordinary unsubscribe, and one
-  lost-response reconciliation (`SEND_UNCERTAIN` → `SENT_RECONCILED`).
-  Controlled live API replies occurred during V3 and V5 Layer 2. The
-  Instantly API base host is verified as `https://api.instantly.ai`.
+---
 
-## Limitations
+## Agent Workflow: Claude Code + Codex
 
-- No durable human-approval mechanism exists yet for the Reply Sender's
-  approval gate, so the normal Intake → Decision Engine → Sender path
-  terminates `BLOCKED_PENDING_DURABLE_APPROVAL`.
-- Automatic `settings.errorWorkflow` routing from a genuinely failed parent
-  execution remains unexercised (only the synthetic Execute Workflow Trigger
-  path was run).
-- Zero-match and multiple-match reconciliation outcomes are policy-verified
-  only, not exercised against a live Instantly response.
-- The SLA Watchdog's actual n8n execution was a manual/CLI-triggered run of
-  the Schedule Trigger node, not an active cron firing.
-- No live reply has been sent through the n8n Reply Sender workflow.
-- The Phase 4B n8n-MCP static validator reports five Code-node return-shape
-  false positives on the Phase 4B workflows; documented and unresolved by
-  design (remote/local source comparison and compile/runtime tests pass).
+- **Claude Code** — repo edits, workflow JSON patches, script/docs changes, local verification
+- **Codex** — code review, independent diff audit, test suggestions, refactor review
+- **ChatGPT** — prompt strategy, output audit, risk review, manual procedure design
+- **Human** — production approvals, credentials, live sends, business decisions, Gate 2 approval
 
-## Exact next milestone
+**Branch naming:**
+```
+agent/claude/<task>/<timestamp>
+agent/codex/<task>/<timestamp>
+```
 
-See `docs/NEXT_STEPS.md`. In summary: design and implement a durable
-human-approval mechanism for the Reply Sender's approval gate so an accepted,
-non-duplicate reply can progress past `BLOCKED_PENDING_DURABLE_APPROVAL`,
-while keeping `DRY_RUN=true`, `LIVE_CAMPAIGNS=[]`, and all six workflows
-inactive. This is required before `READY_FOR_CONTROLLED_LIVE_TEST` can be
-considered.
+**Rules:**
+1. Read `OPERATION_HANDOFF.md` first.
+2. Read `CLAUDE.md` and `docs/HMZ_PRODUCTION_TARGET_GUARD.md`.
+3. Run `scripts/assert-hmz-production-target.ps1` before any n8n operation.
+4. State files changed, tests run, risks, and next owner.
+5. Update `OPERATION_HANDOFF.md` before ending the session.
+6. Application/workflow changes require tests or explicit explanation of why tests were not run.
 
-## Not production-ready
+---
 
-**This system is not production-ready and is not authorised for any live or
-controlled-live Instantly send.** All activation, credential-binding, and
-`LIVE_CAMPAIGNS`/`DRY_RUN=false` decisions require explicit owner approval
-and additional runtime evidence beyond what exists today.
+## Setup / Local Use
+
+There is no local runtime required for documentation or review tasks. For workflow apply operations:
+
+1. Confirm n8n production target: `scripts/assert-hmz-production-target.ps1`
+2. Apply a patch script: `.\<PatchScript>.ps1` (review before running)
+3. Verify with relevant test harness under `verification/`
+
+Do not point scripts at `localhost` or Docker. The active responder runs on the production VPS.
+
+---
+
+## Known Pending Work
+
+1. **SL-PHASE-5Q** *(immediate next blocker)* — Self-improvement behavioural closure: audit learning persistence, active policy creation, Decision node policy consumption, and reopened-form reason preservation. Live evidence shows draft improvement from case-759e58d7 did not propagate to case-d099e6f3. The bridge human-edit → learning event → effective policy → Decision consumption is the likely gap.
+2. **SL-PHASE-5R** — Sender idempotency audit; required before `approve_and_send_followup` can route to automated send. Planned after or parallel to SL-PHASE-5Q.
+3. **Review reopen manual tests** — Owner must run Tests 2/3/4 from `docs/NEXT_MANUAL_TEST_PACKET_REVIEW_REOPEN_REPEAT_SEND.md`
+4. **Draft improvement target classifications UI** — Live UI confirm pending owner (SL-PHASE-5O)
+5. **Gate 2 autonomous pilot** — Requires 14-day real prospect shadow review + owner decisions/allowlists/sign-off (min date ~2026-07-08)
+6. **GitHub secret scan** — Review `reports/LOCAL_RUNTIME_CREDENTI…` and `scripts/SL-PHASE-4I-token-refr…` and `patch_sender_token_resolution.ps1` before first push
+
+---
+
+## Next Recommended Step
+
+**SL-PHASE-5Q** — self-improvement behavioural closure. Draft behavioural self-improvement has **failed** in live evidence: a human improvement applied during review of case-759e58d7 (natural opener / reply style) did not appear in the AI draft for the later similar case case-d099e6f3. The missing or broken bridge is: human edit → learning event write → active/effective policy creation → Decision node policy consumption. Additionally, reopened review forms may not preserve actual human-entered reasons. Audit and repair each stage. Until SL-PHASE-5Q passes, do not claim end-to-end self-improvement is complete. SL-PHASE-5R (Sender idempotency audit, required for `approve_and_send_followup` automated send) follows after or in parallel.
