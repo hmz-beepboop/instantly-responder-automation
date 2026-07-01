@@ -14,9 +14,9 @@
 
 ## CURRENT_STATE
 
-**Last updated:** 2026-07-01T03:00:30Z
+**Last updated:** 2026-07-01T18:16:26Z
 **Updated by:** Codex
-**Current branch:** `agent/codex/phase-5q9-blocked-send-link-diagnostics-learning-source/20260628-152341`
+**Current branch:** `agent/codex/sl-phase-5q-checkpoint-20260701`
 
 **Project status:**
 The supervised responder remains human-approved only. Classification self-improvement is verified. SL-PHASE-5Q production apply and live candidate activation worked, but later live proof (`case-a3e7b1d2`) showed insufficient behavioural draft effect and duplicate-submit retry/token defects after a successful owner-approved send. SL-PHASE-5Q2/5R-prep, 5Q3, 5Q4, 5Q5, 5Q6, 5Q7, 5Q8, 5Q9, 5Q10, 5Q11, **5Q12**, 5Q14B, 5Q14D, **5Q14F**, **5Q15**, **5Q16B**, **5Q16D**, **5Q16F**, **5Q17B**, **5Q17C**, **5Q17D**, **5Q18**, and **5Q19** are complete/proven at their intended scope. **5Q19 audit completed (2026-07-01)**: four fresh seeded-thread review cases (`case-d8368748`, `case-78e677c0`, `case-86a17778`, `case-39352371`) were valid, non-diagnostic, and form-learning-saved (`LEARNING_REVISION_APPROVED`). Active HumanApproval form-created rules now exist for booking (`97eb3b0a-4dac-49e4-92e0-408eaf75b762`, source `case-d8368748`, `INFORMATION_REQUEST / BOOKING_REQUEST`), pricing (`493884ad-7d88-4e25-8744-e73e36f48322`, source `case-78e677c0`, `PRICING_OR_COMMERCIAL_NEGOTIATION / PRICING_REQUEST`), setup/process (`48e10cac-69a0-4ec7-9c35-42d3675812e6`, source `case-86a17778`, `INFORMATION_REQUEST / OFFER_EXPLANATION`), and not-now/later (`6e50fd54-ff2a-4d5a-b220-c0c7374edea4` classification to `AMBIGUOUS / NON_PRIORITY` plus style rule `cdada69d-63a0-471d-801b-3cf3d7ddd1bd`, source `case-39352371`). The old weak booking rule `c9860e74-ff23-477e-87f1-812bec8023e5` was still applied to `case-d8368748` at case creation, but the better override rule was subsequently registered through the review form. No code patch or n8n write was needed in 5Q19. Anti-hardcoding check passed: the new instructions are not present in Decision/HumanApproval workflow JSON. Latest Sender execution remained `3193`; no Sender/Instantly send was triggered. Production versions remain Decision `889e1d45-7103-4b0a-a85d-685d19a2cadd` and HumanApproval `0fa9d0ce-585e-495e-8af6-dbdb4957ab78`. Status remains `95`; do not move above `95` yet. Autonomous shadow layer remains built but inactive; Gate 2 is not approved and live autonomous sending remains 0%.
@@ -109,9 +109,23 @@ Files flagged by lightweight name-pattern scan (2026-06-27). Do not print their 
 
 ## SESSION_LOG
 
+### 2026-07-01T18:16:26Z — Codex — checkpoint audit before selective review/commit
+
+**Agent:** Codex
+**Branch:** `agent/codex/sl-phase-5q-checkpoint-20260701`
+**Objective worked on:** Checkpoint audit/finalization only; no feature implementation, no production/live actions, no branch switch, no commit, no push.
+**Files changed by this checkpoint-finalization task:** `OPERATION_HANDOFF.md` only.
+**Current WIP observed:** The tree contains substantial modified tracked generated/backup/output/verification churn in addition to this handoff edit. Current focused checks show Q18 report/scripts and production workflow exports are tracked and clean; `git ls-files --others --exclude-standard` returned no untracked files.
+**Reports/scripts/workflows added or modified:** No report/script/workflow file was modified by this checkpoint-finalization task. Previously tracked Q18 report/scripts and workflow exports appear clean in the current checkout.
+**Tests/checks run in this checkpoint:** `git branch --show-current`; `git status --short`; `git diff --stat`; focused status on current SL-PHASE-5Q files; `git ls-files --others --exclude-standard`; read latest `OPERATION_HANDOFF.md` section. No harnesses or production checks were run in this checkpoint.
+**Current checkpoint status:** Needs selective staging/review before commit. Do not commit the entire working tree as-is because it includes large generated/backup/output/verification diffs outside the immediate checkpoint.
+**Known risks/unknowns:** The working tree is much broader than the current checkpoint. Avoid opening or committing files flagged as sensitive in this handoff (`reports/LOCAL_RUNTIME_CREDENTI...`, `scripts/SL-PHASE-4I-token-refr...`, `patch_sender_token_resolution.ps1`) until a deliberate secret review is performed. Do not stage `outputs/`, `backups/`, verification backup directories, or unrelated generated files unless explicitly intended.
+**Exact next recommended step:** Human or audit agent should run a selective staging review: inspect `git status --short`, stage only the intended SL-PHASE-5Q files, run a pre-commit secret/risk scan on staged content, then inspect `git diff --cached --stat` before committing.
+**Recommended next agent:** Human review, optionally followed by ChatGPT audit for staged-diff review.
+
 ### 2026-07-01T03:00:30Z — Codex — SL-PHASE-5Q19 human-learning-rule registration audit
 
-**Agent:** Codex  
+**Agent:** Codex
 **Objective:** Audit four fresh seeded-thread cases, confirm valid review creation and learning attribution, determine whether better HumanApproval form-created rules exist, and prepare exact retest actions without code or backend rule insertion.
 
 **Verdict:** COMPLETE. No workflow defect found; no patch applied. Status remains `95`.
