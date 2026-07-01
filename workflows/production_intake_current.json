@@ -1,0 +1,1802 @@
+{
+  "updatedAt": "2026-06-28T04:13:48.235Z",
+  "createdAt": "2026-06-17T18:29:52.847Z",
+  "id": "VtDQqw02Ux1TgjIH",
+  "name": "HMZ - Instantly Reply Intake - Validation",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "id": "sticky_overview",
+      "name": "Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -400
+      ],
+      "parameters": {
+        "content": "# HMZ - Instantly Reply Intake - Validation (Phase 3)\n\nWHAT: Synthetic webhook intake -> configuration gate -> payload validation -> NES normalization -> idempotency check -> deterministic prefilter -> handoff to the Reply Decision Engine sub-workflow (workflow NJcnNQoJ5nSIWYte). Returns the normalized event plus the Decision Engine's decision, draft, and validation result.\n\nWHY: Implements docs/IMPLEMENTATION_PLAN.md Phase 3 for HMZ's own US B2B validation campaign. OPERATING_MODE=VALIDATION, DRY_RUN=true, LIVE_CAMPAIGNS=[].\n\nMOCKED: No connection to Instantly, any AI provider, email infrastructure, Slack, Sheets, or Supabase anywhere in this workflow. The webhook accepts only local synthetic POST payloads from fixtures/phase_3/.\n\nCONFIGURE LATER: Replace the dev webhook path and payload shape with the real Instantly reply webhook once a payload is captured (docs/INSTANTLY_FIELD_MAP.md). Provision idempotency storage (n8n Data Tables). Resolve docs/ASSUMPTIONS_AND_UNKNOWNS.md section D owner decisions (sender name / booking link mappings, storage choice, escalation owners).\n\nHOW TO TEST: Keep this workflow INACTIVE. In the editor, use 'Listen for test event' on the Webhook node, then POST a fixtures/phase_3/*.json file to the shown loopback test URL. Inspect each node's output.\n\nEXPECTED OUTPUT: one item per inbound event containing intake_id, received_at, raw_payload, the validated/normalized NES object, idempotency_state, prefilter result, and (where forwarded) the Decision Engine's decision / draft / validation fields. No external side effects.\n\nANALOGY: A hospital intake desk - time-stamps incoming paperwork, checks the form is filled in, assigns a file number, checks it is not a duplicate visit, and forwards the file to triage (the Decision Engine). It does not diagnose or treat anyone itself.",
+        "height": 360,
+        "width": 700,
+        "color": 1
+      }
+    },
+    {
+      "id": "trigger_webhook",
+      "name": "Webhook - Synthetic Reply Intake (DEV ONLY)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hmz-validation-reply-intake-dev",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "webhookId": "17185adf-e530-4388-8de7-0d81d0b0c318"
+    },
+    {
+      "id": "section_a",
+      "name": "A. Webhook Intake Normalization",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nfunction generateId() {\n  const timestamp = Date.now().toString(36).toUpperCase().padStart(10, '0');\n  const random = Array.from({ length: 16 }, () => Math.floor(Math.random() * 36).toString(36).toUpperCase()).join('');\n  return timestamp + random;\n}\n\nreturn items.map(item => {\n  const json = item.json || {};\n  const body = (json.body && typeof json.body === 'object') ? json.body : json;\n  const receivedAt = new Date().toISOString();\n  const intakeId = (typeof body.intake_id === 'string' && body.intake_id.trim())\n    ? body.intake_id.trim()\n    : generateId();\n\n  return {\n    json: {\n      intake_id: intakeId,\n      received_at: receivedAt,\n      raw_payload: body,\n      synthetic: false\n    }\n  };\n});"
+      }
+    },
+    {
+      "id": "sticky_section_a",
+      "name": "Section A - Synthetic Webhook Intake (notes)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        240
+      ],
+      "parameters": {
+        "content": "# Section A - Synthetic Webhook Intake\n\nWHAT: A dev-only Webhook node accepts a synthetic POST payload shaped like an Instantly 'reply_received' event. The Code node immediately preserves the full raw payload, records received_at, and assigns an intake_id (reusing body.intake_id if a fixture supplies one, for deterministic duplicate testing).\n\nWHY: Establishes a single, time-stamped, traceable entry point with a stable internal identifier before any validation or normalization happens (spec section A).\n\nMOCKED: The webhook path ('hmz-validation-reply-intake-dev') and payload shape are PROVISIONAL development placeholders, not the real Instantly webhook. responseMode=onReceived so the webhook acknowledges immediately (Processing SLO) without waiting for downstream sections.\n\nCONFIGURE LATER: Replace path/shape with the real Instantly reply webhook once docs/INSTANTLY_FIELD_MAP.md is confirmed against a captured payload. Add the compensating controls from docs/ASSUMPTIONS_AND_UNKNOWNS.md B4 (secret path, allowlisting, strict validation) before any non-loopback exposure. Confirm whether Instantly supplies its own event/email IDs that should take priority over this generated intake_id.\n\nHOW TO TEST: With the workflow open (INACTIVE), click 'Listen for test event' on the Webhook node, then POST any fixtures/phase_3/*.json file to the displayed loopback test URL (never expose this port).\n\nEXPECTED OUTPUT: one item with intake_id (string), received_at (ISO timestamp), raw_payload (the exact posted body, untouched), synthetic: true.\n\nANALOGY: The front-desk clerk who time-stamps every incoming envelope and staples a tracking number to it before it goes anywhere else. The clerk does not read or judge the contents.",
+        "height": 560,
+        "width": 380,
+        "color": 4
+      }
+    },
+    {
+      "id": "a3a17c35-027c-4843-9c8c-0a35a1f83429",
+      "name": "B. Configuration Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nconst CONFIG = {\n  operating_mode: 'SUPERVISED_VALIDATION',\n  dry_run: false,\n  live_campaigns: [\"531e64ed-c225-4baf-97a9-4ec90dc34eb0\"],\n  geo_code: 'US_B2B_CORE_12',\n  validation_cells: [\n    'CELL_1_SAAS_SALES_HIRING',\n    'CELL_2_SAAS_EXISTING_OUTBOUND',\n    'CELL_3_SPECIALISED_B2B_AGENCY'\n  ],\n  allowed_country: 'US',\n  region_priority: ['EASTERN', 'CENTRAL'],\n  transmission_disabled: false,\n  external_actions_mocked: false\n};\n\nfunction payloadOf(input) {\n  return input.raw_payload && typeof input.raw_payload === 'object' ? input.raw_payload : input;\n}\n\nfunction normalized(value) {\n  return String(value == null ? '' : value).trim();\n}\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const rawPayload = payloadOf(input);\n\n  const eventType = normalized(rawPayload.event_type || input.event_type);\n  const campaignId = normalized(rawPayload.campaign_id || input.campaign_id);\n  const reasons = [];\n\n  if (eventType && eventType !== 'reply_received') {\n    reasons.push('event_type is not reply_received: ' + eventType);\n  }\n\n  if (!campaignId) {\n    reasons.push('campaign_id is missing');\n  }\n\n  if (CONFIG.operating_mode !== 'SUPERVISED_VALIDATION') {\n    reasons.push('CONFIG.operating_mode is not SUPERVISED_VALIDATION');\n  }\n\n  if (CONFIG.dry_run !== false) {\n    reasons.push('CONFIG.dry_run is not false');\n  }\n\n  if (CONFIG.transmission_disabled !== false) {\n    reasons.push('CONFIG.transmission_disabled is not false');\n  }\n\n  if (CONFIG.external_actions_mocked !== false) {\n    reasons.push('CONFIG.external_actions_mocked is not false');\n  }\n\n  if (CONFIG.live_campaigns.length < 1) {\n    reasons.push('CONFIG.live_campaigns is empty');\n  }\n\n  if (campaignId && !CONFIG.live_campaigns.includes(campaignId)) {\n    reasons.push('campaign_id \"' + campaignId + '\" is not in LIVE_CAMPAIGNS');\n  }\n\n  const passed = reasons.length === 0;\n\n  const result = {\n    ...input,\n    raw_payload: rawPayload,\n    config: CONFIG,\n    config_gate: {\n      passed,\n      supervised_live_ok: passed,\n      dry_run_ok: CONFIG.dry_run === false,\n      live_campaign_allowed: campaignId ? CONFIG.live_campaigns.includes(campaignId) : false,\n      reasons\n    }\n  };\n\n  if (!passed) {\n    result.terminal_status = 'REJECTED';\n    result.processing_halted = true;\n  }\n\n  return { json: result };\n});"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "47799e3c-3b39-4af9-944b-f9d2ca79a696",
+      "name": "Section B - Configuration Gate (notes)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        560,
+        240
+      ],
+      "parameters": {
+        "content": "# Section B - Configuration Gate\n\nWHAT: Attaches a hardcoded validation-mode CONFIG object to every item (operating_mode=VALIDATION, dry_run=true, live_campaigns=[], geo_code=US_B2B_CORE_12, the 3 approved validation cells, allowed_country=US, region_priority=[EASTERN, CENTRAL], transmission_disabled=true, external_actions_mocked=true). Then checks raw_payload for any claim that would require a live send (campaign_id in LIVE_CAMPAIGNS, raw_payload.dry_run=false, raw_payload.operating_mode != VALIDATION, or raw_payload.live_campaign=true).\n\nWHY: spec section B and CLAUDE.md rule 5 - the workflow must fail safely if dry-run is not true or a synthetic event tries to claim a live campaign.\n\nMOCKED: CONFIG is a hardcoded constant for Phase 3, not read from n8n environment variables or an external config store.\n\nCONFIGURE LATER: Move CONFIG to environment-variable-backed values once a config storage adapter is chosen (docs/ASSUMPTIONS_AND_UNKNOWNS.md section D).\n\nBRANCHING (Phase 3.1A repair, resolves reports/UNRESOLVED_ITEMS.md U2): immediately downstream is B1. Configuration Gate Router, a native IF node with condition config_gate.passed === true. If true, the item continues to C. Payload Validation exactly as before. If false, the item is routed to B2. Configuration Gate Rejection (Terminal), which sets terminal_status=REJECTED, processing_halted=true, external_action_status=NOOP, and a reason built from config_gate.reasons; B2 is the FINAL output for that item - Sections C-G (normalization, idempotency, prefilter, Decision Engine) never run. Because CONFIG.dry_run=true and live_campaigns=[] are hardcoded, config_gate.passed is always true for realistic Phase 3 inputs, so the false branch is exercised only by fixture 14 (raw_payload.live_campaign=true).\n\nHOW TO TEST: POST any of the 12 standard fixtures and confirm config_gate.passed=true, dry_run_ok=true, live_campaign_claim_detected=false, and the item proceeds to C. POST fixture 14 (raw_payload.live_campaign=true) and confirm config_gate.passed=false, the item is routed to B2, and the final output has terminal_status=REJECTED, processing_halted=true, external_action_status=NOOP, with no nes/idempotency/prefilter/decision/classifier/validation fields present.\n\nEXPECTED OUTPUT: each item gains config{...CONFIG...} and config_gate{passed, dry_run_ok, live_campaign_claim_detected, reasons[]}, then B1 routes it to either C (passed=true) or B2 (passed=false, terminal).\n\nANALOGY: A safety inspector who checks the building's fire-suppression system is switched on and that no one has tried to disable it, before any work is allowed to proceed.",
+        "height": 560,
+        "width": 380,
+        "color": 4
+      }
+    },
+    {
+      "id": "e1f045ba-fe3c-45b0-9b38-0abcc7df597a",
+      "name": "C. Payload Validation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nconst REQUIRED_FIELDS = [\n  { nesPath: 'event_id', rawKeys: ['event_id'] },\n  { nesPath: 'email_id', rawKeys: ['email_id'] },\n  { nesPath: 'event_type', rawKeys: ['event_type'] },\n  { nesPath: 'lead_email', rawKeys: ['lead_email'] },\n  { nesPath: 'from_address_email', rawKeys: ['from_address_email'] },\n  { nesPath: 'email_account', rawKeys: ['email_account'] },\n  { nesPath: 'reply_subject', rawKeys: ['reply_subject'] },\n  { nesPath: 'reply_text', rawKeys: ['reply_text'] },\n  { nesPath: 'timestamp', rawKeys: ['timestamp'] },\n  { nesPath: 'campaign_id', rawKeys: ['campaign_id'] },\n  { nesPath: 'validation_cell', rawKeys: ['validation_cell'] }\n];\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const rawPayload = input.raw_payload;\n\n  const isMalformed = (\n    rawPayload === null ||\n    typeof rawPayload !== 'object' ||\n    Array.isArray(rawPayload) ||\n    typeof rawPayload.event_type !== 'string' ||\n    rawPayload.event_type.trim() === ''\n  );\n\n  const validated = {};\n  const validationErrors = [];\n\n  if (isMalformed) {\n    for (const field of REQUIRED_FIELDS) {\n      validated[field.nesPath] = null;\n    }\n    validationErrors.push({\n      field: 'event_type',\n      issue: 'MISSING_OR_INVALID',\n      detail: 'raw_payload is missing a non-empty string event_type; cannot determine event type.'\n    });\n  } else {\n    for (const field of REQUIRED_FIELDS) {\n      const raw = rawPayload[field.rawKeys[0]];\n      if (raw === undefined || raw === null || (typeof raw === 'string' && raw.trim() === '')) {\n        validated[field.nesPath] = null;\n        validationErrors.push({ field: field.nesPath, issue: 'MISSING', detail: `raw_payload.${field.rawKeys[0]} is missing or empty.` });\n      } else {\n        validated[field.nesPath] = raw;\n      }\n    }\n  }\n\n  return {\n    json: {\n      ...input,\n      validated,\n      validation_errors: validationErrors,\n      payload_status: isMalformed ? 'MALFORMED' : (validationErrors.length > 0 ? 'INCOMPLETE' : 'COMPLETE')\n    }\n  };\n});"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "3934a0f1-5f2d-4765-8f33-f87283dcb19a",
+      "name": "Section C - Payload Validation (notes)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        880,
+        240
+      ],
+      "parameters": {
+        "content": "# Section C - Payload Validation\n\nWHAT: Reads raw_payload and extracts 11 minimum synthetic fields (event_id, email_id, event_type, lead_email, from_address_email, email_account, reply_subject, reply_text, timestamp, campaign_id, validation_cell) into a validated{} object. Missing or empty fields become null with a structured validation_errors[] entry. If raw_payload itself is missing, not an object, an array, or lacks a non-empty event_type, the whole payload is MALFORMED.\n\nWHY: spec section C - never fabricate values; malformed payloads must route to a terminal state, not continue silently.\n\nMOCKED: none. Pure deterministic field extraction, no external lookups.\n\nCONFIGURE LATER: Update the rawKeys mapping in REQUIRED_FIELDS once a real Instantly reply_received payload is captured (docs/INSTANTLY_FIELD_MAP.md) - field names may differ from these synthetic fixture names.\n\nHOW TO TEST: POST the malformed-payload fixture (#11) and confirm payload_status=MALFORMED with one validation_errors entry for event_type. POST any complete fixture and confirm payload_status=COMPLETE with validation_errors=[].\n\nEXPECTED OUTPUT: each item gains validated{11 fields, each a value or null}, validation_errors[] (array of {field, issue, detail}), payload_status (COMPLETE | INCOMPLETE | MALFORMED).\n\nANALOGY: A form-checker who goes through an intake form field by field, circling any blank boxes, and stamps the form REJECTED if the 'type of request' box itself was left blank.",
+        "height": 560,
+        "width": 380,
+        "color": 4
+      }
+    },
+    {
+      "id": "0c5ff6cd-33c0-48a5-ba81-94081c4805a7",
+      "name": "D. Normalization to NES",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nconst CELL_DEFINITIONS = {\n  CELL_1_SAAS_SALES_HIRING: {\n    segment: 'B2B SaaS',\n    subsegment: '10-50 employees, recently hiring sales roles',\n    pain_trigger: 'We hired sales capacity but pipeline is not keeping up',\n    offer_angle: 'Capacity-aligned qualified meetings',\n    geo_code: 'US_B2B_CORE_12'\n  },\n  CELL_2_SAAS_EXISTING_OUTBOUND: {\n    segment: 'B2B SaaS',\n    subsegment: 'Already using outbound tools/agencies/SDRs',\n    pain_trigger: 'Outbound is producing volume, but quality is inconsistent',\n    offer_angle: 'Fewer junk meetings, capacity-based targeting',\n    geo_code: 'US_B2B_CORE_12'\n  },\n  CELL_3_SPECIALISED_B2B_AGENCY: {\n    segment: 'B2B agencies',\n    subsegment: '$5k+ monthly retainer services',\n    pain_trigger: 'Founder-led sales depends too much on referrals and inconsistent pipeline',\n    offer_angle: 'Predictable qualified meetings without hiring SDRs',\n    geo_code: 'US_B2B_CORE_12'\n  }\n};\n\nfunction emptyValidationLearning() {\n  return {\n    pain_confirmed: 'unknown',\n    current_outbound_spend_confirmed: 'unknown',\n    capacity_problem_confirmed: 'unknown',\n    proof_objection: 'unknown',\n    pricing_interest: 'unknown',\n    alpha_interest: 'unknown',\n    decision_maker_confirmed: 'unknown',\n    discovery_call_booked: 'unknown',\n    discovery_call_showed: 'unknown',\n    validation_signal_strength: 'unknown',\n    voice_of_customer_excerpt: null\n  };\n}\n\nfunction detectAttachments(text, html) {\n  const safeText = typeof text === 'string' ? text : '';\n  const safeHtml = typeof html === 'string' ? html : '';\n  const cidPattern = /<img[^>]+src=\"cid:/i;\n  const wordPattern = /\\b(see attached|please find attached|attached (?:is|are|please|the|for)|attachment\\b)/i;\n  return cidPattern.test(safeHtml) || wordPattern.test(safeHtml) || wordPattern.test(safeText);\n}\n\nfunction detectLanguage(text) {\n  return (typeof text === 'string' && text.trim().length > 0) ? 'en' : 'unknown';\n}\n\nfunction normalizeSubject(subject) {\n  let s = (typeof subject === 'string') ? subject.trim().toLowerCase() : '';\n  let prevLength;\n  do {\n    prevLength = s.length;\n    s = s.replace(/^(re|fwd|fw)\\s*:\\s*/i, '');\n    s = s.trim();\n  } while (s.length !== prevLength);\n  return s.replace(/\\s+/g, ' ');\n}\n\nfunction timeBucket(isoString) {\n  const ms = Date.parse(isoString);\n  if (isNaN(ms)) return 0;\n  return Math.floor(ms / 1000 / 300);\n}\n\nfunction hmzFirstNonEmpty(...values) {\n  for (const v of values) {\n    const s = String(v == null ? '' : v).trim();\n    if (s && s !== '{}' && s !== '[]') return s;\n  }\n  return null;\n}\n// HMZ_NORMALIZATION_TEXT_FALLBACK_V2\nfunction vendorPayloadHash(rawPayload) {\n  const json = JSON.stringify(rawPayload === undefined ? null : rawPayload);\n  let hash = 5381;\n  for (let i = 0; i < json.length; i++) {\n    hash = ((hash << 5) + hash) + json.charCodeAt(i);\n    hash = hash & 0xFFFFFFFF;\n  }\n  const hex = (hash >>> 0).toString(16).padStart(8, '0');\n  return 'phase3-placeholder-djb2:' + hex;\n}\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const validated = input.validated || {};\n  const rawPayload = (input.raw_payload && typeof input.raw_payload === 'object') ? input.raw_payload : {};\n\n  const validationCellKey = (typeof validated.validation_cell === 'string' && CELL_DEFINITIONS[validated.validation_cell])\n    ? validated.validation_cell\n    : null;\n\n  const campaignContext = validationCellKey\n    ? {\n        validation_cell: validationCellKey,\n        segment: CELL_DEFINITIONS[validationCellKey].segment,\n        subsegment: CELL_DEFINITIONS[validationCellKey].subsegment,\n        pain_trigger: CELL_DEFINITIONS[validationCellKey].pain_trigger,\n        offer_angle: CELL_DEFINITIONS[validationCellKey].offer_angle,\n        geo_code: CELL_DEFINITIONS[validationCellKey].geo_code,\n        campaign_purpose: 'UNKNOWN',\n        campaign_message_variant: 'UNKNOWN'\n      }\n    : {\n        validation_cell: 'UNKNOWN',\n        segment: 'UNKNOWN',\n        subsegment: 'UNKNOWN',\n        pain_trigger: 'UNKNOWN',\n        offer_angle: 'UNKNOWN',\n        geo_code: 'UNKNOWN',\n        campaign_purpose: 'UNKNOWN',\n        campaign_message_variant: 'UNKNOWN'\n      };\n\n  const leadEmail = (typeof validated.lead_email === 'string') ? validated.lead_email.trim().toLowerCase() : null;\n  const replyText = (typeof validated.reply_text === 'string' && validated.reply_text.trim()) ? validated.reply_text : ((typeof rawPayload.reply_text === 'string' && rawPayload.reply_text.trim()) ? rawPayload.reply_text : ((typeof rawPayload.reply_text_snippet === 'string' && rawPayload.reply_text_snippet.trim()) ? rawPayload.reply_text_snippet : null));\n  const replyHtml = (typeof rawPayload.reply_html === 'string') ? rawPayload.reply_html : null;\n  const replySnippet = (typeof rawPayload.reply_text_snippet === 'string' && rawPayload.reply_text_snippet.trim()) ? rawPayload.reply_text_snippet : (replyText ? String(replyText).replace(/\\\\s+/g, ' ').trim().slice(0, 240) : null);\n\n  const hasAttachments = detectAttachments(replyText, replyHtml);\n  const language = detectLanguage(replyText);\n\n  const subjectNorm = normalizeSubject(validated.reply_subject);\n  const bucket = timeBucket(input.received_at);\n  const dedupeKey = 'instantly:' + (validated.campaign_id || 'UNKNOWN') + ':' + (leadEmail || 'unknown') + ':' + subjectNorm + ':' + bucket;\n\n  const emailId = (typeof validated.email_id === 'string' && validated.email_id.trim()) ? validated.email_id.trim() : null;\n\n  const nes = {\n    nes_version: '1',\n    intake_id: input.intake_id,\n    received_at: input.received_at,\n    source: 'instantly',\n    event_type: validated.event_type || 'UNKNOWN',\n    workspace_id: (typeof rawPayload.workspace === 'string') ? rawPayload.workspace : 'UNKNOWN',\n    campaign_id: validated.campaign_id || 'UNKNOWN',\n    campaign_name: (typeof rawPayload.campaign_name === 'string') ? rawPayload.campaign_name : 'UNKNOWN',\n    campaign_context: campaignContext,\n    lead_email: leadEmail || 'UNKNOWN',\n    eaccount: validated.email_account || 'UNKNOWN',\n    step: (typeof rawPayload.step === 'number') ? rawPayload.step : null,\n    variant: (typeof rawPayload.variant === 'number') ? rawPayload.variant : null,\n    is_first_reply: (typeof rawPayload.is_first === 'boolean') ? rawPayload.is_first : null,\n    reply: {\n      subject: validated.reply_subject || null,\n      snippet: replySnippet,\n      text: replyText,\n      html: replyHtml,\n      has_attachments: hasAttachments,\n      language: language,\n      from_address_email: (typeof validated.from_address_email === 'string' && validated.from_address_email.trim())\n        ? validated.from_address_email.trim()\n        : (leadEmail || null)\n    },\n    threading: {\n      reply_to_uuid: emailId,\n      thread_id: (typeof rawPayload.thread_id === 'string') ? rawPayload.thread_id : null,\n      rfc_message_id_inbound: (typeof rawPayload.message_id === 'string') ? rawPayload.message_id : null,\n      lookup_strategy: emailId ? 'from_payload' : 'lookup_by_lead_and_campaign'\n    },\n    links: {\n      unibox_url: (typeof rawPayload.unibox_url === 'string') ? rawPayload.unibox_url : null\n    },\n    vendor_payload_hash: vendorPayloadHash(rawPayload),\n    dedupe_key: dedupeKey,\n    synthetic: input.synthetic === true,\n    operating_mode: (input.config && input.config.operating_mode) ? input.config.operating_mode : 'SUPERVISED_VALIDATION',\n    validation_learning_seed: emptyValidationLearning(),\n    timestamps: {\n      webhook_received_at: input.received_at || null,\n      auth_completed_at: null,\n      normalized_at: new Date().toISOString(),\n      classification_started_at: null,\n      classification_completed_at: null,\n      draft_completed_at: null,\n      human_notified_at: null,\n      approved_at: null,\n      send_attempted_at: null,\n      transmission_verified_at: null,\n      terminal_suppressed_at: null,\n      terminal_no_reply_at: null,\n      final_failure_at: null\n    },\n    policy_version: 'policy-HMZ-1.2',\n    kb_version: 'KB-1.0-DRAFT',\n    schema_version: 'nes-1'\n  };\n\n  return {\n    json: {\n      ...input,\n      nes\n    }\n  };\n});"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "37c413c4-800b-4f9c-9c75-9dae47c55641",
+      "name": "Section D - Normalization to NES (notes)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        240
+      ],
+      "parameters": {
+        "content": "# Section D - Normalization to NES\n\nWHAT: Maps validated{} and raw_payload into Normalized Event Schema v1 (docs/NORMALIZED_EVENT_SCHEMA.md): campaign_context (looked up from the 3 approved validation cells in docs/VALIDATION_CAMPAIGN_CONFIG.md, or all UNKNOWN if the cell is unrecognised), reply{subject, snippet, text, html, has_attachments, language, from_address_email}, threading{}, links{}, vendor_payload_hash (placeholder djb2, NOT sha256), dedupe_key, validation_learning_seed (all 11 fields default 'unknown' or null - a static, non-authoritative seed; see Workflow 2 Section B/E for the enriched, authoritative validation_learning), timestamps{}, policy_version, kb_version, schema_version.\n\nWHY: spec section D - establishes the single normalized contract that the Decision Engine and all later phases consume.\n\nMOCKED: vendor_payload_hash uses a placeholder djb2 hash prefixed 'phase3-placeholder-djb2:' (not the sha256 format shown in the NES example). has_attachments and language use simple regex/heuristics only (NES section 3.1), not a real attachment scanner or language detector.\n\nCONFIGURE LATER: Confirm the attachment-detection regexes and language-detection approach against real reply payloads. Populate workspace_id / campaign_name / step / variant / is_first_reply / thread_id / message_id / unibox_url once the real Instantly payload shape is confirmed.\n\nHOW TO TEST: POST the specialised-agency-cell fixture (#12, validation_cell=CELL_3_SPECIALISED_B2B_AGENCY) and confirm nes.campaign_context.segment='B2B agencies'. POST a fixture with an unrecognised validation_cell and confirm nes.campaign_context.validation_cell='UNKNOWN'.\n\nEXPECTED OUTPUT: each item gains nes{...full NES v1 object...}.\n\nANALOGY: A records clerk who transcribes a handwritten intake form onto the hospital's standard chart format, writing 'unknown' rather than guessing for anything not yet examined.",
+        "height": 560,
+        "width": 380,
+        "color": 4
+      }
+    },
+    {
+      "id": "6af71bd2-d399-4f6b-b5ff-655043c914a6",
+      "name": "E1. Compute Idempotency Key",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nconst STATE_ENUM = [\n  'RECEIVED',\n  'VALIDATING',\n  'NORMALIZED',\n  'DUPLICATE',\n  'REJECTED',\n  'READY_FOR_DECISION',\n  'REVIEW_HOLD',\n  'COMPLETED_NO_SEND',\n  'FAILED'\n];\n\nfunction canonicalPayloadHash(value) {\n  function canonicalize(v) {\n    if (Array.isArray(v)) return v.map(canonicalize);\n    if (v !== null && typeof v === 'object') {\n      const out = {};\n      for (const k of Object.keys(v).sort()) out[k] = canonicalize(v[k]);\n      return out;\n    }\n    return v;\n  }\n  const json = JSON.stringify(canonicalize(value === undefined ? null : value));\n  let hash = 5381;\n  for (let i = 0; i < json.length; i++) {\n    hash = ((hash << 5) + hash) + json.charCodeAt(i);\n    hash = hash & 0xFFFFFFFF;\n  }\n  return (hash >>> 0).toString(16).padStart(8, '0');\n}\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const validated = input.validated || {};\n  const nes = input.nes || {};\n  const rawPayload = input.raw_payload;\n\n  const eventId = (typeof validated.event_id === 'string' && validated.event_id.trim()) ? validated.event_id.trim() : null;\n  const emailId = (typeof validated.email_id === 'string' && validated.email_id.trim()) ? validated.email_id.trim() : null;\n  const campaignId = (typeof validated.campaign_id === 'string' && validated.campaign_id.trim()) ? validated.campaign_id.trim() : null;\n  const emailAccount = (typeof validated.email_account === 'string' && validated.email_account.trim()) ? validated.email_account.trim() : null;\n  const leadEmail = (typeof nes.lead_email === 'string' && nes.lead_email.trim() && nes.lead_email !== 'UNKNOWN') ? nes.lead_email.trim() : null;\n\n  const keyComponents = {\n    event_id: eventId,\n    email_id: emailId,\n    campaign_id: campaignId,\n    email_account: emailAccount,\n    lead_email: leadEmail\n  };\n  const isIdentifierPoor = Object.values(keyComponents).some(v => v === null);\n\n  let idempotencyKey;\n  let keyScheme;\n\n  if (!isIdentifierPoor) {\n    idempotencyKey = [eventId, emailId, campaignId, emailAccount, leadEmail].join(':');\n    keyScheme = 'full_identity';\n  } else {\n    const presentParts = Object.entries(keyComponents)\n      .filter(([, v]) => v !== null)\n      .map(([k, v]) => `${k}=${v}`);\n    const payloadHash = canonicalPayloadHash(rawPayload);\n    idempotencyKey = ['identifier_poor', 'instantly', ...presentParts, `payload_hash=${payloadHash}`].join(':');\n    keyScheme = 'identifier_poor_hash';\n  }\n\n  const proposedState = (input.payload_status === 'MALFORMED') ? 'REJECTED' : 'READY_FOR_DECISION';\n\n  return {\n    json: {\n      ...input,\n      idempotency: {\n        idempotency_key: idempotencyKey,\n        key_scheme: keyScheme,\n        key_components: keyComponents,\n        proposed_state: proposedState,\n        state_enum: STATE_ENUM,\n        storage_adapter: 'n8n_data_table',\n        storage_table_name: 'hmz_validation_reply_intake_idempotency'\n      }\n    }\n  };\n});"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "4f938e7b-7871-4c18-b02e-90f9afa02a59",
+      "name": "E2. Idempotency Data Table Upsert",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1920,
+        0
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "upsert",
+        "dataTableId": {
+          "mode": "id",
+          "value": "GogoPaHMGEO0YsyV"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "idempotency_key",
+              "condition": "eq",
+              "keyValue": "={{ $json.idempotency.idempotency_key }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "idempotency_key": "={{ $json.idempotency.idempotency_key }}",
+            "dedupe_key": "={{ $json.nes.dedupe_key }}",
+            "intake_id": "={{ $json.intake_id }}",
+            "state": "={{ $json.idempotency.proposed_state }}",
+            "event_type": "={{ $json.nes.event_type }}",
+            "lead_email": "={{ $json.nes.lead_email }}",
+            "campaign_id": "={{ $json.nes.campaign_id }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "af96d004-6d94-48c6-8eda-1af51bd5f93d",
+      "name": "E3. Recombine Idempotency Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nconst upstream = $('E1. Compute Idempotency Key').all();\n\nreturn items.map((item, index) => {\n  const row = item.json || {};\n  const original = (upstream[index] && upstream[index].json) ? upstream[index].json : {};\n\n  const createdAt = row.createdAt || row.created_at || null;\n  const updatedAt = row.updatedAt || row.updated_at || null;\n  const isDuplicate = !!(createdAt && updatedAt && createdAt !== updatedAt);\n\n  return {\n    json: {\n      ...original,\n      idempotency: {\n        ...original.idempotency,\n        is_duplicate: isDuplicate,\n        table_row_id: (row.id !== undefined) ? row.id : null,\n        created_at: createdAt,\n        updated_at: updatedAt,\n        duplicate_detection_method: 'created_at_vs_updated_at_after_upsert',\n        duplicate_detection_status: 'VERIFIED_N8N_2_25_7'\n      }\n    }\n  };\n});"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "294bd586-30b5-49d8-9adb-cc5bb14b039b",
+      "name": "Section E - Idempotency Preparation (notes)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1520,
+        240
+      ],
+      "parameters": {
+        "content": "# Section E - Idempotency Preparation & Duplicate Routing (E1-E5)\n\nWHAT: Five-step idempotency check and duplicate routing. E1 (Code) computes idempotency.idempotency_key using one of two schemes, recorded in idempotency.key_scheme. If validated.event_id, validated.email_id, validated.campaign_id, validated.email_account, and nes.lead_email are ALL present/known, key_scheme='full_identity' and idempotency_key = event_id:email_id:campaign_id:email_account:lead_email. If ANY of those five components is missing/UNKNOWN, key_scheme='identifier_poor_hash' and idempotency_key = identifier_poor:instantly:<present components as name=value>:payload_hash=<canonicalPayloadHash(raw_payload)>, where canonicalPayloadHash is a deterministic djb2 hash over the key-sorted JSON of raw_payload - so two different identifier-poor payloads (including two different malformed payloads) get different keys (resolves reports/UNRESOLVED_ITEMS.md U3). idempotency.key_components{event_id, email_id, campaign_id, email_account, lead_email} always lists all five components as a value or null. idempotency.proposed_state is REJECTED if payload_status=MALFORMED, else READY_FOR_DECISION. E2 (Data table) upserts a row keyed on idempotency_key into the hmz_validation_reply_intake_idempotency Data Table (id GogoPaHMGEO0YsyV), storing dedupe_key, intake_id, state, event_type, lead_email, campaign_id. E3 (Code) reads the upserted row's createdAt/updatedAt back, sets idempotency.is_duplicate=true if the row already existed before this execution, and recombines the result with the full item from E1.\n\nBRANCHING (Phase 3.1A repair): immediately downstream of E3 is E4. Duplicate Event Router, a native IF node with condition idempotency.is_duplicate === false. If true (not a duplicate), the item continues to F. Deterministic Prefilter exactly as before. If false (idempotency.is_duplicate=true), the item is routed to E5. Duplicate Event Terminal, which sets terminal_status=COMPLETED_NO_SEND, processing_halted=true, external_action_status=NOOP, stop_active_sequence=false, and a reason naming the idempotency_key; E5 is the FINAL output for that item - Section F (prefilter) and the Decision Engine (Workflow 2) never run, so prefilter/deterministic/classifier/decision/draft/validation are all absent from a duplicate item's final output. NOTE: Workflow 2 Section A's op-duplicate rule (which reads prefilter.is_duplicate_event) is now unreachable in normal operation, since duplicate items never reach Workflow 2 - it is left in place as defence-in-depth and is harmless.\n\nWHY: spec section E - prevents repeated synthetic executions of the same event from producing duplicate downstream actions, and (per CLAUDE.md rule 10) ensures one acknowledgement per inbound event even for identifier-poor payloads. idempotency.state_enum lists all 9 required states: RECEIVED, VALIDATING, NORMALIZED, DUPLICATE, REJECTED, READY_FOR_DECISION, REVIEW_HOLD, COMPLETED_NO_SEND, FAILED.\n\nMOCKED: storage_adapter='n8n_data_table' is the Phase 3 dev-safe persistence choice (no paid infrastructure). The created_at-vs-updated_at duplicate check is PROVISIONAL (duplicate_detection_status='PROVISIONAL') - whether n8n Data table 'upsert' returns row-level createdAt/updatedAt that differ between insert and update was not independently confirmed before this build; if it does not, is_duplicate always reads false and E4 always routes to F (logged in reports/UNRESOLVED_ITEMS.md U1). canonicalPayloadHash is a placeholder djb2 hash (same algorithm family as Section D's vendor_payload_hash), not sha256.\n\nCONFIGURE LATER: If row-level createdAt/updatedAt are not returned, switch to a get-then-insert-or-update pattern or add an explicit first_seen_at column written only on insert. Confirm the final idempotency_key composition once real Instantly event/email IDs are captured (key_scheme and key_components are explicitly NOT claimed final).\n\nHOW TO TEST: POST the same fixture twice with the same intake_id (the duplicate-event fixture #10 is designed for this). First execution: idempotency.is_duplicate=false, key_scheme='full_identity', item proceeds through E4(true)->F->G as normal. Second execution: idempotency.is_duplicate=true, the item is routed to E4(false)->E5, and the final output has terminal_status=COMPLETED_NO_SEND, processing_halted=true, external_action_status=NOOP, stop_active_sequence=false, with prefilter/deterministic/classifier/decision/draft/validation all absent. POST the malformed-payload fixture (#11) and a DIFFERENT malformed payload (fixture #13) and confirm both get key_scheme='identifier_poor_hash' with DIFFERENT idempotency_key values (different payload_hash), and both are processed as op-malformed/REJECTED rather than either being misread as a duplicate of the other.\n\nEXPECTED OUTPUT: a non-duplicate item gains idempotency{idempotency_key, key_scheme, key_components{event_id, email_id, campaign_id, email_account, lead_email}, proposed_state, state_enum[9], storage_adapter, storage_table_name, is_duplicate=false, table_row_id, created_at, updated_at, duplicate_detection_method, duplicate_detection_status} and continues through E4(true) to F/G. A duplicate item gets idempotency.is_duplicate=true and E4(false) routes it to E5 as the workflow's final output for that item.\n\nANALOGY: A hospital admissions desk that builds a file number from patient ID + visit reason + date - or, if the patient cannot be identified, a fingerprint of the intake form itself, so two different unidentified patients still get different file numbers - checks its card catalogue for that exact card, files or re-files it, and - if this is a repeat of a visit already on file - sends the patient straight back to the waiting room with a \"you're already checked in\" note instead of starting a new triage.",
+        "height": 760,
+        "width": 1040,
+        "color": 4
+      }
+    },
+    {
+      "id": "f6c6fa52-18a2-4dda-bbc3-0fff6966c54a",
+      "name": "F. Deterministic Prefilter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2560,
+        0
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nconst AUTOMATED_RESPONSE_PATTERN = /\\b(auto[- ]?reply|automatic reply|automated response|do not reply)\\b/i;\nconst OOO_PATTERN = /\\b(out of (the )?office|ooo|on leave|on vacation|away from (the )?office|annual leave)\\b/i;\nconst BOUNCE_PATTERN = /\\b(undeliverable|delivery (status notification|failure)|mail delivery failed|bounce|returned mail|message not delivered|delivery has failed)\\b/i;\nconst UNSUBSCRIBE_PATTERN = /\\b(unsubscribe|opt[- ]?out|remove me from|stop (sending|emailing)|do not contact|take me off)\\b/i;\n\nconst SUPPORTED_EVENT_TYPES = ['reply_received', 'auto_reply_received', 'email_bounced', 'lead_unsubscribed'];\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const nes = input.nes || {};\n  const reply = nes.reply || {};\n\n  const subject = typeof reply.subject === 'string' ? reply.subject : '';\n  const text = typeof reply.text === 'string' ? reply.text : '';\n  const snippet = typeof reply.snippet === 'string' ? reply.snippet : '';\n  const haystack = (subject + ' ' + text + ' ' + snippet).toLowerCase();\n\n  const isMalformedPayload = input.payload_status === 'MALFORMED';\n  const isUnsupportedEventType = !SUPPORTED_EVENT_TYPES.includes(nes.event_type);\n  const isDuplicateEvent = !!(input.idempotency && input.idempotency.is_duplicate === true);\n\n  const leadEmail = typeof nes.lead_email === 'string' ? nes.lead_email.toLowerCase() : '';\n  const eaccount = typeof nes.eaccount === 'string' ? nes.eaccount.trim().toLowerCase() : '';\n  const isSelfSent = !!(leadEmail && eaccount && leadEmail !== 'unknown' && eaccount !== 'unknown' && leadEmail === eaccount);\n\n  const isEmptyReply = text.trim() === '' && snippet.trim() === '';\n\n  const isAutomatedResponse = nes.event_type === 'auto_reply_received' || AUTOMATED_RESPONSE_PATTERN.test(haystack);\n  const isOutOfOffice = OOO_PATTERN.test(haystack);\n  const isBounce = nes.event_type === 'email_bounced' || BOUNCE_PATTERN.test(haystack);\n  const isUnsubscribeLanguage = nes.event_type === 'lead_unsubscribed' || UNSUBSCRIBE_PATTERN.test(haystack);\n\n  const hasAttachments = reply.has_attachments === true;\n\n  const campaignCellMismatch = !nes.campaign_context || nes.campaign_context.validation_cell === 'UNKNOWN';\n\n  return {\n    json: {\n      ...input,\n      prefilter: {\n        is_unsupported_event_type: isUnsupportedEventType,\n        is_malformed_payload: isMalformedPayload,\n        is_duplicate_event: isDuplicateEvent,\n        is_self_sent: isSelfSent,\n        is_empty_reply: isEmptyReply,\n        is_automated_response: isAutomatedResponse,\n        is_out_of_office: isOutOfOffice,\n        is_bounce: isBounce,\n        is_unsubscribe_language: isUnsubscribeLanguage,\n        has_attachments: hasAttachments,\n        campaign_cell_mismatch: campaignCellMismatch\n      }\n    }\n  };\n});"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "ffd8a6c5-cbe9-4d6f-94f5-dd128e748249",
+      "name": "Section F - Deterministic Prefilter (notes)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2480,
+        240
+      ],
+      "parameters": {
+        "content": "# Section F - Deterministic Prefilter\n\nWHAT: Computes 11 deterministic operational flags from nes, idempotency, and payload_status using simple keyword/regex checks against reply.subject/text/snippet: is_unsupported_event_type, is_malformed_payload, is_duplicate_event, is_self_sent, is_empty_reply, is_automated_response, is_out_of_office, is_bounce, is_unsubscribe_language, has_attachments, campaign_cell_mismatch.\n\nWHY: spec section F - supplies the Decision Engine's deterministic policy stage (Workflow 2 section A) with the prefilter.* fields its opFlags and det-* rules read (is_unsupported_event_type, is_malformed_payload, is_duplicate_event, is_self_sent, is_empty_reply, is_automated_response, campaign_cell_mismatch, plus is_out_of_office/is_bounce/is_unsubscribe_language/has_attachments for the det-ooo/det-bounce/det-unsub/det-attach rules).\n\nMOCKED: keyword/regex detection only - is_automated_response, is_out_of_office, is_bounce, is_unsubscribe_language are substring/regex matches on subject+text+snippet (plus event_type), not a header-based or ML classifier. SUPPORTED_EVENT_TYPES = reply_received, auto_reply_received, email_bounced, lead_unsubscribed (docs/INSTANTLY_FIELD_MAP.md section 2.1, the verified list of Instantly event types this responder is designed to act on). These flags are operational evidence only, not semantic certainty - final category assignment happens in Workflow 2.\n\nCONFIGURE LATER: Tune/expand the regex patterns once real auto-reply, OOO, bounce, and unsubscribe wording is observed from Instantly/ESPs.\n\nHOW TO TEST: POST the out-of-office fixture (#5) and confirm prefilter.is_out_of_office=true. POST the bounce fixture (#6) and confirm prefilter.is_bounce=true (and is_unsupported_event_type=false). POST the unsubscribe fixture (#4) and confirm prefilter.is_unsubscribe_language=true.\n\nEXPECTED OUTPUT: each item gains prefilter{is_unsupported_event_type, is_malformed_payload, is_duplicate_event, is_self_sent, is_empty_reply, is_automated_response, is_out_of_office, is_bounce, is_unsubscribe_language, has_attachments, campaign_cell_mismatch} (all boolean).\n\nANALOGY: A triage nurse running a quick checklist (breathing, bleeding, conscious) before the doctor (the Decision Engine) makes any diagnosis - fast and deterministic, never claiming a diagnosis itself.",
+        "height": 560,
+        "width": 380,
+        "color": 4
+      }
+    },
+    {
+      "id": "7262aa75-23ac-476e-9562-0abdd2f6936e",
+      "name": "G. Decision Engine Handoff",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        2880,
+        0
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "mode": "list",
+          "value": "tgYmY97CG4Bm8snI",
+          "cachedResultName": "HMZ - Reply Decision Engine - Validation"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "intake_id": "={{ $json.intake_id }}",
+            "received_at": "={{ $json.received_at }}",
+            "policy_version": "={{ $json.policy_version }}",
+            "kb_version": "={{ $json.kb_version }}",
+            "raw_payload": "={{ $json.raw_payload }}",
+            "validated": "={{ $json.validated }}",
+            "validation_errors": "={{ $json.validation_errors }}",
+            "payload_status": "={{ $json.payload_status }}",
+            "nes": "={{ $json.nes }}",
+            "prefilter": "={{ $json.prefilter }}",
+            "security_gate": "={{ $json.security_gate }}",
+            "idempotency": "={{ $json.idempotency }}",
+            "config": "={{ $json.config }}"
+          }
+        },
+        "mode": "each",
+        "options": {}
+      }
+    },
+    {
+      "id": "f9e8fa1d-cce7-492b-96f8-133851ae969f",
+      "name": "Section G - Decision Engine Handoff (notes)",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2800,
+        240
+      ],
+      "parameters": {
+        "content": "# Section G - Decision Engine Handoff\n\nWHAT: An Execute Sub-workflow node calls 'HMZ - Reply Decision Engine - Validation' (workflow NJcnNQoJ5nSIWYte) once per item, passing the entire current item (intake_id, received_at, raw_payload, synthetic, config, config_gate, validated, validation_errors, payload_status, nes, idempotency, prefilter) through to the sub-workflow's passthrough trigger. The sub-workflow's 5 sections (A deterministic policy, B mock classifier, C decision policy, D mock draft, E output validation) each spread {...input, ...}, so the item returned here is this same item plus deterministic{}, classifier{}, decision{}, validation{}.\n\nWHY: spec section G - pass the normalized event to the Reply Decision Engine using the safest supported sub-workflow pattern, and preserve the structured decision result. Execute Sub-workflow by workflow ID (source=database) is the native n8n mechanism; waitForSubWorkflow=true (default) keeps this synchronous so the decision is available on this workflow's final output.\n\nMOCKED: the sub-workflow's classifier (section B) and draft preparation (section D) are themselves mocked/provider-neutral (no real AI, no Instantly call) - see workflow NJcnNQoJ5nSIWYte's own sticky notes.\n\nCONFIGURE LATER: nothing Instantly-specific - this is a pure n8n-to-n8n call. If a real AI provider is later wired into the Decision Engine, this handoff node does not need to change.\n\nHOW TO TEST: POST any of the 12 fixtures and confirm the final output item contains decision.category, decision.terminal_status, decision.reply_permitted, decision.external_action_status (always NOT_PERFORMED or NOOP), draft.template_id, and validation.valid=true.\n\nEXPECTED OUTPUT: the full item from Section F, plus deterministic{}, classifier{}, decision{} (19 required fields), draft{}, validation{valid, errors[], checked_at}. This is the FINAL output of Workflow 1 for Phase 3 - no sender, SLA watchdog, or error workflow exists yet (out of scope).\n\nANALOGY: The triage nurse hands the completed chart to the attending physician (the Decision Engine) and waits at the door for the diagnosis and care plan to be clipped back onto the same chart, then carries the completed chart back to the front desk. No treatment is administered here.",
+        "height": 560,
+        "width": 380,
+        "color": 4
+      }
+    },
+    {
+      "id": "f2e8963d-8580-4b2d-ad9a-6b6b02645483",
+      "name": "B1. Configuration Gate Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        820,
+        -120
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "efda8524-4f6d-476e-82ed-1bce6d17cae3",
+              "leftValue": "={{ $json.config_gate.passed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c5f65583-97d5-4377-8d21-ace27779d296",
+      "name": "B2. Configuration Gate Rejection (Terminal)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        820,
+        160
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const gate = input.config_gate || {};\n  const reasons = Array.isArray(gate.reasons) ? gate.reasons : [];\n  const reasonText = reasons.length > 0\n    ? `Configuration gate failed: ${reasons.join('; ')}`\n    : 'Configuration gate failed (no reasons recorded)';\n\n  return {\n    json: {\n      ...input,\n      terminal_status: 'REJECTED',\n      processing_halted: true,\n      external_action_status: 'NOOP',\n      reason: reasonText\n    }\n  };\n});"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "4c6090f6-93a2-4047-a386-4f90c8d66540",
+      "name": "E4. Duplicate Event Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2420,
+        -120
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "4dffd302-a194-4ffa-b78d-272c09e9e505",
+              "leftValue": "={{ $json.idempotency.is_duplicate }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "5a923a2f-368b-4787-9225-102641956ed4",
+      "name": "E5. Duplicate Event Terminal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        160
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const key = (input.idempotency && input.idempotency.idempotency_key) ? input.idempotency.idempotency_key : 'UNKNOWN';\n\n  return {\n    json: {\n      ...input,\n      terminal_status: 'COMPLETED_NO_SEND',\n      processing_halted: true,\n      external_action_status: 'NOOP',\n      stop_active_sequence: false,\n      reason: `Duplicate event detected for idempotency key \"${key}\" (idempotency.is_duplicate=true); no further processing or send required.`\n    }\n  };\n});"
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "b6f1c3a2-7d4e-4a1f-9c2b-3e5f6a7b8c9d",
+      "name": "H. Human Approval Handoff",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        3160,
+        0
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "mode": "list",
+          "value": "9aPrt92jFhoYFxbs",
+          "cachedResultName": "HMZ - Reply Human Approval - Validation"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "case_input": "={{ $json }}"
+          }
+        },
+        "mode": "each",
+        "options": {}
+      }
+    },
+    {
+      "id": "node_a0d",
+      "name": "A0. Tag Dev/Synthetic Entry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        -120
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nreturn items.map((item) => ({ json: { ...(item.json || {}), entry_source: 'DEV_OR_SYNTHETIC' } }));"
+      }
+    },
+    {
+      "id": "trigger_webhook_production",
+      "name": "Webhook - Instantly Reply Intake (Production, Gated)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        240
+      ],
+      "webhookId": "f7b3e0c4-9a2e-4b6e-9f1a-instantlyreplyprod",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "instantly-reply",
+        "responseMode": "onReceived",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gUUV1aWlokkrHOCM",
+          "name": "hmzInstantlyWebhookToken"
+        }
+      }
+    },
+    {
+      "id": "node_a0p",
+      "name": "A0. Tag Production Entry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        240
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nreturn items.map((item) => ({ json: { ...(item.json || {}), entry_source: 'PRODUCTION_WEBHOOK' } }));"
+      }
+    },
+    {
+      "id": "node_f1",
+      "name": "F1. Production Security & Allowlist Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2720,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\n// Fixed launch profile allowlists (policy-HMZ-1.2). Mirrors\n// config/business-ready.config.json allowlists.*; all empty by\n// default, which fails this gate closed for PRODUCTION_WEBHOOK\n// entries until the owner configures them and the apply step\n// re-embeds the configured values.\n// HMZ_INJECT_BEGIN:ALLOWLISTS\r\nconst ALLOWLISTS = {\n  workspace_id: 'c7f84f11-4a1a-42dc-9a74-a417e44cb87e',\n  campaign_ids: ['531e64ed-c225-4baf-97a9-4ec90dc34eb0'],\n  connected_sender_eaccounts: ['hamzah@gethmzautomation.com', 'hamzah@gethmzautomations.com', 'hamzah@hmzautomation.com', 'hamzah@hmzautomations.com', 'hamzah@hubhmzautomation.com', 'hamzah@hubhmzautomations.com', 'hamzah@labshmzautomation.com', 'hamzah@labshmzautomations.com', 'hamzah@onehmzautomation.com', 'hamzah@onehmzautomations.com', 'hamzah@teamhmzautomation.org', 'hamzah@teamhmzautomations.com', 'zahid@gethmzautomation.com', 'zahid@gethmzautomations.com', 'zahid@hmzautomation.com', 'zahid@hmzautomations.com', 'zahid@hubhmzautomation.com', 'zahid@hubhmzautomations.com', 'zahid@labshmzautomation.com', 'zahid@labshmzautomations.com', 'zahid@onehmzautomation.com', 'zahid@onehmzautomations.com', 'zahid@teamhmzautomation.org', 'zahid@teamhmzautomations.com'],\n};\r\n// HMZ_INJECT_END:ALLOWLISTS\n// HMZ_INJECT_END:ALLOWLISTS\n// HMZ_INJECT_END:ALLOWLISTS\n// HMZ_INJECT_END:ALLOWLISTS\n\nreturn items.map((item) => {\n  const input = item.json || {};\n  const nes = input.nes || {};\n  const prefilter = input.prefilter || {};\n  const entrySource = input.entry_source || 'UNKNOWN';\n\n  if (entrySource !== 'PRODUCTION_WEBHOOK') {\n    return {\n      json: {\n        ...input,\n        security_gate: { checked: false, entry_source: entrySource, passed: true, reasons: [] },\n      },\n    };\n  }\n\n  const reasons = [];\n  const workspaceId = nes.workspace_id || null;\n  const campaignId = nes.campaign_id || (nes.campaign_context && nes.campaign_context.campaign_id) || null;\n  const eaccount = nes.eaccount || null;\n\n  const workspaceAllowed = !!ALLOWLISTS.workspace_id && workspaceId === ALLOWLISTS.workspace_id;\n  if (!workspaceAllowed) reasons.push('WORKSPACE_NOT_ALLOWLISTED');\n\n  // A missing/blank workspace_id can never allowlist a campaign or sender:\n  // both checks are gated on workspaceAllowed.\n  const campaignAllowed = workspaceAllowed && ALLOWLISTS.campaign_ids.length > 0 && !!campaignId && ALLOWLISTS.campaign_ids.includes(campaignId);\n  if (!campaignAllowed) reasons.push('CAMPAIGN_NOT_ALLOWLISTED_OR_WORKSPACE_NOT_ALLOWLISTED');\n\n  const senderAllowed = workspaceAllowed && ALLOWLISTS.connected_sender_eaccounts.length > 0 && !!eaccount && ALLOWLISTS.connected_sender_eaccounts.includes(eaccount);\n  if (!senderAllowed) reasons.push('SENDER_EACCOUNT_NOT_ALLOWLISTED_OR_WORKSPACE_NOT_ALLOWLISTED');\n\n  if (prefilter.is_self_sent) reasons.push('SELF_SENT');\n  if (prefilter.is_unsupported_event_type) reasons.push('UNSUPPORTED_EVENT_TYPE');\n  if (prefilter.is_malformed_payload) reasons.push('MALFORMED_PAYLOAD');\n  if (prefilter.is_duplicate_event) reasons.push('DUPLICATE_EVENT');\n\n  const passed = workspaceAllowed && campaignAllowed && senderAllowed &&\n    !prefilter.is_self_sent && !prefilter.is_unsupported_event_type &&\n    !prefilter.is_malformed_payload && !prefilter.is_duplicate_event;\n\n  return {\n    json: {\n      ...input,\n      security_gate: {\n        checked: true,\n        entry_source: entrySource,\n        workspace_allowed: workspaceAllowed,\n        campaign_allowed: campaignAllowed,\n        sender_allowed: senderAllowed,\n        passed,\n        reasons,\n      },\n    },\n  };\n});"
+      }
+    },
+    {
+      "id": "if_f2",
+      "name": "F2. Security Gate Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3040,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-f2-1",
+              "leftValue": "={{ $json.security_gate.passed === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node_f3",
+      "name": "F3. Security Gate Rejection Terminal",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3040,
+        220
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nreturn items.map((item) => {\n  const input = item.json || {};\n  return {\n    json: {\n      ...input,\n      terminal: {\n        schema_version: '1.0',\n        result: 'REJECTED',\n        reason: 'PRODUCTION_SECURITY_GATE_FAILED',\n        security_gate: input.security_gate || null,\n      },\n    },\n  };\n});"
+      }
+    },
+    {
+      "id": "hmz_v8_hydrate_reply_email_http",
+      "name": "C1. Hydrate Reply Email From Instantly",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        620,
+        120
+      ],
+      "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "GET",
+        "url": "={{ (() => { const r = $json.raw_payload || {}; const v = $json.validated || {}; const id = r.email_id || v.email_id || r.id || r.emailId || r.reply_email_id || r.event_email_id || (r.email && r.email.id) || ''; return 'https://api.instantly.ai/api/v2/emails/' + encodeURIComponent(String(id || '__missing_email_id__')); })() }}",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "fullResponse": true
+            }
+          }
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "jWeATGMoMGyXl7yK",
+          "name": "hmzInstantlyApi"
+        }
+      }
+    },
+    {
+      "id": "hmz_v8_merge_reply_hydration",
+      "name": "C2. Merge Reply Hydration",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        120
+      ],
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction htmlToText(value) {\n  let s = String(value == null ? '' : value);\n  if (!s) return '';\n  s = s\n    .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n    .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')\n    .replace(/<blockquote[\\s\\S]*?<\\/blockquote>/gi, ' ')\n    .replace(/<div[^>]*class=[\"'][^\"']*(gmail_quote|gmail_attr)[^\"']*[\"'][\\s\\S]*$/gi, ' ')\n    .replace(/<br\\s*\\/?>/gi, '\\n')\n    .replace(/<\\/p>/gi, '\\n')\n    .replace(/<\\/div>/gi, '\\n')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&nbsp;/g, ' ')\n    .replace(/&amp;/g, '&')\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/&quot;/g, '\"')\n    .replace(/&#39;/g, \"'\")\n    .replace(/\\u00a0/g, ' ');\n  return s;\n}\n\nfunction stripQuotedReply(value) {\n  let s = String(value == null ? '' : value);\n  if (!s) return '';\n\n  s = s.replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n');\n\n  const cutPatterns = [\n    /\\nOn .{0,500}wrote:\\s*\\n[\\s\\S]*$/i,\n    /\\n-{2,}\\s*Original Message\\s*-{2,}[\\s\\S]*$/i,\n    /\\nFrom:\\s+.+\\nSent:\\s+.+\\nTo:\\s+.+[\\s\\S]*$/i\n  ];\n\n  for (const rx of cutPatterns) s = s.replace(rx, '');\n\n  return s\n    .split('\\n')\n    .filter(line => !/^\\s*>/.test(line))\n    .join('\\n')\n    .replace(/[ \\t]+/g, ' ')\n    .replace(/\\n{3,}/g, '\\n\\n')\n    .trim();\n}\n\nfunction cleanText(value) {\n  return stripQuotedReply(String(value == null ? '' : value).trim());\n}\n\nfunction cleanHtml(value) {\n  return cleanText(htmlToText(value));\n}\n\nfunction firstUseful(values, html = false) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const raw = typeof value === 'object' ? JSON.stringify(value) : String(value);\n    const cleaned = html ? cleanHtml(raw) : cleanText(raw);\n    if (cleaned && cleaned !== '{}' && cleaned !== '[]') return cleaned;\n  }\n  return '';\n}\n\nfunction path(obj, keys) {\n  let cur = obj;\n  for (const key of keys) {\n    if (cur === null || cur === undefined) return undefined;\n    cur = cur[key];\n  }\n  return cur;\n}\n\nfunction collectStrings(obj, out = [], seen = new Set(), depth = 0) {\n  if (obj === null || obj === undefined || depth > 7) return out;\n\n  if (typeof obj === 'string') {\n    if (obj.trim()) out.push(obj);\n    return out;\n  }\n\n  if (typeof obj !== 'object') return out;\n  if (seen.has(obj)) return out;\n  seen.add(obj);\n\n  const priority = [\n    'reply_text', 'text', 'plain_text', 'body_text', 'email_body_text',\n    'reply_html', 'html', 'body_html', 'email_body_html',\n    'body', 'content', 'email_body', 'message', 'content_preview', 'preview', 'snippet'\n  ];\n\n  for (const k of priority) {\n    if (Object.prototype.hasOwnProperty.call(obj, k)) collectStrings(obj[k], out, seen, depth + 1);\n  }\n\n  for (const [k, v] of Object.entries(obj)) {\n    if (!priority.includes(k)) collectStrings(v, out, seen, depth + 1);\n  }\n\n  return out;\n}\n\nfunction emailObject(http) {\n  if (!http || typeof http !== 'object') return {};\n  if (http.body && typeof http.body === 'object') return http.body;\n  if (http.data && typeof http.data === 'object') return http.data;\n  if (http.email && typeof http.email === 'object') return http.email;\n  return http;\n}\n\nfunction bestHydratedText(http) {\n  const email = emailObject(http);\n  const roots = [email, http && http.body, http && http.data, http && http.email, http].filter(Boolean);\n\n  const textCandidates = [];\n  const htmlCandidates = [];\n\n  for (const root of roots) {\n    textCandidates.push(\n      path(root, ['reply_text']),\n      path(root, ['text']),\n      path(root, ['plain_text']),\n      path(root, ['body_text']),\n      path(root, ['email_body_text']),\n      path(root, ['content_preview']),\n      path(root, ['preview']),\n      path(root, ['snippet'])\n    );\n\n    htmlCandidates.push(\n      path(root, ['reply_html']),\n      path(root, ['html']),\n      path(root, ['body_html']),\n      path(root, ['email_body_html']),\n      typeof path(root, ['body']) === 'string' ? path(root, ['body']) : null,\n      path(root, ['body', 'html']),\n      path(root, ['email_body']),\n      path(root, ['content'])\n    );\n  }\n\n  const direct = firstUseful(textCandidates, false);\n  if (direct) return direct;\n\n  const html = firstUseful(htmlCandidates, true);\n  if (html) return html;\n\n  const allStrings = [];\n  for (const root of roots) collectStrings(root, allStrings);\n  return firstUseful(allStrings, true) || firstUseful(allStrings, false);\n}\n\nfunction snippetOf(text) {\n  return String(text || '').replace(/\\s+/g, ' ').trim().slice(0, 240);\n}\n\nfunction threadIdFromUniboxUrl(value) {\n  const raw = String(value == null ? '' : value).trim();\n  if (!raw) return null;\n  try {\n    const u = new URL(raw);\n    const direct = u.searchParams.get('thread_id') || u.searchParams.get('threadId') || u.searchParams.get('thread');\n    if (direct && /^[A-Za-z0-9_-]{8,}$/.test(direct.trim())) return direct.trim();\n    const search = u.searchParams.get('thread_search') || '';\n    const m = /(?:^|\\b)thread:([A-Za-z0-9_-]{8,})/.exec(search);\n    if (m) return m[1];\n  } catch (e) {\n    const m = /(?:thread_id|threadId|thread)=([A-Za-z0-9_-]{8,})|thread_search=[^&]*thread%3A([A-Za-z0-9_-]{8,})|thread_search=[^&]*thread:([A-Za-z0-9_-]{8,})/i.exec(raw);\n    if (m) return (m[1] || m[2] || m[3] || '').trim() || null;\n  }\n  return null;\n}\n\nreturn items.map((item, index) => {\n  let prior = {};\n  try {\n    const p = $('C. Payload Validation').all()[index];\n    prior = p && p.json ? p.json : {};\n  } catch {\n    prior = {};\n  }\n\n  const http = item.json || {};\n  const email = emailObject(http);\n\n  const raw = {\n    ...((prior.raw_payload && typeof prior.raw_payload === 'object') ? prior.raw_payload : {})\n  };\n\n  const existingText = firstUseful([\n    raw.reply_text,\n    raw.reply_text_snippet,\n    raw.text,\n    raw.plain_text,\n    raw.body_text,\n    raw.email_body_text\n  ], false);\n\n  const hydratedText = bestHydratedText(http);\n  const finalText = existingText || hydratedText;\n\n  const finalSnippet = firstUseful([\n    raw.reply_text_snippet,\n    email.content_preview,\n    email.preview,\n    email.snippet,\n    snippetOf(finalText)\n  ], false);\n\n  const uniboxThreadId = threadIdFromUniboxUrl(raw.unibox_url);\n  const alternateThreadId = (typeof email.thread_id === 'string' && email.thread_id.trim())\n    ? email.thread_id.trim()\n    : uniboxThreadId;\n\n  raw._hmz_v10_hydration = {\n    attempted: true,\n    source_email_id: raw.email_id || raw.id || null,\n    http_status_code: http.statusCode || http.status || null,\n    used_hydrated_text: !existingText && !!hydratedText,\n    hydrated_text_length: hydratedText ? hydratedText.length : 0,\n    final_text_length: finalText ? finalText.length : 0,\n    response_keys: Object.keys(http || {}).slice(0, 30),\n    body_type: http && http.body === null ? 'null' : typeof (http && http.body),\n    alternate_thread_id_source: (!raw.thread_id && alternateThreadId) ? (email.thread_id ? 'instantly_email' : 'unibox_url_thread_search') : null\n  };\n\n  raw._instantly_hydrated_email = email;\n\n  if (finalText) raw.reply_text = finalText;\n  if (finalSnippet) raw.reply_text_snippet = finalSnippet;\n\n  if (!raw.reply_subject && email.subject) raw.reply_subject = email.subject;\n  if (!raw.email_account && email.eaccount) raw.email_account = email.eaccount;\n  if (!raw.thread_id && alternateThreadId) raw.thread_id = alternateThreadId;\n  if (!raw.message_id && email.message_id) raw.message_id = email.message_id;\n\n  const validated = {\n    ...((prior.validated && typeof prior.validated === 'object') ? prior.validated : {})\n  };\n\n  if (finalText) validated.reply_text = finalText;\n  if (!validated.reply_subject && raw.reply_subject) validated.reply_subject = raw.reply_subject;\n  if (!validated.email_account && raw.email_account) validated.email_account = raw.email_account;\n  if (!validated.email_id && raw.email_id) validated.email_id = raw.email_id;\n  if (!validated.lead_email && raw.lead_email) validated.lead_email = raw.lead_email;\n  if (!validated.campaign_id && raw.campaign_id) validated.campaign_id = raw.campaign_id;\n  if (!validated.event_type && raw.event_type) validated.event_type = raw.event_type;\n  if (!validated.timestamp && raw.timestamp) validated.timestamp = raw.timestamp;\n\n  const validationErrors = Array.isArray(prior.validation_errors) ? prior.validation_errors.filter(err => {\n    return !(err && err.field === 'reply_text' && finalText);\n  }) : [];\n\n  return {\n    json: {\n      ...prior,\n      raw_payload: raw,\n      validated,\n      validation_errors: validationErrors,\n      payload_status: validationErrors.length > 0 ? 'INCOMPLETE' : 'COMPLETE'\n    }\n  };\n});"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook - Synthetic Reply Intake (DEV ONLY)": {
+      "main": [
+        [
+          {
+            "node": "A0. Tag Dev/Synthetic Entry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A. Webhook Intake Normalization": {
+      "main": [
+        [
+          {
+            "node": "B. Configuration Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "D. Normalization to NES": {
+      "main": [
+        [
+          {
+            "node": "E1. Compute Idempotency Key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "E1. Compute Idempotency Key": {
+      "main": [
+        [
+          {
+            "node": "E2. Idempotency Data Table Upsert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "E2. Idempotency Data Table Upsert": {
+      "main": [
+        [
+          {
+            "node": "E3. Recombine Idempotency Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "F. Deterministic Prefilter": {
+      "main": [
+        [
+          {
+            "node": "F1. Production Security & Allowlist Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B. Configuration Gate": {
+      "main": [
+        [
+          {
+            "node": "B1. Configuration Gate Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B1. Configuration Gate Router": {
+      "main": [
+        [
+          {
+            "node": "C. Payload Validation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "B2. Configuration Gate Rejection (Terminal)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "E3. Recombine Idempotency Result": {
+      "main": [
+        [
+          {
+            "node": "E4. Duplicate Event Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "E4. Duplicate Event Router": {
+      "main": [
+        [
+          {
+            "node": "F. Deterministic Prefilter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "E5. Duplicate Event Terminal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "G. Decision Engine Handoff": {
+      "main": [
+        [
+          {
+            "node": "H. Human Approval Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A0. Tag Dev/Synthetic Entry": {
+      "main": [
+        [
+          {
+            "node": "A. Webhook Intake Normalization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Instantly Reply Intake (Production, Gated)": {
+      "main": [
+        [
+          {
+            "node": "A0. Tag Production Entry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A0. Tag Production Entry": {
+      "main": [
+        [
+          {
+            "node": "A. Webhook Intake Normalization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "F1. Production Security & Allowlist Gate": {
+      "main": [
+        [
+          {
+            "node": "F2. Security Gate Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "F2. Security Gate Router": {
+      "main": [
+        [
+          {
+            "node": "G. Decision Engine Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "F3. Security Gate Rejection Terminal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "C. Payload Validation": {
+      "main": [
+        [
+          {
+            "node": "C1. Hydrate Reply Email From Instantly",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "C1. Hydrate Reply Email From Instantly": {
+      "main": [
+        [
+          {
+            "node": "C2. Merge Reply Hydration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "C2. Merge Reply Hydration": {
+      "main": [
+        [
+          {
+            "node": "D. Normalization to NES",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "errorWorkflow": "2PR9YEkG4KyGdowa"
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": null,
+  "versionId": "abc83e43-9b97-4ca1-ae32-c42599255328",
+  "activeVersionId": "abc83e43-9b97-4ca1-ae32-c42599255328",
+  "versionCounter": 12,
+  "triggerCount": 2,
+  "sourceWorkflowId": null,
+  "shared": [
+    {
+      "updatedAt": "2026-06-17T18:29:52.848Z",
+      "createdAt": "2026-06-17T18:29:52.848Z",
+      "role": "workflow:owner",
+      "workflowId": "VtDQqw02Ux1TgjIH",
+      "projectId": "wczOkcRaHDWk4Ffs",
+      "project": {
+        "updatedAt": "2026-06-17T07:02:32.299Z",
+        "createdAt": "2026-06-17T06:55:32.963Z",
+        "id": "wczOkcRaHDWk4Ffs",
+        "name": "Hamzah Zahid <hamzahzahidsales@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "c36de550-8f81-4842-a501-1a1e33f7d4b8"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-06-28T04:13:48.236Z",
+    "createdAt": "2026-06-28T04:13:48.236Z",
+    "versionId": "abc83e43-9b97-4ca1-ae32-c42599255328",
+    "workflowId": "VtDQqw02Ux1TgjIH",
+    "nodes": [
+      {
+        "id": "sticky_overview",
+        "name": "Overview",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          0,
+          -400
+        ],
+        "parameters": {
+          "content": "# HMZ - Instantly Reply Intake - Validation (Phase 3)\n\nWHAT: Synthetic webhook intake -> configuration gate -> payload validation -> NES normalization -> idempotency check -> deterministic prefilter -> handoff to the Reply Decision Engine sub-workflow (workflow NJcnNQoJ5nSIWYte). Returns the normalized event plus the Decision Engine's decision, draft, and validation result.\n\nWHY: Implements docs/IMPLEMENTATION_PLAN.md Phase 3 for HMZ's own US B2B validation campaign. OPERATING_MODE=VALIDATION, DRY_RUN=true, LIVE_CAMPAIGNS=[].\n\nMOCKED: No connection to Instantly, any AI provider, email infrastructure, Slack, Sheets, or Supabase anywhere in this workflow. The webhook accepts only local synthetic POST payloads from fixtures/phase_3/.\n\nCONFIGURE LATER: Replace the dev webhook path and payload shape with the real Instantly reply webhook once a payload is captured (docs/INSTANTLY_FIELD_MAP.md). Provision idempotency storage (n8n Data Tables). Resolve docs/ASSUMPTIONS_AND_UNKNOWNS.md section D owner decisions (sender name / booking link mappings, storage choice, escalation owners).\n\nHOW TO TEST: Keep this workflow INACTIVE. In the editor, use 'Listen for test event' on the Webhook node, then POST a fixtures/phase_3/*.json file to the shown loopback test URL. Inspect each node's output.\n\nEXPECTED OUTPUT: one item per inbound event containing intake_id, received_at, raw_payload, the validated/normalized NES object, idempotency_state, prefilter result, and (where forwarded) the Decision Engine's decision / draft / validation fields. No external side effects.\n\nANALOGY: A hospital intake desk - time-stamps incoming paperwork, checks the form is filled in, assigns a file number, checks it is not a duplicate visit, and forwards the file to triage (the Decision Engine). It does not diagnose or treat anyone itself.",
+          "height": 360,
+          "width": 700,
+          "color": 1
+        }
+      },
+      {
+        "id": "trigger_webhook",
+        "name": "Webhook - Synthetic Reply Intake (DEV ONLY)",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          0,
+          0
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true,
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "hmz-validation-reply-intake-dev",
+          "responseMode": "onReceived",
+          "options": {}
+        },
+        "webhookId": "17185adf-e530-4388-8de7-0d81d0b0c318"
+      },
+      {
+        "id": "section_a",
+        "name": "A. Webhook Intake Normalization",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          320,
+          0
+        ],
+        "onError": "continueRegularOutput",
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "const items = $input.all();\n\nfunction generateId() {\n  const timestamp = Date.now().toString(36).toUpperCase().padStart(10, '0');\n  const random = Array.from({ length: 16 }, () => Math.floor(Math.random() * 36).toString(36).toUpperCase()).join('');\n  return timestamp + random;\n}\n\nreturn items.map(item => {\n  const json = item.json || {};\n  const body = (json.body && typeof json.body === 'object') ? json.body : json;\n  const receivedAt = new Date().toISOString();\n  const intakeId = (typeof body.intake_id === 'string' && body.intake_id.trim())\n    ? body.intake_id.trim()\n    : generateId();\n\n  return {\n    json: {\n      intake_id: intakeId,\n      received_at: receivedAt,\n      raw_payload: body,\n      synthetic: false\n    }\n  };\n});"
+        }
+      },
+      {
+        "id": "sticky_section_a",
+        "name": "Section A - Synthetic Webhook Intake (notes)",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          240,
+          240
+        ],
+        "parameters": {
+          "content": "# Section A - Synthetic Webhook Intake\n\nWHAT: A dev-only Webhook node accepts a synthetic POST payload shaped like an Instantly 'reply_received' event. The Code node immediately preserves the full raw payload, records received_at, and assigns an intake_id (reusing body.intake_id if a fixture supplies one, for deterministic duplicate testing).\n\nWHY: Establishes a single, time-stamped, traceable entry point with a stable internal identifier before any validation or normalization happens (spec section A).\n\nMOCKED: The webhook path ('hmz-validation-reply-intake-dev') and payload shape are PROVISIONAL development placeholders, not the real Instantly webhook. responseMode=onReceived so the webhook acknowledges immediately (Processing SLO) without waiting for downstream sections.\n\nCONFIGURE LATER: Replace path/shape with the real Instantly reply webhook once docs/INSTANTLY_FIELD_MAP.md is confirmed against a captured payload. Add the compensating controls from docs/ASSUMPTIONS_AND_UNKNOWNS.md B4 (secret path, allowlisting, strict validation) before any non-loopback exposure. Confirm whether Instantly supplies its own event/email IDs that should take priority over this generated intake_id.\n\nHOW TO TEST: With the workflow open (INACTIVE), click 'Listen for test event' on the Webhook node, then POST any fixtures/phase_3/*.json file to the displayed loopback test URL (never expose this port).\n\nEXPECTED OUTPUT: one item with intake_id (string), received_at (ISO timestamp), raw_payload (the exact posted body, untouched), synthetic: true.\n\nANALOGY: The front-desk clerk who time-stamps every incoming envelope and staples a tracking number to it before it goes anywhere else. The clerk does not read or judge the contents.",
+          "height": 560,
+          "width": 380,
+          "color": 4
+        }
+      },
+      {
+        "id": "a3a17c35-027c-4843-9c8c-0a35a1f83429",
+        "name": "B. Configuration Gate",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          640,
+          0
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "const items = $input.all();\n\nconst CONFIG = {\n  operating_mode: 'SUPERVISED_VALIDATION',\n  dry_run: false,\n  live_campaigns: [\"531e64ed-c225-4baf-97a9-4ec90dc34eb0\"],\n  geo_code: 'US_B2B_CORE_12',\n  validation_cells: [\n    'CELL_1_SAAS_SALES_HIRING',\n    'CELL_2_SAAS_EXISTING_OUTBOUND',\n    'CELL_3_SPECIALISED_B2B_AGENCY'\n  ],\n  allowed_country: 'US',\n  region_priority: ['EASTERN', 'CENTRAL'],\n  transmission_disabled: false,\n  external_actions_mocked: false\n};\n\nfunction payloadOf(input) {\n  return input.raw_payload && typeof input.raw_payload === 'object' ? input.raw_payload : input;\n}\n\nfunction normalized(value) {\n  return String(value == null ? '' : value).trim();\n}\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const rawPayload = payloadOf(input);\n\n  const eventType = normalized(rawPayload.event_type || input.event_type);\n  const campaignId = normalized(rawPayload.campaign_id || input.campaign_id);\n  const reasons = [];\n\n  if (eventType && eventType !== 'reply_received') {\n    reasons.push('event_type is not reply_received: ' + eventType);\n  }\n\n  if (!campaignId) {\n    reasons.push('campaign_id is missing');\n  }\n\n  if (CONFIG.operating_mode !== 'SUPERVISED_VALIDATION') {\n    reasons.push('CONFIG.operating_mode is not SUPERVISED_VALIDATION');\n  }\n\n  if (CONFIG.dry_run !== false) {\n    reasons.push('CONFIG.dry_run is not false');\n  }\n\n  if (CONFIG.transmission_disabled !== false) {\n    reasons.push('CONFIG.transmission_disabled is not false');\n  }\n\n  if (CONFIG.external_actions_mocked !== false) {\n    reasons.push('CONFIG.external_actions_mocked is not false');\n  }\n\n  if (CONFIG.live_campaigns.length < 1) {\n    reasons.push('CONFIG.live_campaigns is empty');\n  }\n\n  if (campaignId && !CONFIG.live_campaigns.includes(campaignId)) {\n    reasons.push('campaign_id \"' + campaignId + '\" is not in LIVE_CAMPAIGNS');\n  }\n\n  const passed = reasons.length === 0;\n\n  const result = {\n    ...input,\n    raw_payload: rawPayload,\n    config: CONFIG,\n    config_gate: {\n      passed,\n      supervised_live_ok: passed,\n      dry_run_ok: CONFIG.dry_run === false,\n      live_campaign_allowed: campaignId ? CONFIG.live_campaigns.includes(campaignId) : false,\n      reasons\n    }\n  };\n\n  if (!passed) {\n    result.terminal_status = 'REJECTED';\n    result.processing_halted = true;\n  }\n\n  return { json: result };\n});"
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "47799e3c-3b39-4af9-944b-f9d2ca79a696",
+        "name": "Section B - Configuration Gate (notes)",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          560,
+          240
+        ],
+        "parameters": {
+          "content": "# Section B - Configuration Gate\n\nWHAT: Attaches a hardcoded validation-mode CONFIG object to every item (operating_mode=VALIDATION, dry_run=true, live_campaigns=[], geo_code=US_B2B_CORE_12, the 3 approved validation cells, allowed_country=US, region_priority=[EASTERN, CENTRAL], transmission_disabled=true, external_actions_mocked=true). Then checks raw_payload for any claim that would require a live send (campaign_id in LIVE_CAMPAIGNS, raw_payload.dry_run=false, raw_payload.operating_mode != VALIDATION, or raw_payload.live_campaign=true).\n\nWHY: spec section B and CLAUDE.md rule 5 - the workflow must fail safely if dry-run is not true or a synthetic event tries to claim a live campaign.\n\nMOCKED: CONFIG is a hardcoded constant for Phase 3, not read from n8n environment variables or an external config store.\n\nCONFIGURE LATER: Move CONFIG to environment-variable-backed values once a config storage adapter is chosen (docs/ASSUMPTIONS_AND_UNKNOWNS.md section D).\n\nBRANCHING (Phase 3.1A repair, resolves reports/UNRESOLVED_ITEMS.md U2): immediately downstream is B1. Configuration Gate Router, a native IF node with condition config_gate.passed === true. If true, the item continues to C. Payload Validation exactly as before. If false, the item is routed to B2. Configuration Gate Rejection (Terminal), which sets terminal_status=REJECTED, processing_halted=true, external_action_status=NOOP, and a reason built from config_gate.reasons; B2 is the FINAL output for that item - Sections C-G (normalization, idempotency, prefilter, Decision Engine) never run. Because CONFIG.dry_run=true and live_campaigns=[] are hardcoded, config_gate.passed is always true for realistic Phase 3 inputs, so the false branch is exercised only by fixture 14 (raw_payload.live_campaign=true).\n\nHOW TO TEST: POST any of the 12 standard fixtures and confirm config_gate.passed=true, dry_run_ok=true, live_campaign_claim_detected=false, and the item proceeds to C. POST fixture 14 (raw_payload.live_campaign=true) and confirm config_gate.passed=false, the item is routed to B2, and the final output has terminal_status=REJECTED, processing_halted=true, external_action_status=NOOP, with no nes/idempotency/prefilter/decision/classifier/validation fields present.\n\nEXPECTED OUTPUT: each item gains config{...CONFIG...} and config_gate{passed, dry_run_ok, live_campaign_claim_detected, reasons[]}, then B1 routes it to either C (passed=true) or B2 (passed=false, terminal).\n\nANALOGY: A safety inspector who checks the building's fire-suppression system is switched on and that no one has tried to disable it, before any work is allowed to proceed.",
+          "height": 560,
+          "width": 380,
+          "color": 4
+        }
+      },
+      {
+        "id": "e1f045ba-fe3c-45b0-9b38-0abcc7df597a",
+        "name": "C. Payload Validation",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          960,
+          0
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "const items = $input.all();\n\nconst REQUIRED_FIELDS = [\n  { nesPath: 'event_id', rawKeys: ['event_id'] },\n  { nesPath: 'email_id', rawKeys: ['email_id'] },\n  { nesPath: 'event_type', rawKeys: ['event_type'] },\n  { nesPath: 'lead_email', rawKeys: ['lead_email'] },\n  { nesPath: 'from_address_email', rawKeys: ['from_address_email'] },\n  { nesPath: 'email_account', rawKeys: ['email_account'] },\n  { nesPath: 'reply_subject', rawKeys: ['reply_subject'] },\n  { nesPath: 'reply_text', rawKeys: ['reply_text'] },\n  { nesPath: 'timestamp', rawKeys: ['timestamp'] },\n  { nesPath: 'campaign_id', rawKeys: ['campaign_id'] },\n  { nesPath: 'validation_cell', rawKeys: ['validation_cell'] }\n];\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const rawPayload = input.raw_payload;\n\n  const isMalformed = (\n    rawPayload === null ||\n    typeof rawPayload !== 'object' ||\n    Array.isArray(rawPayload) ||\n    typeof rawPayload.event_type !== 'string' ||\n    rawPayload.event_type.trim() === ''\n  );\n\n  const validated = {};\n  const validationErrors = [];\n\n  if (isMalformed) {\n    for (const field of REQUIRED_FIELDS) {\n      validated[field.nesPath] = null;\n    }\n    validationErrors.push({\n      field: 'event_type',\n      issue: 'MISSING_OR_INVALID',\n      detail: 'raw_payload is missing a non-empty string event_type; cannot determine event type.'\n    });\n  } else {\n    for (const field of REQUIRED_FIELDS) {\n      const raw = rawPayload[field.rawKeys[0]];\n      if (raw === undefined || raw === null || (typeof raw === 'string' && raw.trim() === '')) {\n        validated[field.nesPath] = null;\n        validationErrors.push({ field: field.nesPath, issue: 'MISSING', detail: `raw_payload.${field.rawKeys[0]} is missing or empty.` });\n      } else {\n        validated[field.nesPath] = raw;\n      }\n    }\n  }\n\n  return {\n    json: {\n      ...input,\n      validated,\n      validation_errors: validationErrors,\n      payload_status: isMalformed ? 'MALFORMED' : (validationErrors.length > 0 ? 'INCOMPLETE' : 'COMPLETE')\n    }\n  };\n});"
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "3934a0f1-5f2d-4765-8f33-f87283dcb19a",
+        "name": "Section C - Payload Validation (notes)",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          880,
+          240
+        ],
+        "parameters": {
+          "content": "# Section C - Payload Validation\n\nWHAT: Reads raw_payload and extracts 11 minimum synthetic fields (event_id, email_id, event_type, lead_email, from_address_email, email_account, reply_subject, reply_text, timestamp, campaign_id, validation_cell) into a validated{} object. Missing or empty fields become null with a structured validation_errors[] entry. If raw_payload itself is missing, not an object, an array, or lacks a non-empty event_type, the whole payload is MALFORMED.\n\nWHY: spec section C - never fabricate values; malformed payloads must route to a terminal state, not continue silently.\n\nMOCKED: none. Pure deterministic field extraction, no external lookups.\n\nCONFIGURE LATER: Update the rawKeys mapping in REQUIRED_FIELDS once a real Instantly reply_received payload is captured (docs/INSTANTLY_FIELD_MAP.md) - field names may differ from these synthetic fixture names.\n\nHOW TO TEST: POST the malformed-payload fixture (#11) and confirm payload_status=MALFORMED with one validation_errors entry for event_type. POST any complete fixture and confirm payload_status=COMPLETE with validation_errors=[].\n\nEXPECTED OUTPUT: each item gains validated{11 fields, each a value or null}, validation_errors[] (array of {field, issue, detail}), payload_status (COMPLETE | INCOMPLETE | MALFORMED).\n\nANALOGY: A form-checker who goes through an intake form field by field, circling any blank boxes, and stamps the form REJECTED if the 'type of request' box itself was left blank.",
+          "height": 560,
+          "width": 380,
+          "color": 4
+        }
+      },
+      {
+        "id": "0c5ff6cd-33c0-48a5-ba81-94081c4805a7",
+        "name": "D. Normalization to NES",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1280,
+          0
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "const items = $input.all();\n\nconst CELL_DEFINITIONS = {\n  CELL_1_SAAS_SALES_HIRING: {\n    segment: 'B2B SaaS',\n    subsegment: '10-50 employees, recently hiring sales roles',\n    pain_trigger: 'We hired sales capacity but pipeline is not keeping up',\n    offer_angle: 'Capacity-aligned qualified meetings',\n    geo_code: 'US_B2B_CORE_12'\n  },\n  CELL_2_SAAS_EXISTING_OUTBOUND: {\n    segment: 'B2B SaaS',\n    subsegment: 'Already using outbound tools/agencies/SDRs',\n    pain_trigger: 'Outbound is producing volume, but quality is inconsistent',\n    offer_angle: 'Fewer junk meetings, capacity-based targeting',\n    geo_code: 'US_B2B_CORE_12'\n  },\n  CELL_3_SPECIALISED_B2B_AGENCY: {\n    segment: 'B2B agencies',\n    subsegment: '$5k+ monthly retainer services',\n    pain_trigger: 'Founder-led sales depends too much on referrals and inconsistent pipeline',\n    offer_angle: 'Predictable qualified meetings without hiring SDRs',\n    geo_code: 'US_B2B_CORE_12'\n  }\n};\n\nfunction emptyValidationLearning() {\n  return {\n    pain_confirmed: 'unknown',\n    current_outbound_spend_confirmed: 'unknown',\n    capacity_problem_confirmed: 'unknown',\n    proof_objection: 'unknown',\n    pricing_interest: 'unknown',\n    alpha_interest: 'unknown',\n    decision_maker_confirmed: 'unknown',\n    discovery_call_booked: 'unknown',\n    discovery_call_showed: 'unknown',\n    validation_signal_strength: 'unknown',\n    voice_of_customer_excerpt: null\n  };\n}\n\nfunction detectAttachments(text, html) {\n  const safeText = typeof text === 'string' ? text : '';\n  const safeHtml = typeof html === 'string' ? html : '';\n  const cidPattern = /<img[^>]+src=\"cid:/i;\n  const wordPattern = /\\b(see attached|please find attached|attached (?:is|are|please|the|for)|attachment\\b)/i;\n  return cidPattern.test(safeHtml) || wordPattern.test(safeHtml) || wordPattern.test(safeText);\n}\n\nfunction detectLanguage(text) {\n  return (typeof text === 'string' && text.trim().length > 0) ? 'en' : 'unknown';\n}\n\nfunction normalizeSubject(subject) {\n  let s = (typeof subject === 'string') ? subject.trim().toLowerCase() : '';\n  let prevLength;\n  do {\n    prevLength = s.length;\n    s = s.replace(/^(re|fwd|fw)\\s*:\\s*/i, '');\n    s = s.trim();\n  } while (s.length !== prevLength);\n  return s.replace(/\\s+/g, ' ');\n}\n\nfunction timeBucket(isoString) {\n  const ms = Date.parse(isoString);\n  if (isNaN(ms)) return 0;\n  return Math.floor(ms / 1000 / 300);\n}\n\nfunction hmzFirstNonEmpty(...values) {\n  for (const v of values) {\n    const s = String(v == null ? '' : v).trim();\n    if (s && s !== '{}' && s !== '[]') return s;\n  }\n  return null;\n}\n// HMZ_NORMALIZATION_TEXT_FALLBACK_V2\nfunction vendorPayloadHash(rawPayload) {\n  const json = JSON.stringify(rawPayload === undefined ? null : rawPayload);\n  let hash = 5381;\n  for (let i = 0; i < json.length; i++) {\n    hash = ((hash << 5) + hash) + json.charCodeAt(i);\n    hash = hash & 0xFFFFFFFF;\n  }\n  const hex = (hash >>> 0).toString(16).padStart(8, '0');\n  return 'phase3-placeholder-djb2:' + hex;\n}\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const validated = input.validated || {};\n  const rawPayload = (input.raw_payload && typeof input.raw_payload === 'object') ? input.raw_payload : {};\n\n  const validationCellKey = (typeof validated.validation_cell === 'string' && CELL_DEFINITIONS[validated.validation_cell])\n    ? validated.validation_cell\n    : null;\n\n  const campaignContext = validationCellKey\n    ? {\n        validation_cell: validationCellKey,\n        segment: CELL_DEFINITIONS[validationCellKey].segment,\n        subsegment: CELL_DEFINITIONS[validationCellKey].subsegment,\n        pain_trigger: CELL_DEFINITIONS[validationCellKey].pain_trigger,\n        offer_angle: CELL_DEFINITIONS[validationCellKey].offer_angle,\n        geo_code: CELL_DEFINITIONS[validationCellKey].geo_code,\n        campaign_purpose: 'UNKNOWN',\n        campaign_message_variant: 'UNKNOWN'\n      }\n    : {\n        validation_cell: 'UNKNOWN',\n        segment: 'UNKNOWN',\n        subsegment: 'UNKNOWN',\n        pain_trigger: 'UNKNOWN',\n        offer_angle: 'UNKNOWN',\n        geo_code: 'UNKNOWN',\n        campaign_purpose: 'UNKNOWN',\n        campaign_message_variant: 'UNKNOWN'\n      };\n\n  const leadEmail = (typeof validated.lead_email === 'string') ? validated.lead_email.trim().toLowerCase() : null;\n  const replyText = (typeof validated.reply_text === 'string' && validated.reply_text.trim()) ? validated.reply_text : ((typeof rawPayload.reply_text === 'string' && rawPayload.reply_text.trim()) ? rawPayload.reply_text : ((typeof rawPayload.reply_text_snippet === 'string' && rawPayload.reply_text_snippet.trim()) ? rawPayload.reply_text_snippet : null));\n  const replyHtml = (typeof rawPayload.reply_html === 'string') ? rawPayload.reply_html : null;\n  const replySnippet = (typeof rawPayload.reply_text_snippet === 'string' && rawPayload.reply_text_snippet.trim()) ? rawPayload.reply_text_snippet : (replyText ? String(replyText).replace(/\\\\s+/g, ' ').trim().slice(0, 240) : null);\n\n  const hasAttachments = detectAttachments(replyText, replyHtml);\n  const language = detectLanguage(replyText);\n\n  const subjectNorm = normalizeSubject(validated.reply_subject);\n  const bucket = timeBucket(input.received_at);\n  const dedupeKey = 'instantly:' + (validated.campaign_id || 'UNKNOWN') + ':' + (leadEmail || 'unknown') + ':' + subjectNorm + ':' + bucket;\n\n  const emailId = (typeof validated.email_id === 'string' && validated.email_id.trim()) ? validated.email_id.trim() : null;\n\n  const nes = {\n    nes_version: '1',\n    intake_id: input.intake_id,\n    received_at: input.received_at,\n    source: 'instantly',\n    event_type: validated.event_type || 'UNKNOWN',\n    workspace_id: (typeof rawPayload.workspace === 'string') ? rawPayload.workspace : 'UNKNOWN',\n    campaign_id: validated.campaign_id || 'UNKNOWN',\n    campaign_name: (typeof rawPayload.campaign_name === 'string') ? rawPayload.campaign_name : 'UNKNOWN',\n    campaign_context: campaignContext,\n    lead_email: leadEmail || 'UNKNOWN',\n    eaccount: validated.email_account || 'UNKNOWN',\n    step: (typeof rawPayload.step === 'number') ? rawPayload.step : null,\n    variant: (typeof rawPayload.variant === 'number') ? rawPayload.variant : null,\n    is_first_reply: (typeof rawPayload.is_first === 'boolean') ? rawPayload.is_first : null,\n    reply: {\n      subject: validated.reply_subject || null,\n      snippet: replySnippet,\n      text: replyText,\n      html: replyHtml,\n      has_attachments: hasAttachments,\n      language: language,\n      from_address_email: (typeof validated.from_address_email === 'string' && validated.from_address_email.trim())\n        ? validated.from_address_email.trim()\n        : (leadEmail || null)\n    },\n    threading: {\n      reply_to_uuid: emailId,\n      thread_id: (typeof rawPayload.thread_id === 'string') ? rawPayload.thread_id : null,\n      rfc_message_id_inbound: (typeof rawPayload.message_id === 'string') ? rawPayload.message_id : null,\n      lookup_strategy: emailId ? 'from_payload' : 'lookup_by_lead_and_campaign'\n    },\n    links: {\n      unibox_url: (typeof rawPayload.unibox_url === 'string') ? rawPayload.unibox_url : null\n    },\n    vendor_payload_hash: vendorPayloadHash(rawPayload),\n    dedupe_key: dedupeKey,\n    synthetic: input.synthetic === true,\n    operating_mode: (input.config && input.config.operating_mode) ? input.config.operating_mode : 'SUPERVISED_VALIDATION',\n    validation_learning_seed: emptyValidationLearning(),\n    timestamps: {\n      webhook_received_at: input.received_at || null,\n      auth_completed_at: null,\n      normalized_at: new Date().toISOString(),\n      classification_started_at: null,\n      classification_completed_at: null,\n      draft_completed_at: null,\n      human_notified_at: null,\n      approved_at: null,\n      send_attempted_at: null,\n      transmission_verified_at: null,\n      terminal_suppressed_at: null,\n      terminal_no_reply_at: null,\n      final_failure_at: null\n    },\n    policy_version: 'policy-HMZ-1.2',\n    kb_version: 'KB-1.0-DRAFT',\n    schema_version: 'nes-1'\n  };\n\n  return {\n    json: {\n      ...input,\n      nes\n    }\n  };\n});"
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "37c413c4-800b-4f9c-9c75-9dae47c55641",
+        "name": "Section D - Normalization to NES (notes)",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          1200,
+          240
+        ],
+        "parameters": {
+          "content": "# Section D - Normalization to NES\n\nWHAT: Maps validated{} and raw_payload into Normalized Event Schema v1 (docs/NORMALIZED_EVENT_SCHEMA.md): campaign_context (looked up from the 3 approved validation cells in docs/VALIDATION_CAMPAIGN_CONFIG.md, or all UNKNOWN if the cell is unrecognised), reply{subject, snippet, text, html, has_attachments, language, from_address_email}, threading{}, links{}, vendor_payload_hash (placeholder djb2, NOT sha256), dedupe_key, validation_learning_seed (all 11 fields default 'unknown' or null - a static, non-authoritative seed; see Workflow 2 Section B/E for the enriched, authoritative validation_learning), timestamps{}, policy_version, kb_version, schema_version.\n\nWHY: spec section D - establishes the single normalized contract that the Decision Engine and all later phases consume.\n\nMOCKED: vendor_payload_hash uses a placeholder djb2 hash prefixed 'phase3-placeholder-djb2:' (not the sha256 format shown in the NES example). has_attachments and language use simple regex/heuristics only (NES section 3.1), not a real attachment scanner or language detector.\n\nCONFIGURE LATER: Confirm the attachment-detection regexes and language-detection approach against real reply payloads. Populate workspace_id / campaign_name / step / variant / is_first_reply / thread_id / message_id / unibox_url once the real Instantly payload shape is confirmed.\n\nHOW TO TEST: POST the specialised-agency-cell fixture (#12, validation_cell=CELL_3_SPECIALISED_B2B_AGENCY) and confirm nes.campaign_context.segment='B2B agencies'. POST a fixture with an unrecognised validation_cell and confirm nes.campaign_context.validation_cell='UNKNOWN'.\n\nEXPECTED OUTPUT: each item gains nes{...full NES v1 object...}.\n\nANALOGY: A records clerk who transcribes a handwritten intake form onto the hospital's standard chart format, writing 'unknown' rather than guessing for anything not yet examined.",
+          "height": 560,
+          "width": 380,
+          "color": 4
+        }
+      },
+      {
+        "id": "6af71bd2-d399-4f6b-b5ff-655043c914a6",
+        "name": "E1. Compute Idempotency Key",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1600,
+          0
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "const items = $input.all();\n\nconst STATE_ENUM = [\n  'RECEIVED',\n  'VALIDATING',\n  'NORMALIZED',\n  'DUPLICATE',\n  'REJECTED',\n  'READY_FOR_DECISION',\n  'REVIEW_HOLD',\n  'COMPLETED_NO_SEND',\n  'FAILED'\n];\n\nfunction canonicalPayloadHash(value) {\n  function canonicalize(v) {\n    if (Array.isArray(v)) return v.map(canonicalize);\n    if (v !== null && typeof v === 'object') {\n      const out = {};\n      for (const k of Object.keys(v).sort()) out[k] = canonicalize(v[k]);\n      return out;\n    }\n    return v;\n  }\n  const json = JSON.stringify(canonicalize(value === undefined ? null : value));\n  let hash = 5381;\n  for (let i = 0; i < json.length; i++) {\n    hash = ((hash << 5) + hash) + json.charCodeAt(i);\n    hash = hash & 0xFFFFFFFF;\n  }\n  return (hash >>> 0).toString(16).padStart(8, '0');\n}\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const validated = input.validated || {};\n  const nes = input.nes || {};\n  const rawPayload = input.raw_payload;\n\n  const eventId = (typeof validated.event_id === 'string' && validated.event_id.trim()) ? validated.event_id.trim() : null;\n  const emailId = (typeof validated.email_id === 'string' && validated.email_id.trim()) ? validated.email_id.trim() : null;\n  const campaignId = (typeof validated.campaign_id === 'string' && validated.campaign_id.trim()) ? validated.campaign_id.trim() : null;\n  const emailAccount = (typeof validated.email_account === 'string' && validated.email_account.trim()) ? validated.email_account.trim() : null;\n  const leadEmail = (typeof nes.lead_email === 'string' && nes.lead_email.trim() && nes.lead_email !== 'UNKNOWN') ? nes.lead_email.trim() : null;\n\n  const keyComponents = {\n    event_id: eventId,\n    email_id: emailId,\n    campaign_id: campaignId,\n    email_account: emailAccount,\n    lead_email: leadEmail\n  };\n  const isIdentifierPoor = Object.values(keyComponents).some(v => v === null);\n\n  let idempotencyKey;\n  let keyScheme;\n\n  if (!isIdentifierPoor) {\n    idempotencyKey = [eventId, emailId, campaignId, emailAccount, leadEmail].join(':');\n    keyScheme = 'full_identity';\n  } else {\n    const presentParts = Object.entries(keyComponents)\n      .filter(([, v]) => v !== null)\n      .map(([k, v]) => `${k}=${v}`);\n    const payloadHash = canonicalPayloadHash(rawPayload);\n    idempotencyKey = ['identifier_poor', 'instantly', ...presentParts, `payload_hash=${payloadHash}`].join(':');\n    keyScheme = 'identifier_poor_hash';\n  }\n\n  const proposedState = (input.payload_status === 'MALFORMED') ? 'REJECTED' : 'READY_FOR_DECISION';\n\n  return {\n    json: {\n      ...input,\n      idempotency: {\n        idempotency_key: idempotencyKey,\n        key_scheme: keyScheme,\n        key_components: keyComponents,\n        proposed_state: proposedState,\n        state_enum: STATE_ENUM,\n        storage_adapter: 'n8n_data_table',\n        storage_table_name: 'hmz_validation_reply_intake_idempotency'\n      }\n    }\n  };\n});"
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "4f938e7b-7871-4c18-b02e-90f9afa02a59",
+        "name": "E2. Idempotency Data Table Upsert",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1920,
+          0
+        ],
+        "parameters": {
+          "resource": "row",
+          "operation": "upsert",
+          "dataTableId": {
+            "mode": "id",
+            "value": "GogoPaHMGEO0YsyV"
+          },
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "idempotency_key",
+                "condition": "eq",
+                "keyValue": "={{ $json.idempotency.idempotency_key }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "idempotency_key": "={{ $json.idempotency.idempotency_key }}",
+              "dedupe_key": "={{ $json.nes.dedupe_key }}",
+              "intake_id": "={{ $json.intake_id }}",
+              "state": "={{ $json.idempotency.proposed_state }}",
+              "event_type": "={{ $json.nes.event_type }}",
+              "lead_email": "={{ $json.nes.lead_email }}",
+              "campaign_id": "={{ $json.nes.campaign_id }}"
+            }
+          }
+        }
+      },
+      {
+        "id": "af96d004-6d94-48c6-8eda-1af51bd5f93d",
+        "name": "E3. Recombine Idempotency Result",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2240,
+          0
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "const items = $input.all();\nconst upstream = $('E1. Compute Idempotency Key').all();\n\nreturn items.map((item, index) => {\n  const row = item.json || {};\n  const original = (upstream[index] && upstream[index].json) ? upstream[index].json : {};\n\n  const createdAt = row.createdAt || row.created_at || null;\n  const updatedAt = row.updatedAt || row.updated_at || null;\n  const isDuplicate = !!(createdAt && updatedAt && createdAt !== updatedAt);\n\n  return {\n    json: {\n      ...original,\n      idempotency: {\n        ...original.idempotency,\n        is_duplicate: isDuplicate,\n        table_row_id: (row.id !== undefined) ? row.id : null,\n        created_at: createdAt,\n        updated_at: updatedAt,\n        duplicate_detection_method: 'created_at_vs_updated_at_after_upsert',\n        duplicate_detection_status: 'VERIFIED_N8N_2_25_7'\n      }\n    }\n  };\n});"
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "294bd586-30b5-49d8-9adb-cc5bb14b039b",
+        "name": "Section E - Idempotency Preparation (notes)",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          1520,
+          240
+        ],
+        "parameters": {
+          "content": "# Section E - Idempotency Preparation & Duplicate Routing (E1-E5)\n\nWHAT: Five-step idempotency check and duplicate routing. E1 (Code) computes idempotency.idempotency_key using one of two schemes, recorded in idempotency.key_scheme. If validated.event_id, validated.email_id, validated.campaign_id, validated.email_account, and nes.lead_email are ALL present/known, key_scheme='full_identity' and idempotency_key = event_id:email_id:campaign_id:email_account:lead_email. If ANY of those five components is missing/UNKNOWN, key_scheme='identifier_poor_hash' and idempotency_key = identifier_poor:instantly:<present components as name=value>:payload_hash=<canonicalPayloadHash(raw_payload)>, where canonicalPayloadHash is a deterministic djb2 hash over the key-sorted JSON of raw_payload - so two different identifier-poor payloads (including two different malformed payloads) get different keys (resolves reports/UNRESOLVED_ITEMS.md U3). idempotency.key_components{event_id, email_id, campaign_id, email_account, lead_email} always lists all five components as a value or null. idempotency.proposed_state is REJECTED if payload_status=MALFORMED, else READY_FOR_DECISION. E2 (Data table) upserts a row keyed on idempotency_key into the hmz_validation_reply_intake_idempotency Data Table (id GogoPaHMGEO0YsyV), storing dedupe_key, intake_id, state, event_type, lead_email, campaign_id. E3 (Code) reads the upserted row's createdAt/updatedAt back, sets idempotency.is_duplicate=true if the row already existed before this execution, and recombines the result with the full item from E1.\n\nBRANCHING (Phase 3.1A repair): immediately downstream of E3 is E4. Duplicate Event Router, a native IF node with condition idempotency.is_duplicate === false. If true (not a duplicate), the item continues to F. Deterministic Prefilter exactly as before. If false (idempotency.is_duplicate=true), the item is routed to E5. Duplicate Event Terminal, which sets terminal_status=COMPLETED_NO_SEND, processing_halted=true, external_action_status=NOOP, stop_active_sequence=false, and a reason naming the idempotency_key; E5 is the FINAL output for that item - Section F (prefilter) and the Decision Engine (Workflow 2) never run, so prefilter/deterministic/classifier/decision/draft/validation are all absent from a duplicate item's final output. NOTE: Workflow 2 Section A's op-duplicate rule (which reads prefilter.is_duplicate_event) is now unreachable in normal operation, since duplicate items never reach Workflow 2 - it is left in place as defence-in-depth and is harmless.\n\nWHY: spec section E - prevents repeated synthetic executions of the same event from producing duplicate downstream actions, and (per CLAUDE.md rule 10) ensures one acknowledgement per inbound event even for identifier-poor payloads. idempotency.state_enum lists all 9 required states: RECEIVED, VALIDATING, NORMALIZED, DUPLICATE, REJECTED, READY_FOR_DECISION, REVIEW_HOLD, COMPLETED_NO_SEND, FAILED.\n\nMOCKED: storage_adapter='n8n_data_table' is the Phase 3 dev-safe persistence choice (no paid infrastructure). The created_at-vs-updated_at duplicate check is PROVISIONAL (duplicate_detection_status='PROVISIONAL') - whether n8n Data table 'upsert' returns row-level createdAt/updatedAt that differ between insert and update was not independently confirmed before this build; if it does not, is_duplicate always reads false and E4 always routes to F (logged in reports/UNRESOLVED_ITEMS.md U1). canonicalPayloadHash is a placeholder djb2 hash (same algorithm family as Section D's vendor_payload_hash), not sha256.\n\nCONFIGURE LATER: If row-level createdAt/updatedAt are not returned, switch to a get-then-insert-or-update pattern or add an explicit first_seen_at column written only on insert. Confirm the final idempotency_key composition once real Instantly event/email IDs are captured (key_scheme and key_components are explicitly NOT claimed final).\n\nHOW TO TEST: POST the same fixture twice with the same intake_id (the duplicate-event fixture #10 is designed for this). First execution: idempotency.is_duplicate=false, key_scheme='full_identity', item proceeds through E4(true)->F->G as normal. Second execution: idempotency.is_duplicate=true, the item is routed to E4(false)->E5, and the final output has terminal_status=COMPLETED_NO_SEND, processing_halted=true, external_action_status=NOOP, stop_active_sequence=false, with prefilter/deterministic/classifier/decision/draft/validation all absent. POST the malformed-payload fixture (#11) and a DIFFERENT malformed payload (fixture #13) and confirm both get key_scheme='identifier_poor_hash' with DIFFERENT idempotency_key values (different payload_hash), and both are processed as op-malformed/REJECTED rather than either being misread as a duplicate of the other.\n\nEXPECTED OUTPUT: a non-duplicate item gains idempotency{idempotency_key, key_scheme, key_components{event_id, email_id, campaign_id, email_account, lead_email}, proposed_state, state_enum[9], storage_adapter, storage_table_name, is_duplicate=false, table_row_id, created_at, updated_at, duplicate_detection_method, duplicate_detection_status} and continues through E4(true) to F/G. A duplicate item gets idempotency.is_duplicate=true and E4(false) routes it to E5 as the workflow's final output for that item.\n\nANALOGY: A hospital admissions desk that builds a file number from patient ID + visit reason + date - or, if the patient cannot be identified, a fingerprint of the intake form itself, so two different unidentified patients still get different file numbers - checks its card catalogue for that exact card, files or re-files it, and - if this is a repeat of a visit already on file - sends the patient straight back to the waiting room with a \"you're already checked in\" note instead of starting a new triage.",
+          "height": 760,
+          "width": 1040,
+          "color": 4
+        }
+      },
+      {
+        "id": "f6c6fa52-18a2-4dda-bbc3-0fff6966c54a",
+        "name": "F. Deterministic Prefilter",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2560,
+          0
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "const items = $input.all();\n\nconst AUTOMATED_RESPONSE_PATTERN = /\\b(auto[- ]?reply|automatic reply|automated response|do not reply)\\b/i;\nconst OOO_PATTERN = /\\b(out of (the )?office|ooo|on leave|on vacation|away from (the )?office|annual leave)\\b/i;\nconst BOUNCE_PATTERN = /\\b(undeliverable|delivery (status notification|failure)|mail delivery failed|bounce|returned mail|message not delivered|delivery has failed)\\b/i;\nconst UNSUBSCRIBE_PATTERN = /\\b(unsubscribe|opt[- ]?out|remove me from|stop (sending|emailing)|do not contact|take me off)\\b/i;\n\nconst SUPPORTED_EVENT_TYPES = ['reply_received', 'auto_reply_received', 'email_bounced', 'lead_unsubscribed'];\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const nes = input.nes || {};\n  const reply = nes.reply || {};\n\n  const subject = typeof reply.subject === 'string' ? reply.subject : '';\n  const text = typeof reply.text === 'string' ? reply.text : '';\n  const snippet = typeof reply.snippet === 'string' ? reply.snippet : '';\n  const haystack = (subject + ' ' + text + ' ' + snippet).toLowerCase();\n\n  const isMalformedPayload = input.payload_status === 'MALFORMED';\n  const isUnsupportedEventType = !SUPPORTED_EVENT_TYPES.includes(nes.event_type);\n  const isDuplicateEvent = !!(input.idempotency && input.idempotency.is_duplicate === true);\n\n  const leadEmail = typeof nes.lead_email === 'string' ? nes.lead_email.toLowerCase() : '';\n  const eaccount = typeof nes.eaccount === 'string' ? nes.eaccount.trim().toLowerCase() : '';\n  const isSelfSent = !!(leadEmail && eaccount && leadEmail !== 'unknown' && eaccount !== 'unknown' && leadEmail === eaccount);\n\n  const isEmptyReply = text.trim() === '' && snippet.trim() === '';\n\n  const isAutomatedResponse = nes.event_type === 'auto_reply_received' || AUTOMATED_RESPONSE_PATTERN.test(haystack);\n  const isOutOfOffice = OOO_PATTERN.test(haystack);\n  const isBounce = nes.event_type === 'email_bounced' || BOUNCE_PATTERN.test(haystack);\n  const isUnsubscribeLanguage = nes.event_type === 'lead_unsubscribed' || UNSUBSCRIBE_PATTERN.test(haystack);\n\n  const hasAttachments = reply.has_attachments === true;\n\n  const campaignCellMismatch = !nes.campaign_context || nes.campaign_context.validation_cell === 'UNKNOWN';\n\n  return {\n    json: {\n      ...input,\n      prefilter: {\n        is_unsupported_event_type: isUnsupportedEventType,\n        is_malformed_payload: isMalformedPayload,\n        is_duplicate_event: isDuplicateEvent,\n        is_self_sent: isSelfSent,\n        is_empty_reply: isEmptyReply,\n        is_automated_response: isAutomatedResponse,\n        is_out_of_office: isOutOfOffice,\n        is_bounce: isBounce,\n        is_unsubscribe_language: isUnsubscribeLanguage,\n        has_attachments: hasAttachments,\n        campaign_cell_mismatch: campaignCellMismatch\n      }\n    }\n  };\n});"
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "ffd8a6c5-cbe9-4d6f-94f5-dd128e748249",
+        "name": "Section F - Deterministic Prefilter (notes)",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          2480,
+          240
+        ],
+        "parameters": {
+          "content": "# Section F - Deterministic Prefilter\n\nWHAT: Computes 11 deterministic operational flags from nes, idempotency, and payload_status using simple keyword/regex checks against reply.subject/text/snippet: is_unsupported_event_type, is_malformed_payload, is_duplicate_event, is_self_sent, is_empty_reply, is_automated_response, is_out_of_office, is_bounce, is_unsubscribe_language, has_attachments, campaign_cell_mismatch.\n\nWHY: spec section F - supplies the Decision Engine's deterministic policy stage (Workflow 2 section A) with the prefilter.* fields its opFlags and det-* rules read (is_unsupported_event_type, is_malformed_payload, is_duplicate_event, is_self_sent, is_empty_reply, is_automated_response, campaign_cell_mismatch, plus is_out_of_office/is_bounce/is_unsubscribe_language/has_attachments for the det-ooo/det-bounce/det-unsub/det-attach rules).\n\nMOCKED: keyword/regex detection only - is_automated_response, is_out_of_office, is_bounce, is_unsubscribe_language are substring/regex matches on subject+text+snippet (plus event_type), not a header-based or ML classifier. SUPPORTED_EVENT_TYPES = reply_received, auto_reply_received, email_bounced, lead_unsubscribed (docs/INSTANTLY_FIELD_MAP.md section 2.1, the verified list of Instantly event types this responder is designed to act on). These flags are operational evidence only, not semantic certainty - final category assignment happens in Workflow 2.\n\nCONFIGURE LATER: Tune/expand the regex patterns once real auto-reply, OOO, bounce, and unsubscribe wording is observed from Instantly/ESPs.\n\nHOW TO TEST: POST the out-of-office fixture (#5) and confirm prefilter.is_out_of_office=true. POST the bounce fixture (#6) and confirm prefilter.is_bounce=true (and is_unsupported_event_type=false). POST the unsubscribe fixture (#4) and confirm prefilter.is_unsubscribe_language=true.\n\nEXPECTED OUTPUT: each item gains prefilter{is_unsupported_event_type, is_malformed_payload, is_duplicate_event, is_self_sent, is_empty_reply, is_automated_response, is_out_of_office, is_bounce, is_unsubscribe_language, has_attachments, campaign_cell_mismatch} (all boolean).\n\nANALOGY: A triage nurse running a quick checklist (breathing, bleeding, conscious) before the doctor (the Decision Engine) makes any diagnosis - fast and deterministic, never claiming a diagnosis itself.",
+          "height": 560,
+          "width": 380,
+          "color": 4
+        }
+      },
+      {
+        "id": "7262aa75-23ac-476e-9562-0abdd2f6936e",
+        "name": "G. Decision Engine Handoff",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.3,
+        "position": [
+          2880,
+          0
+        ],
+        "parameters": {
+          "source": "database",
+          "workflowId": {
+            "mode": "list",
+            "value": "tgYmY97CG4Bm8snI",
+            "cachedResultName": "HMZ - Reply Decision Engine - Validation"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "intake_id": "={{ $json.intake_id }}",
+              "received_at": "={{ $json.received_at }}",
+              "policy_version": "={{ $json.policy_version }}",
+              "kb_version": "={{ $json.kb_version }}",
+              "raw_payload": "={{ $json.raw_payload }}",
+              "validated": "={{ $json.validated }}",
+              "validation_errors": "={{ $json.validation_errors }}",
+              "payload_status": "={{ $json.payload_status }}",
+              "nes": "={{ $json.nes }}",
+              "prefilter": "={{ $json.prefilter }}",
+              "security_gate": "={{ $json.security_gate }}",
+              "idempotency": "={{ $json.idempotency }}",
+              "config": "={{ $json.config }}"
+            }
+          },
+          "mode": "each",
+          "options": {}
+        }
+      },
+      {
+        "id": "f9e8fa1d-cce7-492b-96f8-133851ae969f",
+        "name": "Section G - Decision Engine Handoff (notes)",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          2800,
+          240
+        ],
+        "parameters": {
+          "content": "# Section G - Decision Engine Handoff\n\nWHAT: An Execute Sub-workflow node calls 'HMZ - Reply Decision Engine - Validation' (workflow NJcnNQoJ5nSIWYte) once per item, passing the entire current item (intake_id, received_at, raw_payload, synthetic, config, config_gate, validated, validation_errors, payload_status, nes, idempotency, prefilter) through to the sub-workflow's passthrough trigger. The sub-workflow's 5 sections (A deterministic policy, B mock classifier, C decision policy, D mock draft, E output validation) each spread {...input, ...}, so the item returned here is this same item plus deterministic{}, classifier{}, decision{}, validation{}.\n\nWHY: spec section G - pass the normalized event to the Reply Decision Engine using the safest supported sub-workflow pattern, and preserve the structured decision result. Execute Sub-workflow by workflow ID (source=database) is the native n8n mechanism; waitForSubWorkflow=true (default) keeps this synchronous so the decision is available on this workflow's final output.\n\nMOCKED: the sub-workflow's classifier (section B) and draft preparation (section D) are themselves mocked/provider-neutral (no real AI, no Instantly call) - see workflow NJcnNQoJ5nSIWYte's own sticky notes.\n\nCONFIGURE LATER: nothing Instantly-specific - this is a pure n8n-to-n8n call. If a real AI provider is later wired into the Decision Engine, this handoff node does not need to change.\n\nHOW TO TEST: POST any of the 12 fixtures and confirm the final output item contains decision.category, decision.terminal_status, decision.reply_permitted, decision.external_action_status (always NOT_PERFORMED or NOOP), draft.template_id, and validation.valid=true.\n\nEXPECTED OUTPUT: the full item from Section F, plus deterministic{}, classifier{}, decision{} (19 required fields), draft{}, validation{valid, errors[], checked_at}. This is the FINAL output of Workflow 1 for Phase 3 - no sender, SLA watchdog, or error workflow exists yet (out of scope).\n\nANALOGY: The triage nurse hands the completed chart to the attending physician (the Decision Engine) and waits at the door for the diagnosis and care plan to be clipped back onto the same chart, then carries the completed chart back to the front desk. No treatment is administered here.",
+          "height": 560,
+          "width": 380,
+          "color": 4
+        }
+      },
+      {
+        "id": "f2e8963d-8580-4b2d-ad9a-6b6b02645483",
+        "name": "B1. Configuration Gate Router",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          820,
+          -120
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "strict"
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "efda8524-4f6d-476e-82ed-1bce6d17cae3",
+                "leftValue": "={{ $json.config_gate.passed }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "c5f65583-97d5-4377-8d21-ace27779d296",
+        "name": "B2. Configuration Gate Rejection (Terminal)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          820,
+          160
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "const items = $input.all();\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const gate = input.config_gate || {};\n  const reasons = Array.isArray(gate.reasons) ? gate.reasons : [];\n  const reasonText = reasons.length > 0\n    ? `Configuration gate failed: ${reasons.join('; ')}`\n    : 'Configuration gate failed (no reasons recorded)';\n\n  return {\n    json: {\n      ...input,\n      terminal_status: 'REJECTED',\n      processing_halted: true,\n      external_action_status: 'NOOP',\n      reason: reasonText\n    }\n  };\n});"
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "4c6090f6-93a2-4047-a386-4f90c8d66540",
+        "name": "E4. Duplicate Event Router",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          2420,
+          -120
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "strict"
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "4dffd302-a194-4ffa-b78d-272c09e9e505",
+                "leftValue": "={{ $json.idempotency.is_duplicate }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "false",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "5a923a2f-368b-4787-9225-102641956ed4",
+        "name": "E5. Duplicate Event Terminal",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2420,
+          160
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "const items = $input.all();\n\nreturn items.map(item => {\n  const input = item.json || {};\n  const key = (input.idempotency && input.idempotency.idempotency_key) ? input.idempotency.idempotency_key : 'UNKNOWN';\n\n  return {\n    json: {\n      ...input,\n      terminal_status: 'COMPLETED_NO_SEND',\n      processing_halted: true,\n      external_action_status: 'NOOP',\n      stop_active_sequence: false,\n      reason: `Duplicate event detected for idempotency key \"${key}\" (idempotency.is_duplicate=true); no further processing or send required.`\n    }\n  };\n});"
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "b6f1c3a2-7d4e-4a1f-9c2b-3e5f6a7b8c9d",
+        "name": "H. Human Approval Handoff",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.3,
+        "position": [
+          3160,
+          0
+        ],
+        "parameters": {
+          "source": "database",
+          "workflowId": {
+            "mode": "list",
+            "value": "9aPrt92jFhoYFxbs",
+            "cachedResultName": "HMZ - Reply Human Approval - Validation"
+          },
+          "workflowInputs": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "case_input": "={{ $json }}"
+            }
+          },
+          "mode": "each",
+          "options": {}
+        }
+      },
+      {
+        "id": "node_a0d",
+        "name": "A0. Tag Dev/Synthetic Entry",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          160,
+          -120
+        ],
+        "onError": "continueRegularOutput",
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "const items = $input.all();\nreturn items.map((item) => ({ json: { ...(item.json || {}), entry_source: 'DEV_OR_SYNTHETIC' } }));"
+        }
+      },
+      {
+        "id": "trigger_webhook_production",
+        "name": "Webhook - Instantly Reply Intake (Production, Gated)",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          0,
+          240
+        ],
+        "webhookId": "f7b3e0c4-9a2e-4b6e-9f1a-instantlyreplyprod",
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "instantly-reply",
+          "responseMode": "onReceived",
+          "authentication": "headerAuth",
+          "options": {}
+        },
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "gUUV1aWlokkrHOCM",
+            "name": "hmzInstantlyWebhookToken"
+          }
+        }
+      },
+      {
+        "id": "node_a0p",
+        "name": "A0. Tag Production Entry",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          160,
+          240
+        ],
+        "onError": "continueRegularOutput",
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "const items = $input.all();\nreturn items.map((item) => ({ json: { ...(item.json || {}), entry_source: 'PRODUCTION_WEBHOOK' } }));"
+        }
+      },
+      {
+        "id": "node_f1",
+        "name": "F1. Production Security & Allowlist Gate",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2720,
+          0
+        ],
+        "onError": "continueRegularOutput",
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "const items = $input.all();\n\n// Fixed launch profile allowlists (policy-HMZ-1.2). Mirrors\n// config/business-ready.config.json allowlists.*; all empty by\n// default, which fails this gate closed for PRODUCTION_WEBHOOK\n// entries until the owner configures them and the apply step\n// re-embeds the configured values.\n// HMZ_INJECT_BEGIN:ALLOWLISTS\r\nconst ALLOWLISTS = {\n  workspace_id: 'c7f84f11-4a1a-42dc-9a74-a417e44cb87e',\n  campaign_ids: ['531e64ed-c225-4baf-97a9-4ec90dc34eb0'],\n  connected_sender_eaccounts: ['hamzah@gethmzautomation.com', 'hamzah@gethmzautomations.com', 'hamzah@hmzautomation.com', 'hamzah@hmzautomations.com', 'hamzah@hubhmzautomation.com', 'hamzah@hubhmzautomations.com', 'hamzah@labshmzautomation.com', 'hamzah@labshmzautomations.com', 'hamzah@onehmzautomation.com', 'hamzah@onehmzautomations.com', 'hamzah@teamhmzautomation.org', 'hamzah@teamhmzautomations.com', 'zahid@gethmzautomation.com', 'zahid@gethmzautomations.com', 'zahid@hmzautomation.com', 'zahid@hmzautomations.com', 'zahid@hubhmzautomation.com', 'zahid@hubhmzautomations.com', 'zahid@labshmzautomation.com', 'zahid@labshmzautomations.com', 'zahid@onehmzautomation.com', 'zahid@onehmzautomations.com', 'zahid@teamhmzautomation.org', 'zahid@teamhmzautomations.com'],\n};\r\n// HMZ_INJECT_END:ALLOWLISTS\n// HMZ_INJECT_END:ALLOWLISTS\n// HMZ_INJECT_END:ALLOWLISTS\n// HMZ_INJECT_END:ALLOWLISTS\n\nreturn items.map((item) => {\n  const input = item.json || {};\n  const nes = input.nes || {};\n  const prefilter = input.prefilter || {};\n  const entrySource = input.entry_source || 'UNKNOWN';\n\n  if (entrySource !== 'PRODUCTION_WEBHOOK') {\n    return {\n      json: {\n        ...input,\n        security_gate: { checked: false, entry_source: entrySource, passed: true, reasons: [] },\n      },\n    };\n  }\n\n  const reasons = [];\n  const workspaceId = nes.workspace_id || null;\n  const campaignId = nes.campaign_id || (nes.campaign_context && nes.campaign_context.campaign_id) || null;\n  const eaccount = nes.eaccount || null;\n\n  const workspaceAllowed = !!ALLOWLISTS.workspace_id && workspaceId === ALLOWLISTS.workspace_id;\n  if (!workspaceAllowed) reasons.push('WORKSPACE_NOT_ALLOWLISTED');\n\n  // A missing/blank workspace_id can never allowlist a campaign or sender:\n  // both checks are gated on workspaceAllowed.\n  const campaignAllowed = workspaceAllowed && ALLOWLISTS.campaign_ids.length > 0 && !!campaignId && ALLOWLISTS.campaign_ids.includes(campaignId);\n  if (!campaignAllowed) reasons.push('CAMPAIGN_NOT_ALLOWLISTED_OR_WORKSPACE_NOT_ALLOWLISTED');\n\n  const senderAllowed = workspaceAllowed && ALLOWLISTS.connected_sender_eaccounts.length > 0 && !!eaccount && ALLOWLISTS.connected_sender_eaccounts.includes(eaccount);\n  if (!senderAllowed) reasons.push('SENDER_EACCOUNT_NOT_ALLOWLISTED_OR_WORKSPACE_NOT_ALLOWLISTED');\n\n  if (prefilter.is_self_sent) reasons.push('SELF_SENT');\n  if (prefilter.is_unsupported_event_type) reasons.push('UNSUPPORTED_EVENT_TYPE');\n  if (prefilter.is_malformed_payload) reasons.push('MALFORMED_PAYLOAD');\n  if (prefilter.is_duplicate_event) reasons.push('DUPLICATE_EVENT');\n\n  const passed = workspaceAllowed && campaignAllowed && senderAllowed &&\n    !prefilter.is_self_sent && !prefilter.is_unsupported_event_type &&\n    !prefilter.is_malformed_payload && !prefilter.is_duplicate_event;\n\n  return {\n    json: {\n      ...input,\n      security_gate: {\n        checked: true,\n        entry_source: entrySource,\n        workspace_allowed: workspaceAllowed,\n        campaign_allowed: campaignAllowed,\n        sender_allowed: senderAllowed,\n        passed,\n        reasons,\n      },\n    },\n  };\n});"
+        }
+      },
+      {
+        "id": "if_f2",
+        "name": "F2. Security Gate Router",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          3040,
+          0
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "version": 2,
+              "leftValue": "",
+              "caseSensitive": true,
+              "typeValidation": "strict"
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "cond-f2-1",
+                "leftValue": "={{ $json.security_gate.passed === true }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "node_f3",
+        "name": "F3. Security Gate Rejection Terminal",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3040,
+          220
+        ],
+        "onError": "continueRegularOutput",
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "const items = $input.all();\n\nreturn items.map((item) => {\n  const input = item.json || {};\n  return {\n    json: {\n      ...input,\n      terminal: {\n        schema_version: '1.0',\n        result: 'REJECTED',\n        reason: 'PRODUCTION_SECURITY_GATE_FAILED',\n        security_gate: input.security_gate || null,\n      },\n    },\n  };\n});"
+        }
+      },
+      {
+        "id": "hmz_v8_hydrate_reply_email_http",
+        "name": "C1. Hydrate Reply Email From Instantly",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          620,
+          120
+        ],
+        "onError": "continueRegularOutput",
+        "parameters": {
+          "method": "GET",
+          "url": "={{ (() => { const r = $json.raw_payload || {}; const v = $json.validated || {}; const id = r.email_id || v.email_id || r.id || r.emailId || r.reply_email_id || r.event_email_id || (r.email && r.email.id) || ''; return 'https://api.instantly.ai/api/v2/emails/' + encodeURIComponent(String(id || '__missing_email_id__')); })() }}",
+          "options": {
+            "timeout": 10000,
+            "response": {
+              "response": {
+                "neverError": true,
+                "fullResponse": true
+              }
+            }
+          },
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth"
+        },
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "jWeATGMoMGyXl7yK",
+            "name": "hmzInstantlyApi"
+          }
+        }
+      },
+      {
+        "id": "hmz_v8_merge_reply_hydration",
+        "name": "C2. Merge Reply Hydration",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          840,
+          120
+        ],
+        "parameters": {
+          "jsCode": "const items = $input.all();\n\nfunction htmlToText(value) {\n  let s = String(value == null ? '' : value);\n  if (!s) return '';\n  s = s\n    .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n    .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')\n    .replace(/<blockquote[\\s\\S]*?<\\/blockquote>/gi, ' ')\n    .replace(/<div[^>]*class=[\"'][^\"']*(gmail_quote|gmail_attr)[^\"']*[\"'][\\s\\S]*$/gi, ' ')\n    .replace(/<br\\s*\\/?>/gi, '\\n')\n    .replace(/<\\/p>/gi, '\\n')\n    .replace(/<\\/div>/gi, '\\n')\n    .replace(/<[^>]+>/g, ' ')\n    .replace(/&nbsp;/g, ' ')\n    .replace(/&amp;/g, '&')\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/&quot;/g, '\"')\n    .replace(/&#39;/g, \"'\")\n    .replace(/\\u00a0/g, ' ');\n  return s;\n}\n\nfunction stripQuotedReply(value) {\n  let s = String(value == null ? '' : value);\n  if (!s) return '';\n\n  s = s.replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n');\n\n  const cutPatterns = [\n    /\\nOn .{0,500}wrote:\\s*\\n[\\s\\S]*$/i,\n    /\\n-{2,}\\s*Original Message\\s*-{2,}[\\s\\S]*$/i,\n    /\\nFrom:\\s+.+\\nSent:\\s+.+\\nTo:\\s+.+[\\s\\S]*$/i\n  ];\n\n  for (const rx of cutPatterns) s = s.replace(rx, '');\n\n  return s\n    .split('\\n')\n    .filter(line => !/^\\s*>/.test(line))\n    .join('\\n')\n    .replace(/[ \\t]+/g, ' ')\n    .replace(/\\n{3,}/g, '\\n\\n')\n    .trim();\n}\n\nfunction cleanText(value) {\n  return stripQuotedReply(String(value == null ? '' : value).trim());\n}\n\nfunction cleanHtml(value) {\n  return cleanText(htmlToText(value));\n}\n\nfunction firstUseful(values, html = false) {\n  for (const value of values) {\n    if (value === null || value === undefined) continue;\n    const raw = typeof value === 'object' ? JSON.stringify(value) : String(value);\n    const cleaned = html ? cleanHtml(raw) : cleanText(raw);\n    if (cleaned && cleaned !== '{}' && cleaned !== '[]') return cleaned;\n  }\n  return '';\n}\n\nfunction path(obj, keys) {\n  let cur = obj;\n  for (const key of keys) {\n    if (cur === null || cur === undefined) return undefined;\n    cur = cur[key];\n  }\n  return cur;\n}\n\nfunction collectStrings(obj, out = [], seen = new Set(), depth = 0) {\n  if (obj === null || obj === undefined || depth > 7) return out;\n\n  if (typeof obj === 'string') {\n    if (obj.trim()) out.push(obj);\n    return out;\n  }\n\n  if (typeof obj !== 'object') return out;\n  if (seen.has(obj)) return out;\n  seen.add(obj);\n\n  const priority = [\n    'reply_text', 'text', 'plain_text', 'body_text', 'email_body_text',\n    'reply_html', 'html', 'body_html', 'email_body_html',\n    'body', 'content', 'email_body', 'message', 'content_preview', 'preview', 'snippet'\n  ];\n\n  for (const k of priority) {\n    if (Object.prototype.hasOwnProperty.call(obj, k)) collectStrings(obj[k], out, seen, depth + 1);\n  }\n\n  for (const [k, v] of Object.entries(obj)) {\n    if (!priority.includes(k)) collectStrings(v, out, seen, depth + 1);\n  }\n\n  return out;\n}\n\nfunction emailObject(http) {\n  if (!http || typeof http !== 'object') return {};\n  if (http.body && typeof http.body === 'object') return http.body;\n  if (http.data && typeof http.data === 'object') return http.data;\n  if (http.email && typeof http.email === 'object') return http.email;\n  return http;\n}\n\nfunction bestHydratedText(http) {\n  const email = emailObject(http);\n  const roots = [email, http && http.body, http && http.data, http && http.email, http].filter(Boolean);\n\n  const textCandidates = [];\n  const htmlCandidates = [];\n\n  for (const root of roots) {\n    textCandidates.push(\n      path(root, ['reply_text']),\n      path(root, ['text']),\n      path(root, ['plain_text']),\n      path(root, ['body_text']),\n      path(root, ['email_body_text']),\n      path(root, ['content_preview']),\n      path(root, ['preview']),\n      path(root, ['snippet'])\n    );\n\n    htmlCandidates.push(\n      path(root, ['reply_html']),\n      path(root, ['html']),\n      path(root, ['body_html']),\n      path(root, ['email_body_html']),\n      typeof path(root, ['body']) === 'string' ? path(root, ['body']) : null,\n      path(root, ['body', 'html']),\n      path(root, ['email_body']),\n      path(root, ['content'])\n    );\n  }\n\n  const direct = firstUseful(textCandidates, false);\n  if (direct) return direct;\n\n  const html = firstUseful(htmlCandidates, true);\n  if (html) return html;\n\n  const allStrings = [];\n  for (const root of roots) collectStrings(root, allStrings);\n  return firstUseful(allStrings, true) || firstUseful(allStrings, false);\n}\n\nfunction snippetOf(text) {\n  return String(text || '').replace(/\\s+/g, ' ').trim().slice(0, 240);\n}\n\nfunction threadIdFromUniboxUrl(value) {\n  const raw = String(value == null ? '' : value).trim();\n  if (!raw) return null;\n  try {\n    const u = new URL(raw);\n    const direct = u.searchParams.get('thread_id') || u.searchParams.get('threadId') || u.searchParams.get('thread');\n    if (direct && /^[A-Za-z0-9_-]{8,}$/.test(direct.trim())) return direct.trim();\n    const search = u.searchParams.get('thread_search') || '';\n    const m = /(?:^|\\b)thread:([A-Za-z0-9_-]{8,})/.exec(search);\n    if (m) return m[1];\n  } catch (e) {\n    const m = /(?:thread_id|threadId|thread)=([A-Za-z0-9_-]{8,})|thread_search=[^&]*thread%3A([A-Za-z0-9_-]{8,})|thread_search=[^&]*thread:([A-Za-z0-9_-]{8,})/i.exec(raw);\n    if (m) return (m[1] || m[2] || m[3] || '').trim() || null;\n  }\n  return null;\n}\n\nreturn items.map((item, index) => {\n  let prior = {};\n  try {\n    const p = $('C. Payload Validation').all()[index];\n    prior = p && p.json ? p.json : {};\n  } catch {\n    prior = {};\n  }\n\n  const http = item.json || {};\n  const email = emailObject(http);\n\n  const raw = {\n    ...((prior.raw_payload && typeof prior.raw_payload === 'object') ? prior.raw_payload : {})\n  };\n\n  const existingText = firstUseful([\n    raw.reply_text,\n    raw.reply_text_snippet,\n    raw.text,\n    raw.plain_text,\n    raw.body_text,\n    raw.email_body_text\n  ], false);\n\n  const hydratedText = bestHydratedText(http);\n  const finalText = existingText || hydratedText;\n\n  const finalSnippet = firstUseful([\n    raw.reply_text_snippet,\n    email.content_preview,\n    email.preview,\n    email.snippet,\n    snippetOf(finalText)\n  ], false);\n\n  const uniboxThreadId = threadIdFromUniboxUrl(raw.unibox_url);\n  const alternateThreadId = (typeof email.thread_id === 'string' && email.thread_id.trim())\n    ? email.thread_id.trim()\n    : uniboxThreadId;\n\n  raw._hmz_v10_hydration = {\n    attempted: true,\n    source_email_id: raw.email_id || raw.id || null,\n    http_status_code: http.statusCode || http.status || null,\n    used_hydrated_text: !existingText && !!hydratedText,\n    hydrated_text_length: hydratedText ? hydratedText.length : 0,\n    final_text_length: finalText ? finalText.length : 0,\n    response_keys: Object.keys(http || {}).slice(0, 30),\n    body_type: http && http.body === null ? 'null' : typeof (http && http.body),\n    alternate_thread_id_source: (!raw.thread_id && alternateThreadId) ? (email.thread_id ? 'instantly_email' : 'unibox_url_thread_search') : null\n  };\n\n  raw._instantly_hydrated_email = email;\n\n  if (finalText) raw.reply_text = finalText;\n  if (finalSnippet) raw.reply_text_snippet = finalSnippet;\n\n  if (!raw.reply_subject && email.subject) raw.reply_subject = email.subject;\n  if (!raw.email_account && email.eaccount) raw.email_account = email.eaccount;\n  if (!raw.thread_id && alternateThreadId) raw.thread_id = alternateThreadId;\n  if (!raw.message_id && email.message_id) raw.message_id = email.message_id;\n\n  const validated = {\n    ...((prior.validated && typeof prior.validated === 'object') ? prior.validated : {})\n  };\n\n  if (finalText) validated.reply_text = finalText;\n  if (!validated.reply_subject && raw.reply_subject) validated.reply_subject = raw.reply_subject;\n  if (!validated.email_account && raw.email_account) validated.email_account = raw.email_account;\n  if (!validated.email_id && raw.email_id) validated.email_id = raw.email_id;\n  if (!validated.lead_email && raw.lead_email) validated.lead_email = raw.lead_email;\n  if (!validated.campaign_id && raw.campaign_id) validated.campaign_id = raw.campaign_id;\n  if (!validated.event_type && raw.event_type) validated.event_type = raw.event_type;\n  if (!validated.timestamp && raw.timestamp) validated.timestamp = raw.timestamp;\n\n  const validationErrors = Array.isArray(prior.validation_errors) ? prior.validation_errors.filter(err => {\n    return !(err && err.field === 'reply_text' && finalText);\n  }) : [];\n\n  return {\n    json: {\n      ...prior,\n      raw_payload: raw,\n      validated,\n      validation_errors: validationErrors,\n      payload_status: validationErrors.length > 0 ? 'INCOMPLETE' : 'COMPLETE'\n    }\n  };\n});"
+        }
+      }
+    ],
+    "connections": {
+      "Webhook - Synthetic Reply Intake (DEV ONLY)": {
+        "main": [
+          [
+            {
+              "node": "A0. Tag Dev/Synthetic Entry",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "A. Webhook Intake Normalization": {
+        "main": [
+          [
+            {
+              "node": "B. Configuration Gate",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "D. Normalization to NES": {
+        "main": [
+          [
+            {
+              "node": "E1. Compute Idempotency Key",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "E1. Compute Idempotency Key": {
+        "main": [
+          [
+            {
+              "node": "E2. Idempotency Data Table Upsert",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "E2. Idempotency Data Table Upsert": {
+        "main": [
+          [
+            {
+              "node": "E3. Recombine Idempotency Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "F. Deterministic Prefilter": {
+        "main": [
+          [
+            {
+              "node": "F1. Production Security & Allowlist Gate",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "B. Configuration Gate": {
+        "main": [
+          [
+            {
+              "node": "B1. Configuration Gate Router",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "B1. Configuration Gate Router": {
+        "main": [
+          [
+            {
+              "node": "C. Payload Validation",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "B2. Configuration Gate Rejection (Terminal)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "E3. Recombine Idempotency Result": {
+        "main": [
+          [
+            {
+              "node": "E4. Duplicate Event Router",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "E4. Duplicate Event Router": {
+        "main": [
+          [
+            {
+              "node": "F. Deterministic Prefilter",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "E5. Duplicate Event Terminal",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "G. Decision Engine Handoff": {
+        "main": [
+          [
+            {
+              "node": "H. Human Approval Handoff",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "A0. Tag Dev/Synthetic Entry": {
+        "main": [
+          [
+            {
+              "node": "A. Webhook Intake Normalization",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Webhook - Instantly Reply Intake (Production, Gated)": {
+        "main": [
+          [
+            {
+              "node": "A0. Tag Production Entry",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "A0. Tag Production Entry": {
+        "main": [
+          [
+            {
+              "node": "A. Webhook Intake Normalization",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "F1. Production Security & Allowlist Gate": {
+        "main": [
+          [
+            {
+              "node": "F2. Security Gate Router",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "F2. Security Gate Router": {
+        "main": [
+          [
+            {
+              "node": "G. Decision Engine Handoff",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "F3. Security Gate Rejection Terminal",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "C. Payload Validation": {
+        "main": [
+          [
+            {
+              "node": "C1. Hydrate Reply Email From Instantly",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "C1. Hydrate Reply Email From Instantly": {
+        "main": [
+          [
+            {
+              "node": "C2. Merge Reply Hydration",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "C2. Merge Reply Hydration": {
+        "main": [
+          [
+            {
+              "node": "D. Normalization to NES",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Hamzah Zahid",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-06-28T04:13:48.285Z",
+        "id": 381,
+        "workflowId": "VtDQqw02Ux1TgjIH",
+        "versionId": "abc83e43-9b97-4ca1-ae32-c42599255328",
+        "event": "activated",
+        "userId": "c36de550-8f81-4842-a501-1a1e33f7d4b8"
+      },
+      {
+        "createdAt": "2026-06-28T04:13:48.270Z",
+        "id": 380,
+        "workflowId": "VtDQqw02Ux1TgjIH",
+        "versionId": "abc83e43-9b97-4ca1-ae32-c42599255328",
+        "event": "deactivated",
+        "userId": "c36de550-8f81-4842-a501-1a1e33f7d4b8"
+      }
+    ]
+  }
+}
