@@ -88,3 +88,25 @@ The five-minute objective does **not** mean every prospect receives a reply with
 - One narrow objective per Claude session.
 - No full-repository scan unless explicitly authorised.
 - Hard cap tool calls when MCP is used.
+
+## Business Brain Context
+
+Business-wide context for HMZ may exist at:
+`C:\Users\Hamzah Zahid\Projects\hmz-business-brain`
+
+**Read these files only when business context is needed for the current task:**
+- `AI_CONTEXT/AI_BUSINESS_BRIEF.md` — high-level business overview
+- `AI_CONTEXT/AI_PROJECT_INDEX.md` — index of active projects
+- `AI_CONTEXT/AI_SOURCE_PRIORITY.md` — which source wins when files conflict
+- `AI_CONTEXT/AI_AGENT_RULES.md` — agent behaviour rules that apply across projects
+- The relevant project note under `02_PROJECTS/` for the specific project in scope
+
+**Hard rules for the vault:**
+- Do not read the full vault by default. Read only the files listed above plus targeted project notes.
+- Do not edit any vault file unless the owner explicitly instructs it in the current session.
+- Do not copy large Obsidian notes into this repo.
+- Do not store secrets found in the vault in any repo file or log.
+
+**Precedence:**
+- For current execution state of this responder project, `OPERATION_HANDOFF.md` in this repo takes precedence over any Obsidian note.
+- If an Obsidian file conflicts with a file in this repo, follow `AI_CONTEXT/AI_SOURCE_PRIORITY.md` to resolve.
