@@ -4,6 +4,28 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ---
 
+## 2026-07-02 — Codex AGENTS.md Business Brain Reference Review
+
+**Agent:** Codex (GPT-5)  
+**Objective:** Verify that `AGENTS.md` correctly and safely references the HMZ Business Brain for Codex onboarding.
+
+**Files changed:**
+- `OPERATION_HANDOFF.md` — added this timestamped onboarding/review entry
+
+**What was done:**
+Documentation/control-file review only. Read `OPERATION_HANDOFF.md` and `AGENTS.md`. Business Brain files were not read because the review did not require business context. No application code, scripts, workflows, configs, package files, tests, credentials, lockfiles, or Obsidian vault files were modified.
+
+**Current status:** COMPLETE — `AGENTS.md` was already accurate, concise, and safe for Codex. No edits were needed.
+
+**Risks / unknowns:**
+- The Business Brain path was not verified in this session because vault access was not needed for the requested review.
+- `AI_CONTEXT/AI_SOURCE_PRIORITY.md` remains unread in this session; if future work requires vault context or conflict resolution, read only the approved `AI_CONTEXT/` files first.
+
+**Recommended next step:**
+Proceed with the next narrow implementation or documentation task. If that task needs business context, read only the approved Business Brain files listed in `AGENTS.md`.
+
+---
+
 ## 2026-07-01 — Business Brain Connection
 
 **Agent:** Claude Code (claude-sonnet-4-6)  
