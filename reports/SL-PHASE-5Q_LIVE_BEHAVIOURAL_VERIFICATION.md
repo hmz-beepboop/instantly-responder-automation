@@ -83,33 +83,40 @@ All 4 Variant B cases ran against Decision versionId `a3916c2e` (confirmed via n
 
 ## Decision Patch Scope Required
 
-### GAP-3b (narrow, required)
-**What:** `_5qApplyActiveFormRuleInstructionToDraft` (or equivalent NOT_NOW post-processor) must apply cdada69d style guidance to NOT_NOW template drafts. Output should add "when to check back" question. Must not use cdada69d instruction text verbatim. Must use an approved follow-up line consistent with `docs/HMZ_APPROVED_REPLY_RULES.md`.
+### GAP-3b — PATCHED (session 4)
+**Fix applied:** `_5qApplyActiveFormRuleInstructionToDraft` now has a NON_PRIORITY/NOT_NOW handler. When cdada69d guidance is active and contains "check back/when would be/better time", the "close the loop" template line is replaced with "When would be a good time to check back in?". Instruction text is NOT pasted verbatim. cdada69d instruction text does not appear in output.  
+**Harness:** P8.1–P8.18 all PASS.
 
-### Classification correction for BOOKING/PRICING confusion (investigation required)
-**What:** Booking walkthrough requests and minimum-commitment questions are being classified as OFFER_EXPLANATION. This is an AI classification gap, not a deterministic code bug. Investigation options:
-1. Improve AI classification prompt to distinguish "booking/walkthrough" from "setup explanation"
-2. Add a classification correction rule: INFORMATION_REQUEST/OFFER_EXPLANATION → BOOKING_REQUEST when reply contains booking/walkthrough signals
-3. Accept current behavior and handle via reviewer form
-**Recommended:** Add targeted classification correction rules (similar to rule 6e50fd54 pattern) — avoids modifying the AI prompt.
+### Classification correction for BOOKING/PRICING confusion — PATCHED (session 4)
+**Root cause confirmed:** Section B `detectMicroIntent` did not recognise `walkthrough`/`demo`/`tour`/`meeting` as booking signals, and did not recognise `commitment`/`retainer` as pricing signals.  
+**Fix applied:**  
+- FIX-1: `book (a )?(time|slot|call)` extended to `book (?:a (?:quick |brief )?)?(time|slot|call|walkthrough|demo|tour|meeting)`
+- FIX-2: pricing regex extended with `commitment|retainer`
+- FIX-1a: `_5qReplyHasBookingIntent` (Section D guard) extended consistently  
+**Harness:** P7.1–P7.12 all PASS. Setup/process regression (P7.8) confirmed clean.
+
+**Session 4 Decision versionId:** `a3916c2e` → `937488a9`. Active: true. 119/119 PASS.
 
 ---
 
-## Review Form Regression (this session)
+## Review Form Regression (session 3)
 
 **Root cause confirmed:** Previous session patched Node J using stale HumanApproval `9c71882f` as source, not the modern `0fa9d0ce` lineage. Old `draft_revision_type`, `desired_future_behavior`, and `What should the system do next time?` fields reintroduced.
 
 **Fix applied:** Node J replaced surgically from `agent/codex/sl-phase-5q-checkpoint-20260701` (0fa9d0ce lineage). Modern `draft_learning_instruction` combined field restored. Old fields removed.
 
-**Harness:** 89/89 PASS (was 66/66 — added P5 regression section + P6 Variant B structural section).
+**Harness:** 89/89 PASS session 3 → 119/119 PASS session 4 (+30 new P7+P8 tests).
 
 **Production applied:** HumanApproval `54b7a8e4` → `849c2c64`. Active state preserved. No Sender touched.
 
 ---
 
-## Owner Action Required
+## Owner Action Required (session 4 — Variant C live retests)
 
-1. **Verify review form:** Open a pending case review link — confirm `draft_learning_instruction` field, `Save draft and learning` button, no `draft_revision_type` dropdown.
-2. **Retest not-now after GAP-3b patch** (next session): fresh reply "will look at this next quarter" → confirm draft asks "when to check back."
-3. **Decide booking/pricing classification fix approach** (owner choice): correction rules vs AI prompt vs accept-and-review.
-4. **Paste case IDs** from Variant B Instantly replies into the execution trace table above when available.
+1. **Run Variant C live retests** — send fresh emails from Instantly for all 4 cases:
+   - Booking: "Is there a link where I can book a quick walkthrough?" → expect BOOKING_REQUEST, booking link draft
+   - Pricing/commitment: "Before scheduling, what's the minimum commitment to try this?" → expect PRICING_REQUEST or AI_COMMERCIAL_SUPERVISED draft with commitment answer before CTA
+   - Not-now: "This could be useful but not until later in the quarter." → expect "When would be a good time to check back in?" in draft (not "close the loop")
+   - Setup/process: "Before I book, can you give me a quick breakdown of what you set up?" → expect OFFER_EXPLANATION, setup steps draft (regression guard)
+2. **Confirm booking classification** after Variant C — if still OFFER_EXPLANATION, investigate whether `walkthrough` is in the live Section B code (check production execution trace).
+3. **Paste Variant C execution IDs** into this report when available.

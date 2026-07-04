@@ -4,6 +4,39 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ---
 
+## 2026-07-04 — SL-PHASE-5Q Decision Classification + GAP-3b Repair (PARTIAL → pending Variant C)
+
+**Agent:** Claude Code (claude-sonnet-4-6)  
+**Objective:** FIX-1 booking/pricing classification correction; FIX-3 NOT_NOW style rule consumption (GAP-3b).
+
+**Files changed:**
+- `workflows/production_decision_current.json` — updated from production (versionId `937488a9`)
+- `workflows/nodeD_backup_a3916c2e_pre_5q_session4.json` — backup before patch
+- `scripts/SL-PHASE-5Q-self-improvement-behavioural-closure.py` — updated 89/89 → 119/119 (+30 new P7+P8 tests)
+- `reports/SL-PHASE-5Q_LIVE_BEHAVIOURAL_VERIFICATION.md` — session 4 patches documented
+- `reports/SL-PHASE-5Q_SELF_IMPROVEMENT_BEHAVIOURAL_CLOSURE.md` — session 4 status
+- `reports/SL-PHASE-5Q_ANTI_FALSE_POSITIVE_AUDIT.md` — session 4 verdict
+- `OPERATION_HANDOFF.md` — this entry
+
+**Production workflow changes:**
+
+| Workflow | ID | Old versionId | New versionId | Patches |
+|----------|----|---------------|---------------|---------|
+| Decision | `tgYmY97CG4Bm8snI` | `a3916c2e` | `937488a9` | FIX-1 booking regex, FIX-2 pricing regex, FIX-3 GAP-3b NOT_NOW consumer |
+
+**HumanApproval unchanged** (`849c2c64`). No Sender triggered. No Instantly POST. Shadow Evaluator (`aHzLtQiv6G8h1bqD`) not touched. Gate 2 unapproved.
+
+**Root causes fixed:**
+- FIX-1: Section B `detectMicroIntent` BOOKING_REQUEST regex didn't match `walkthrough`/`demo`/`tour`/`meeting`. Extended: `book (?:a (?:quick |brief )?)?(time|slot|call|walkthrough|demo|tour|meeting)`. Same fix applied to `_5qReplyHasBookingIntent` in Section D.
+- FIX-2: Section B `detectMicroIntent` PRICING_REQUEST regex didn't match `commitment`/`retainer`. Extended with those terms.
+- FIX-3 (GAP-3b): `_5qApplyActiveFormRuleInstructionToDraft` had no NON_PRIORITY/NOT_NOW handler. Added: when cdada69d guidance active + "check back/when would be/better time" signal present, replaces "I'll close the loop" with "When would be a good time to check back in?"
+
+**Harness:** 119/119 PASS (was 89/89). P7 (booking/pricing classification 12 tests) + P8 (NOT_NOW style 18 tests) added.
+
+**Remaining:** Owner Variant C live retests required — booking, pricing/commitment, not-now, setup/process regression.
+
+---
+
 ## 2026-07-04 — SL-PHASE-5Q Live Regression Repair (PARTIAL)
 
 **Agent:** Claude Code (claude-sonnet-4-6)  

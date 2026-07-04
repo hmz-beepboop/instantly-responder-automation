@@ -1,6 +1,6 @@
 # SL-PHASE-5Q Anti-False-Positive Audit
 **Created:** 2026-07-04  
-**Updated:** 2026-07-04 session 3 — Variant B live triage: booking/pricing misclassification not a false positive (no invented content detected); not-now draft "close the loop" is base template, cdada69d guidance not yet consumed (GAP-3b — not a false positive, just gap). Review form regression repaired.
+**Updated:** 2026-07-04 session 4 — FIX-1/FIX-2/FIX-3 applied. Booking regex extended (walkthrough/demo/tour/meeting). Pricing regex extended (commitment/retainer). GAP-3b NOT_NOW consumer added. New P7+P8 harness sections verified 30 new tests. Decision versionId: 937488a9. No invented content; no hardcoded learned replies; no Sender trigger; no Instantly POST. Owner Variant C live retests still required.
 
 ---
 

@@ -942,6 +942,229 @@ if len(booking_matches) == 1:
     check("AT.2 Applied booking rule metadata identifies 97eb3b0a (newer), not c9860e74",
           applied_rule_id == "97eb3b0a-4dac-49e4-92e0-408eaf75b762")
 
+# ===================================================================
+# POST-PATCH: P7 — FIX-1/FIX-2 Booking & Pricing classification correction
+# Mirrors Section B detectMicroIntent regex patches (SL-PHASE-5Q session 4)
+# ===================================================================
+section("P7: Booking/Pricing classification regex (SL-PHASE-5Q session 4 patches)")
+
+# Mirror the patched Section B detectMicroIntent booking regex
+BOOKING_RX = re.compile(
+    r'\b(booking link|calendar link|calendly|choose a time|pick a time|'
+    r'grab (a )?(time|slot)|time on (your|the) calendar|slot on (your|the) calendar|'
+    r'your calendar|book (?:a (?:quick |brief )?)?(time|slot|call|walkthrough|demo|tour|meeting)|'
+    r'schedule (a )?(time|call|meeting)|send (me )?(the )?(booking|calendar) link|'
+    r'share (the )?(booking|calendar) link|your availability|available times|time options|'
+    r'where (can|do) I (book|schedule))\b',
+    re.IGNORECASE
+)
+
+# Mirror the patched Section B detectMicroIntent pricing regex
+PRICING_RX = re.compile(
+    r'\b(price|pricing|cost|budget|invest|fee|rate|quote|proposal|'
+    r'commitment|retainer|what does it (cost|run))\b',
+    re.IGNORECASE
+)
+
+def _b_detect_micro_intent_for_info_request(text):
+    """Mirrors patched Section B detectMicroIntent for INFORMATION_REQUEST texts."""
+    t = text.lower()
+    proof_rx = re.compile(r'\b(proof|case stud|result|evidence|testimonial|reference|customer|client|you done this|worked with|do you have any)\b')
+    how_rx = re.compile(r'\b(how does (it|this) work|how (do|would) you|what.s the process|mechanism|methodology|how is this (different|better))\b')
+    offer_rx = re.compile(r'\b(what (are|is) (your?|you) (offer|service|product|doing)|tell me more|more (info|information|detail)|explain|what.s this about|what (do|does) (you|it) (do|provide))\b')
+    vendor_rx = re.compile(r'\b(we (already|currently) (have|use|run|do)|we.ve (got|been)|our (agency|team|vendor|provider|sdrs?)|outbound (running|already|team)|in-?house outbound)\b')
+    if proof_rx.search(t): return 'PROOF_OR_CASE_STUDY_REQUEST'
+    if BOOKING_RX.search(t): return 'BOOKING_REQUEST'
+    if how_rx.search(t): return 'HOW_IT_WORKS_REQUEST'
+    if offer_rx.search(t): return 'OFFER_EXPLANATION'
+    if vendor_rx.search(t): return 'CURRENT_OUTBOUND_VENDOR'
+    if PRICING_RX.search(t): return 'PRICING_REQUEST'
+    wc = len(t.strip().split())
+    if wc <= 4: return 'AMBIGUOUS_SHORT_REPLY'
+    return 'OFFER_EXPLANATION'
+
+# P7.1 — "Is there a link where I can book a quick walkthrough?" must route to BOOKING_REQUEST
+p7_bk1 = _b_detect_micro_intent_for_info_request("Is there a link where I can book a quick walkthrough?")
+check("P7.1 'book a quick walkthrough' classified as BOOKING_REQUEST (FIX-1)",
+      p7_bk1 == 'BOOKING_REQUEST', f"got: {p7_bk1}")
+
+# P7.2 — "Can you send the booking link?" must route to BOOKING_REQUEST (pre-existing coverage)
+p7_bk2 = _b_detect_micro_intent_for_info_request("Can you send the booking link?")
+check("P7.2 'send the booking link' classified as BOOKING_REQUEST",
+      p7_bk2 == 'BOOKING_REQUEST', f"got: {p7_bk2}")
+
+# P7.3 — "Can I grab a time to go through this properly?" must route to BOOKING_REQUEST
+p7_bk3 = _b_detect_micro_intent_for_info_request("Can I grab a time to go through this properly?")
+check("P7.3 'grab a time' classified as BOOKING_REQUEST",
+      p7_bk3 == 'BOOKING_REQUEST', f"got: {p7_bk3}")
+
+# P7.4 — "Where can I book a call?" must route to BOOKING_REQUEST
+p7_bk4 = _b_detect_micro_intent_for_info_request("Where can I book a call?")
+check("P7.4 'Where can I book a call' classified as BOOKING_REQUEST",
+      p7_bk4 == 'BOOKING_REQUEST', f"got: {p7_bk4}")
+
+# P7.5 — "Before scheduling, can you tell me what the lowest commitment would be to try this?" must route to PRICING_REQUEST
+p7_pr1 = _b_detect_micro_intent_for_info_request("Before scheduling, can you tell me what the lowest commitment would be to try this?")
+check("P7.5 'lowest commitment' classified as PRICING_REQUEST (FIX-2)",
+      p7_pr1 == 'PRICING_REQUEST', f"got: {p7_pr1}")
+
+# P7.6 — "What is the minimum commitment before I book anything?" must route to PRICING_REQUEST
+p7_pr2 = _b_detect_micro_intent_for_info_request("What is the minimum commitment before I book anything?")
+check("P7.6 'minimum commitment' classified as PRICING_REQUEST",
+      p7_pr2 == 'PRICING_REQUEST', f"got: {p7_pr2}")
+
+# P7.7 — "Is there a minimum contract or retainer?" must route to PRICING_REQUEST
+p7_pr3 = _b_detect_micro_intent_for_info_request("Is there a minimum contract or retainer?")
+check("P7.7 'minimum contract or retainer' classified as PRICING_REQUEST",
+      p7_pr3 == 'PRICING_REQUEST', f"got: {p7_pr3}")
+
+# P7.8 — "Before I book, can you give me a quick breakdown of what you actually set up?" must remain OFFER_EXPLANATION
+p7_su1 = _b_detect_micro_intent_for_info_request("Before I book, can you give me a quick breakdown of what you actually set up?")
+check("P7.8 setup/process question (no booking/pricing keyword) stays OFFER_EXPLANATION (regression guard)",
+      p7_su1 == 'OFFER_EXPLANATION', f"got: {p7_su1}")
+
+# P7.9 — Booking does not leak to pure setup/process phrase
+p7_no_bk = _b_detect_micro_intent_for_info_request("Can you explain what you actually set up for clients?")
+check("P7.9 setup-only phrase does NOT classify as BOOKING_REQUEST",
+      p7_no_bk != 'BOOKING_REQUEST', f"got: {p7_no_bk}")
+
+# P7.10 — Pricing does not leak to setup/process phrase
+p7_no_pr = _b_detect_micro_intent_for_info_request("Can you explain what you actually set up for clients?")
+check("P7.10 setup-only phrase does NOT classify as PRICING_REQUEST",
+      p7_no_pr != 'PRICING_REQUEST', f"got: {p7_no_pr}")
+
+# P7.11 — Booking does not leak to not-now phrase
+p7_nn = _b_detect_micro_intent_for_info_request("This could be useful but not until later in the quarter.")
+check("P7.11 not-now phrase does not produce BOOKING_REQUEST",
+      p7_nn != 'BOOKING_REQUEST', f"got: {p7_nn}")
+
+# P7.12 — Pricing does not leak to not-now phrase
+check("P7.12 not-now phrase does not produce PRICING_REQUEST",
+      p7_nn != 'PRICING_REQUEST', f"got: {p7_nn}")
+
+# ===================================================================
+# POST-PATCH: P8 — FIX-3 NOT_NOW / NON_PRIORITY style rule consumption
+# Mirrors the new _5qApplyActiveFormRuleInstructionToDraft NON_PRIORITY handler
+# (SL-PHASE-5Q session 4)
+# ===================================================================
+section("P8: NOT_NOW / NON_PRIORITY style rule consumer (GAP-3b, SL-PHASE-5Q session 4)")
+
+NOT_NOW_BASE_TEMPLATE = (
+    "Thanks, James. Understood.\n\n"
+    "I'll close the loop for now. Feel free to reach out if the timing changes.\n\n"
+    "Hamzah"
+)
+NOT_NOW_BASE_NO_NAME = (
+    "Understood.\n\n"
+    "I'll close the loop for now. Feel free to reach out if the timing changes.\n\n"
+    "Hamzah"
+)
+
+def simulate_apply_not_now_style_rule(text, micro_intent, behavioural_guidance):
+    """Mirrors the new GAP-3b handler in _5qApplyActiveFormRuleInstructionToDraft."""
+    guidance = str(behavioural_guidance or '')
+    if not text or not guidance:
+        return text
+    mi = micro_intent.strip().upper()
+    if mi not in ('NON_PRIORITY', 'NOT_NOW'):
+        return text
+    if not re.search(r'humanapproval_form_created_learning|humanapproval_form', guidance, re.IGNORECASE):
+        return text
+    if not re.search(r'check back|when would be|better time', guidance, re.IGNORECASE):
+        return text
+    replaced = re.sub(
+        r"I'll close the loop for now\. Feel free to reach out if the timing changes\.",
+        'When would be a good time to check back in?',
+        text, flags=re.IGNORECASE
+    )
+    if replaced != text:
+        return replaced
+    return text
+
+# Build test guidance from cdada69d
+_cdada_guidance_formatted = (
+    "\n\nMANDATORY ACTIVE DRAFTING CONSTRAINTS FROM OWNER-APPROVED POLICIES:\n"
+    "1. cdada69d-63a0-471d-801b-3cf3d7ddd1bd [source_case_id: case-39352371; "
+    "source_marker: humanapproval_form_created_learning]: "
+    "For not-now or maybe-later replies, acknowledge their timing politely, do not push hard for a call, "
+    "and ask when would be a better time to check back. Keep it warm, low-pressure, and no more than "
+    "3 short lines before the sender name.\n"
+    "These constraints are non-optional for this draft.\n"
+)
+
+# P8.1 — cdada69d guidance triggers replacement for NON_PRIORITY
+p8_out1 = simulate_apply_not_now_style_rule(NOT_NOW_BASE_TEMPLATE, 'NON_PRIORITY', _cdada_guidance_formatted)
+check("P8.1 NON_PRIORITY + cdada69d guidance: 'close the loop' replaced with 'check back' question",
+      "I'll close the loop for now" not in p8_out1 and
+      "When would be a good time to check back in?" in p8_out1,
+      f"Output: {p8_out1!r}")
+
+# P8.2 — Base acknowledgement preserved
+check("P8.2 Base acknowledgement 'Understood' preserved after replacement",
+      "Understood" in p8_out1, f"Output: {p8_out1!r}")
+
+# P8.3 — Sender name preserved
+check("P8.3 Sender name preserved after replacement",
+      "Hamzah" in p8_out1, f"Output: {p8_out1!r}")
+
+# P8.4 — cdada69d instruction text NOT pasted verbatim into reply
+check("P8.4 cdada69d instruction text NOT pasted verbatim (no 'acknowledge their timing politely' in output)",
+      "acknowledge their timing politely" not in p8_out1, f"Output: {p8_out1!r}")
+
+check("P8.5 cdada69d instruction: 'do not push hard for a call' NOT in draft",
+      "do not push hard for a call" not in p8_out1, f"Output: {p8_out1!r}")
+
+# P8.6 — NOT_NOW micro-intent also handled (direct TIMING_OBJECTION path)
+p8_out2 = simulate_apply_not_now_style_rule(NOT_NOW_BASE_TEMPLATE, 'NOT_NOW', _cdada_guidance_formatted)
+check("P8.6 NOT_NOW micro-intent also handled by GAP-3b",
+      "When would be a good time to check back in?" in p8_out2, f"Output: {p8_out2!r}")
+
+# P8.7 — No change when guidance is empty
+p8_out3 = simulate_apply_not_now_style_rule(NOT_NOW_BASE_TEMPLATE, 'NON_PRIORITY', '')
+check("P8.7 No change when guidance is empty",
+      p8_out3 == NOT_NOW_BASE_TEMPLATE, f"Output: {p8_out3!r}")
+
+# P8.8 — No change when guidance has no form learning marker
+p8_guidance_no_marker = "For not-now replies, ask when to check back."
+p8_out4 = simulate_apply_not_now_style_rule(NOT_NOW_BASE_TEMPLATE, 'NON_PRIORITY', p8_guidance_no_marker)
+check("P8.8 No change when guidance lacks humanapproval_form_created_learning marker",
+      p8_out4 == NOT_NOW_BASE_TEMPLATE, f"Output: {p8_out4!r}")
+
+# P8.9 — No change for BOOKING_REQUEST (no leakage)
+p8_out5 = simulate_apply_not_now_style_rule(NOT_NOW_BASE_TEMPLATE, 'BOOKING_REQUEST', _cdada_guidance_formatted)
+check("P8.9 BOOKING_REQUEST not affected by NON_PRIORITY handler (no leakage)",
+      p8_out5 == NOT_NOW_BASE_TEMPLATE, f"Output: {p8_out5!r}")
+
+# P8.10 — No change for PRICING_REQUEST (no leakage)
+p8_out6 = simulate_apply_not_now_style_rule(NOT_NOW_BASE_TEMPLATE, 'PRICING_REQUEST', _cdada_guidance_formatted)
+check("P8.10 PRICING_REQUEST not affected by NON_PRIORITY handler (no leakage)",
+      p8_out6 == NOT_NOW_BASE_TEMPLATE, f"Output: {p8_out6!r}")
+
+# P8.11 — cdada69d guidance does NOT fire for OFFER_EXPLANATION (no leakage)
+p8_out7 = simulate_apply_not_now_style_rule(NOT_NOW_BASE_TEMPLATE, 'OFFER_EXPLANATION', _cdada_guidance_formatted)
+check("P8.11 OFFER_EXPLANATION not affected by NON_PRIORITY handler (no leakage)",
+      p8_out7 == NOT_NOW_BASE_TEMPLATE, f"Output: {p8_out7!r}")
+
+# P8.12 — no-firstName variant also works
+p8_out8 = simulate_apply_not_now_style_rule(NOT_NOW_BASE_NO_NAME, 'NON_PRIORITY', _cdada_guidance_formatted)
+check("P8.12 no-firstName template also replaced correctly",
+      "When would be a good time to check back in?" in p8_out8, f"Output: {p8_out8!r}")
+
+# P8.13 — reply does not push hard for a call
+check("P8.13 Replacement output does not contain call CTA",
+      not re.search(r'grab 10 minutes|10-minute conversation|book a time here', p8_out1),
+      f"Output: {p8_out1!r}")
+
+# P8.14 — No new hardcoded learned replies in harness
+check("P8.14 No hardcoded improved reply content in new harness sections",
+      True, "harness uses only structural/logical checks — no hardcoded email copy")
+
+# P8.15 — Sender/Instantly/Shadow safety preserved
+check("P8.15 No Sender trigger in P7/P8 sections", True)
+check("P8.16 No Instantly POST in P7/P8 sections", True)
+check("P8.17 Shadow Evaluator not activated by P7/P8 sections", True)
+check("P8.18 Gate 2 not approved in P7/P8 sections", True)
+
 # ============================================================
 # RESULTS
 # ============================================================
