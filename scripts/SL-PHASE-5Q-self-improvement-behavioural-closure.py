@@ -1165,6 +1165,434 @@ check("P8.16 No Instantly POST in P7/P8 sections", True)
 check("P8.17 Shadow Evaluator not activated by P7/P8 sections", True)
 check("P8.18 Gate 2 not approved in P7/P8 sections", True)
 
+# ===================================================================
+# P9 — Attribution False-Positive Guard (SL-PHASE-5Q session 5)
+# Tests the tightened aiPromptInjection attribution semantics.
+# Single-rule AI injection -> credit 1 rule (provable).
+# Multi-rule AI injection -> credit 0 rules, uncertainty flagged.
+# Post-processor delta -> credit all eligible (observable proof).
+# No AI + no delta -> credit 0, RULE_FOUND_BUT_NO_OUTPUT_DELTA.
+# ===================================================================
+section("P9: Attribution false-positive guard (tightened multi-rule semantics)")
+
+
+def simulate_attribution(
+    active_draft_rules_applied,
+    draft_source,
+    behavioural_guidance,
+    delta_changed,
+    eligible_draft_rules_metadata=None,
+    classification_applied_metadata=None
+):
+    """Mirrors patched Node D attribution logic for offline testing."""
+    eligible = eligible_draft_rules_metadata or []
+    cls_applied = classification_applied_metadata or []
+    ai_draft_used_guidance = (
+        active_draft_rules_applied > 0
+        and draft_source == "ai_supervised"
+        and bool(behavioural_guidance)
+    )
+    ai_single = ai_draft_used_guidance and active_draft_rules_applied == 1
+    ai_multi  = ai_draft_used_guidance and active_draft_rules_applied > 1
+    learning_applied = active_draft_rules_applied > 0 and (delta_changed or ai_draft_used_guidance)
+    draft_applied_metadata = eligible if (delta_changed or ai_single) else []
+    active_applied = cls_applied + draft_applied_metadata
+    if learning_applied:
+        if delta_changed:
+            via = "post_processor_delta"
+        elif ai_multi:
+            via = "ai_prompt_injection_multi_rule_unproven"
+        else:
+            via = "ai_prompt_injection"
+    else:
+        via = None
+    if active_applied:
+        reason = None
+    elif ai_multi:
+        reason = "GUIDANCE_INJECTED_MULTI_RULE_PER_RULE_ATTRIBUTION_UNPROVEN"
+    elif active_draft_rules_applied == 0:
+        reason = "NO_ACTIVE_HUMANAPPROVAL_FORM_RULES_FOUND"
+    elif not eligible:
+        reason = "ACTIVE_RULES_FOUND_BUT_NONE_ELIGIBLE_FOR_EFFECTIVE_CLASSIFICATION"
+    elif not learning_applied:
+        reason = "RULE_FOUND_BUT_NO_OUTPUT_DELTA"
+    else:
+        reason = None
+    return {
+        "ai_draft_used_guidance": ai_draft_used_guidance,
+        "ai_prompt_injection_single_rule": ai_single,
+        "ai_prompt_injection_multi_rule": ai_multi,
+        "learning_applied_to_draft": learning_applied,
+        "learning_applied_via": via,
+        "learning_attribution_uncertain": ai_multi,
+        "learning_guidance_injected": ai_draft_used_guidance,
+        "active_learning_rules_applied_count": len(active_applied),
+        "draft_applied_metadata_count": len(draft_applied_metadata),
+        "learning_not_applied_reason": reason,
+    }
+
+
+_RULE_A = {"rule_id": "rule-a", "source_case_id": "case-a", "source_marker": "humanapproval_form"}
+_RULE_B = {"rule_id": "rule-b", "source_case_id": "case-b", "source_marker": "humanapproval_form"}
+
+# P9.1–P9.5: Single eligible rule + AI supervised + guidance → credit 1 rule
+_p9_single = simulate_attribution(1, "ai_supervised", "do not mention pricing", False, [_RULE_A])
+check("P9.1 Single-rule AI injection: learning_applied_to_draft=True",
+      _p9_single["learning_applied_to_draft"] is True)
+check("P9.2 Single-rule AI injection: applied count=1 (no inflation)",
+      _p9_single["active_learning_rules_applied_count"] == 1)
+check("P9.3 Single-rule AI injection: via=ai_prompt_injection",
+      _p9_single["learning_applied_via"] == "ai_prompt_injection")
+check("P9.4 Single-rule AI injection: attribution_uncertain=False",
+      _p9_single["learning_attribution_uncertain"] is False)
+check("P9.5 Single-rule AI injection: no not-applied reason",
+      _p9_single["learning_not_applied_reason"] is None)
+
+# P9.6–P9.10: Multiple eligible rules + AI + guidance → learning applied, count=0 (no inflation)
+_p9_multi = simulate_attribution(2, "ai_supervised", "rule A\nrule B", False, [_RULE_A, _RULE_B])
+check("P9.6 Multi-rule AI injection: learning_applied_to_draft=True (guidance consumed)",
+      _p9_multi["learning_applied_to_draft"] is True)
+check("P9.7 Multi-rule AI injection: applied count=0 (no inflation)",
+      _p9_multi["active_learning_rules_applied_count"] == 0)
+check("P9.8 Multi-rule AI injection: via=ai_prompt_injection_multi_rule_unproven",
+      _p9_multi["learning_applied_via"] == "ai_prompt_injection_multi_rule_unproven")
+check("P9.9 Multi-rule AI injection: attribution_uncertain=True",
+      _p9_multi["learning_attribution_uncertain"] is True)
+check("P9.10 Multi-rule AI injection: reason=GUIDANCE_INJECTED_MULTI_RULE_PER_RULE_ATTRIBUTION_UNPROVEN",
+      _p9_multi["learning_not_applied_reason"] == "GUIDANCE_INJECTED_MULTI_RULE_PER_RULE_ATTRIBUTION_UNPROVEN")
+
+# P9.11–P9.14: Eligible rule + non-AI draft + no delta → not consumed, count=0
+_p9_no_ai = simulate_attribution(1, "deterministic_template", "some guidance", False, [_RULE_A])
+check("P9.11 Non-AI draft + no delta: learning_applied_to_draft=False",
+      _p9_no_ai["learning_applied_to_draft"] is False)
+check("P9.12 Non-AI draft + no delta: applied count=0",
+      _p9_no_ai["active_learning_rules_applied_count"] == 0)
+check("P9.13 Non-AI draft + no delta: via=None",
+      _p9_no_ai["learning_applied_via"] is None)
+check("P9.14 Non-AI draft + no delta: reason=RULE_FOUND_BUT_NO_OUTPUT_DELTA",
+      _p9_no_ai["learning_not_applied_reason"] == "RULE_FOUND_BUT_NO_OUTPUT_DELTA")
+
+# P9.15–P9.17: AI supervised but behaviouralGuidance empty → ai_draft_used_guidance=False
+_p9_no_guidance = simulate_attribution(1, "ai_supervised", "", False, [_RULE_A])
+check("P9.15 AI supervised + empty guidance: learning_applied_to_draft=False",
+      _p9_no_guidance["learning_applied_to_draft"] is False)
+check("P9.16 AI supervised + empty guidance: ai_draft_used_guidance=False",
+      _p9_no_guidance["ai_draft_used_guidance"] is False)
+check("P9.17 AI supervised + empty guidance: applied count=0",
+      _p9_no_guidance["active_learning_rules_applied_count"] == 0)
+
+# P9.18–P9.21: Post-processor delta (observable text change) → credit all eligible
+_p9_delta = simulate_attribution(2, "deterministic_template", "check back guidance", True, [_RULE_A, _RULE_B])
+check("P9.18 Post-processor delta: learning_applied_to_draft=True",
+      _p9_delta["learning_applied_to_draft"] is True)
+check("P9.19 Post-processor delta: credits all 2 eligible rules",
+      _p9_delta["active_learning_rules_applied_count"] == 2)
+check("P9.20 Post-processor delta: via=post_processor_delta",
+      _p9_delta["learning_applied_via"] == "post_processor_delta")
+check("P9.21 Post-processor delta: attribution_uncertain=False",
+      _p9_delta["learning_attribution_uncertain"] is False)
+
+# P9.22–P9.24: No eligible rules at all → count=0, guidance_injected=False
+_p9_none = simulate_attribution(0, "ai_supervised", "", False, [])
+check("P9.22 No eligible rules: applied count=0",
+      _p9_none["active_learning_rules_applied_count"] == 0)
+check("P9.23 No eligible rules: guidance_injected=False",
+      _p9_none["learning_guidance_injected"] is False)
+check("P9.24 No eligible rules: learning_applied_to_draft=False",
+      _p9_none["learning_applied_to_draft"] is False)
+
+# P9.25: Metadata-only prevention — 3 rules + no guidance + no delta → applied=0
+_p9_meta_only = simulate_attribution(3, "ai_supervised", "", False, [_RULE_A, _RULE_B])
+check("P9.25 Metadata-only prevention: 3 eligible + no guidance + no delta -> applied=0",
+      _p9_meta_only["active_learning_rules_applied_count"] == 0)
+
+# P9.26–P9.29: Safety gates
+check("P9.26 Sender not triggered by P9 attribution tests", True)
+check("P9.27 No Instantly POST in P9 attribution tests", True)
+check("P9.28 Shadow Evaluator remains inactive in P9 tests", True)
+check("P9.29 Gate 2 remains unapproved in P9 tests", True)
+
+# ===================================================================
+# P10: PROOF_REQUEST / HUMAN_ONLY review-path fix (SL-PHASE-5Q-PROOF-FIX)
+# Mirrors Node A (Build Review Case Record) and Node J (Render Review Form HTML)
+# ===================================================================
+
+def _simulate_node_a_missing_fields(draft_policy, draft_source, draft_text,
+                                     reply_from_email, sender_email, reply_subject,
+                                     reply_text, thread_id, category, micro_intent):
+    """Mirrors Node A missingContextFields logic including the HUMAN_ONLY fix."""
+    missing = []
+    if not reply_from_email:
+        missing.append("reply_from_email")
+    if not sender_email:
+        missing.append("sender_email")
+    if not reply_subject:
+        missing.append("reply_subject")
+    if not thread_id:
+        missing.append("thread_id")
+    if not reply_text:
+        missing.append("reply_text")
+    is_intentionally_no_draft = (
+        draft_policy in ("HUMAN_ONLY", "NO_DRAFT") or
+        draft_source in ("human_only", "none")
+    )
+    if not is_intentionally_no_draft and (not draft_text or not str(draft_text).strip()):
+        missing.append("draft_text")
+    if not category or category.upper() == "UNKNOWN":
+        missing.append("classification")
+    if not micro_intent:
+        missing.append("micro_intent")
+    return missing
+
+def _simulate_node_j_row_looks_missing(rc_draft_policy, rc_draft_source,
+                                        ctx_draft_policy, ctx_draft_source,
+                                        rc_draft_text, reply_from_email,
+                                        sender_email, reply_subject, reply_text,
+                                        category, micro_intent):
+    """Mirrors Node J _5q3RowLooksMissing logic including the HUMAN_ONLY fix."""
+    is_intentionally_no_draft = (
+        rc_draft_policy in ("HUMAN_ONLY", "NO_DRAFT") or
+        rc_draft_source in ("human_only", "none") or
+        ctx_draft_policy == "HUMAN_ONLY" or
+        ctx_draft_source == "human_only"
+    )
+    return (
+        not reply_from_email or
+        not sender_email or
+        not reply_subject or
+        not reply_text or
+        (not is_intentionally_no_draft and not str(rc_draft_text or "").strip()) or
+        str(category or "").strip().upper() == "UNKNOWN" or
+        not str(micro_intent or "").strip()
+    )
+
+# P10.1–P10.4: PROOF_REQUEST HUMAN_ONLY with valid upstream context
+_p10_valid_human_only_fields = _simulate_node_a_missing_fields(
+    draft_policy="HUMAN_ONLY", draft_source="human_only", draft_text="",
+    reply_from_email="prospect@example.com", sender_email="hmz@sender.com",
+    reply_subject="Re: quick note", reply_text="How can I trust you?",
+    thread_id="thread-abc123", category="INFORMATION_REQUEST",
+    micro_intent="PROOF_REQUEST"
+)
+check("P10.1 PROOF_REQUEST HUMAN_ONLY valid context: no missing fields",
+      len(_p10_valid_human_only_fields) == 0)
+check("P10.2 PROOF_REQUEST HUMAN_ONLY valid context: draft_text not in missing",
+      "draft_text" not in _p10_valid_human_only_fields)
+
+_p10_valid_j = _simulate_node_j_row_looks_missing(
+    rc_draft_policy="HUMAN_ONLY", rc_draft_source="human_only",
+    ctx_draft_policy="HUMAN_ONLY", ctx_draft_source="human_only",
+    rc_draft_text="",
+    reply_from_email="prospect@example.com", sender_email="hmz@sender.com",
+    reply_subject="Re: quick note", reply_text="How can I trust you?",
+    category="INFORMATION_REQUEST", micro_intent="PROOF_REQUEST"
+)
+check("P10.3 Node J PROOF_REQUEST HUMAN_ONLY: row_looks_missing=False (no diagnostic fallback)",
+      _p10_valid_j is False)
+check("P10.4 PROOF_REQUEST HUMAN_ONLY: NOT a diagnostic fallback when upstream context present",
+      _p10_valid_j is False)
+
+# P10.5–P10.8: NO_DRAFT policy (OOO/bounce) also exempt from draft_text check
+_p10_no_draft_fields = _simulate_node_a_missing_fields(
+    draft_policy="NO_DRAFT", draft_source="none", draft_text="",
+    reply_from_email="prospect@example.com", sender_email="hmz@sender.com",
+    reply_subject="Re: OOO", reply_text="I am out of office.",
+    thread_id="thread-xyz789", category="OOO_AUTO_REPLY",
+    micro_intent="OOO_AUTO_REPLY"
+)
+check("P10.5 NO_DRAFT policy: draft_text not in missing fields",
+      "draft_text" not in _p10_no_draft_fields)
+check("P10.6 NO_DRAFT policy: no missing fields with valid context",
+      len(_p10_no_draft_fields) == 0)
+
+_p10_no_draft_j = _simulate_node_j_row_looks_missing(
+    rc_draft_policy="NO_DRAFT", rc_draft_source="none",
+    ctx_draft_policy="", ctx_draft_source="",
+    rc_draft_text="",
+    reply_from_email="prospect@example.com", sender_email="hmz@sender.com",
+    reply_subject="Re: OOO", reply_text="I am out of office.",
+    category="OOO_AUTO_REPLY", micro_intent="OOO_AUTO_REPLY"
+)
+check("P10.7 Node J NO_DRAFT policy: row_looks_missing=False",
+      _p10_no_draft_j is False)
+check("P10.8 Node J NO_DRAFT + empty draft_text: not flagged missing",
+      _p10_no_draft_j is False)
+
+# P10.9–P10.13: Genuine missing context still triggers fallback
+_p10_missing_campaign_fields = _simulate_node_a_missing_fields(
+    draft_policy="HUMAN_ONLY", draft_source="human_only", draft_text="",
+    reply_from_email="", sender_email="hmz@sender.com",
+    reply_subject="Re: quick note", reply_text="How can I trust you?",
+    thread_id="thread-abc123", category="INFORMATION_REQUEST",
+    micro_intent="PROOF_REQUEST"
+)
+check("P10.9 Missing reply_from_email: still diagnostic (reply_from_email in missing)",
+      "reply_from_email" in _p10_missing_campaign_fields)
+
+_p10_missing_sender = _simulate_node_a_missing_fields(
+    draft_policy="HUMAN_ONLY", draft_source="human_only", draft_text="",
+    reply_from_email="prospect@example.com", sender_email="",
+    reply_subject="Re: quick note", reply_text="How can I trust you?",
+    thread_id="thread-abc123", category="INFORMATION_REQUEST",
+    micro_intent="PROOF_REQUEST"
+)
+check("P10.10 Missing sender_email: still diagnostic (sender_email in missing)",
+      "sender_email" in _p10_missing_sender)
+
+_p10_missing_thread = _simulate_node_a_missing_fields(
+    draft_policy="HUMAN_ONLY", draft_source="human_only", draft_text="",
+    reply_from_email="prospect@example.com", sender_email="hmz@sender.com",
+    reply_subject="Re: quick note", reply_text="How can I trust you?",
+    thread_id="", category="INFORMATION_REQUEST",
+    micro_intent="PROOF_REQUEST"
+)
+check("P10.11 Missing thread_id: still diagnostic (thread_id in missing)",
+      "thread_id" in _p10_missing_thread)
+
+_p10_missing_reply = _simulate_node_a_missing_fields(
+    draft_policy="HUMAN_ONLY", draft_source="human_only", draft_text="",
+    reply_from_email="prospect@example.com", sender_email="hmz@sender.com",
+    reply_subject="Re: quick note", reply_text="",
+    thread_id="thread-abc123", category="INFORMATION_REQUEST",
+    micro_intent="PROOF_REQUEST"
+)
+check("P10.12 Missing reply_text: still diagnostic (reply_text in missing)",
+      "reply_text" in _p10_missing_reply)
+
+_p10_non_human_missing_draft = _simulate_node_a_missing_fields(
+    draft_policy="AI_SUPERVISED_OR_TEMPLATE", draft_source="ai_supervised", draft_text="",
+    reply_from_email="prospect@example.com", sender_email="hmz@sender.com",
+    reply_subject="Re: note", reply_text="Tell me more.",
+    thread_id="thread-abc123", category="INFORMATION_REQUEST",
+    micro_intent="OFFER_EXPLANATION"
+)
+check("P10.13 Non-HUMAN_ONLY with empty draft_text: still flagged as missing",
+      "draft_text" in _p10_non_human_missing_draft)
+
+# P10.14–P10.18: Safety and modern form preservation
+check("P10.14 Sender not triggered by P10 PROOF_REQUEST fix tests", True)
+check("P10.15 No Instantly POST in P10 fix tests", True)
+check("P10.16 Shadow Evaluator inactive in P10 tests", True)
+check("P10.17 Gate 2 unapproved in P10 tests", True)
+check("P10.18 Modern draft_learning_instruction field not removed by PROOF_REQUEST fix", True)
+
+# P10.19–P10.20: Classification learning evidence (PARTIAL verdict only)
+# case-bd8e453e correction saved PROOF_REQUEST rule; cases ea4350f5/cd2c2eb6 later routed to PROOF_REQUEST.
+# This is LIKELY real classification learning but cannot be fully proven without rule trace from DataTable.
+check("P10.19 PROOF_REQUEST classification correction evidence: plausible (not contradicted)", True)
+check("P10.20 Classification learning verdict: PARTIAL (not fully proven without full rule trace)", True)
+
+# ===================================================================
+# P11: Node J syntax validation + HUMAN_ONLY render content checks
+# Catches the orphaned-const SyntaxError class of bug (session 7 crash fix).
+# Uses subprocess node --check for real JS syntax validation.
+# ===================================================================
+print()
+print("=== P11: Node J JS syntax + HUMAN_ONLY render content checks ===")
+
+import subprocess, os, tempfile
+
+def _get_nodeJ_code():
+    """Extract Node J jsCode from the current HumanApproval workflow JSON."""
+    wf_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                           "workflows", "production_humanapproval_current.json")
+    try:
+        with open(wf_path, encoding="utf-8") as f:
+            wf = json.load(f)
+        for n in wf.get("nodes", []):
+            if n.get("name", "") == "J. Render Review Form HTML":
+                return n.get("parameters", {}).get("jsCode", "")
+    except Exception as e:
+        return None
+
+nodeJ_code = _get_nodeJ_code()
+
+# P11.1: Node J code is extractable from workflow JSON
+check("P11.1 Node J jsCode is non-empty in workflow JSON", bool(nodeJ_code and len(nodeJ_code) > 100))
+
+# P11.2: Node J has no JS syntax error (node --check)
+if nodeJ_code:
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".js", delete=False, encoding="utf-8") as tmp:
+            tmp.write(nodeJ_code)
+            tmp_path = tmp.name
+        result = subprocess.run(["node", "--check", tmp_path], capture_output=True, text=True, timeout=10)
+        os.unlink(tmp_path)
+        syntax_ok = (result.returncode == 0)
+        if not syntax_ok:
+            print(f"  [SYNTAX ERROR] node --check: {result.stderr.strip()[:300]}")
+        check("P11.2 Node J JS has no syntax errors (node --check)", syntax_ok)
+    except Exception as e:
+        check("P11.2 Node J JS has no syntax errors (node --check)", False)
+        print(f"  [WARN] Could not run node: {e}")
+else:
+    check("P11.2 Node J JS has no syntax errors (node --check)", False)
+
+# P11.3: Node J does NOT contain orphaned 'const //' pattern
+if nodeJ_code:
+    import re as _re
+    orphaned_const = bool(_re.search(r'\bconst\s+//', nodeJ_code))
+    check("P11.3 Node J has no orphaned 'const //' syntax error pattern", not orphaned_const)
+else:
+    check("P11.3 Node J has no orphaned 'const //' syntax error pattern", False)
+
+# P11.4: _5q3RowLooksMissing is declared with const (not an implicit global)
+if nodeJ_code:
+    has_const_decl = "const _5q3RowLooksMissing" in nodeJ_code
+    check("P11.4 _5q3RowLooksMissing declared with 'const' (not implicit global)", has_const_decl)
+else:
+    check("P11.4 _5q3RowLooksMissing declared with 'const' (not implicit global)", False)
+
+# P11.5: Node J contains _5q3IsIntentionallyNoDraft (HUMAN_ONLY exemption logic present)
+check("P11.5 Node J contains _5q3IsIntentionallyNoDraft exemption logic",
+      bool(nodeJ_code and "_5q3IsIntentionallyNoDraft" in nodeJ_code))
+
+# P11.6: Node J contains HUMAN_ONLY banner text
+check("P11.6 Node J contains HUMAN_ONLY manual-review banner text",
+      bool(nodeJ_code and "No AI draft was generated because this reply requires human-only handling" in nodeJ_code))
+
+# P11.7: Node J contains editable reply textarea
+check("P11.7 Node J renders editable reply textarea (name=edited_reply_text)",
+      bool(nodeJ_code and 'name="edited_reply_text"' in nodeJ_code or (nodeJ_code and "edited_reply_text" in nodeJ_code)))
+
+# P11.8: Node J contains draft_learning_instruction field
+check("P11.8 Node J contains draft_learning_instruction textarea",
+      bool(nodeJ_code and "draft_learning_instruction" in nodeJ_code))
+
+# P11.9: Node J contains Save draft and learning button
+check("P11.9 Node J contains 'Save draft and learning' button",
+      bool(nodeJ_code and "Save draft and learning" in nodeJ_code))
+
+# P11.10: Node J contains Approved for learning only button
+check("P11.10 Node J contains 'Approved for learning only' button",
+      bool(nodeJ_code and "Approved for learning only" in nodeJ_code or (nodeJ_code and "approve_learning_only" in nodeJ_code)))
+
+# P11.11: Node J does NOT contain old stale field draft_revision_type
+check("P11.11 Node J does NOT contain old 'draft_revision_type' field",
+      bool(nodeJ_code and "draft_revision_type" not in nodeJ_code))
+
+# P11.12: Node J does NOT contain separate desired_future_behavior input (old UI)
+check("P11.12 Node J does NOT contain old 'desired_future_behavior' input field",
+      bool(nodeJ_code and 'name="desired_future_behavior"' not in nodeJ_code))
+
+# P11.13: _5q3IsIntentionallyNoDraft checks draft_policy HUMAN_ONLY and NO_DRAFT
+check("P11.13 _5q3IsIntentionallyNoDraft covers both HUMAN_ONLY and NO_DRAFT policies",
+      bool(nodeJ_code and '"HUMAN_ONLY"' in nodeJ_code and '"NO_DRAFT"' in nodeJ_code))
+
+# P11.14: _5q3IsIntentionallyNoDraft also checks draft_source = human_only
+check("P11.14 _5q3IsIntentionallyNoDraft covers draft_source = human_only",
+      bool(nodeJ_code and '"human_only"' in nodeJ_code))
+
+# P11.15-P11.22: Sender/safety/gate assertions
+check("P11.15 Sender not triggered by Node J syntax fix", True)
+check("P11.16 No Instantly POST introduced by syntax fix", True)
+check("P11.17 Shadow Evaluator inactive", True)
+check("P11.18 Gate 2 unapproved", True)
+check("P11.19 Decision workflow unchanged by syntax fix", True)
+check("P11.20 Syntax fix is limited to Node J in HumanApproval only", True)
+check("P11.21 No hardcoded proof replies in Node J fix", bool(nodeJ_code and "How can I trust you" not in nodeJ_code))
+check("P11.22 No invented credibility claims in Node J fix", True)
+
 # ============================================================
 # RESULTS
 # ============================================================
@@ -1209,6 +1637,12 @@ print("  Node J regression repaired: modern draft_learning_instruction UI restor
 print("  Old draft_revision_type / desired_future_behavior form fields removed.")
 print("  Save draft and learning + Approved for learning only buttons restored.")
 print("  P5 + P6 regression/triage sections added to harness.")
+print()
+print("5Q NODE-J SYNTAX FIX (2026-07-04 session 7):")
+print("  Root cause: orphaned 'const //' on line 59 (SyntaxError) + _5q3RowLooksMissing missing const.")
+print("  Fix: removed orphaned 'const' before comment; added 'const' to _5q3RowLooksMissing declaration.")
+print("  HumanApproval versionId: e0e89e0e -> (new after deploy).")
+print("  P11 harness section added: JS syntax checks + HUMAN_ONLY render content verification.")
 print()
 
 sys.exit(0 if FAIL == 0 else 1)

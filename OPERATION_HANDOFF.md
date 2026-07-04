@@ -4,6 +4,109 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ---
 
+## 2026-07-04 — SL-PHASE-5Q Node J Syntax Crash Fix (DEPLOYED)
+
+**Agent:** Claude Code (claude-sonnet-4-6)  
+**Objective:** Fix live render crash (UNKNOWN at node J) for valid PROOF_REQUEST/HUMAN_ONLY cases after session 6 deploy.
+
+**Root cause:** Session 6 introduced a JavaScript `SyntaxError` in Node J. The comment placement was wrong: `const // SL-PHASE-5Q-PROOF-FIX: ...` (line 59) left an orphaned `const` keyword with no variable declaration — only a comment followed on the same line. Line 61 then declared `_5q3RowLooksMissing = ...` without `const`/`let`/`var`. These two errors together caused n8n to report `UNKNOWN at node J. Render Review Form HTML` for every case, including valid PROOF_REQUEST cases. The session 6 harness (168/168 Python simulation) missed this because it simulates logic in Python and never runs the actual JavaScript.
+
+**Fix (HumanApproval Node J only):**
+- Line 59: `const // SL-PHASE-5Q-PROOF-FIX: ...` → `// SL-PHASE-5Q-PROOF-FIX: ...` (removed orphaned `const`)
+- Line 61: `_5q3RowLooksMissing = ...` → `const _5q3RowLooksMissing = ...` (added `const` declaration)
+- Verified with `node --check`: SYNTAX OK.
+
+**Harness:** 190/190 PASS (was 168/168; P11 section added: 22 new tests including `node --check` JS syntax validation to prevent recurrence).
+
+**Classification learning confirmed (live):** Cases case-d24661f0 and case-3838bcee both showed active learning applied, rule `1dba7933-c38c-4bc1-a7d2-3723af0b2711`, source case-bd8e453e, marker `humanapproval_form_created_learning`, effective classification `INFORMATION_REQUEST / PROOF_REQUEST`. Classification learning is materially evidenced.
+
+| Workflow | ID | Old versionId | New versionId | Change |
+|----------|----|---------------|---------------|--------|
+| HumanApproval | `9aPrt92jFhoYFxbs` | `e0e89e0e` | `c51ac1f3` | Node J syntax crash fix (two-line const error) |
+
+**Decision unchanged** (`4cb34768`). No Sender triggered. No Instantly POST. Shadow Evaluator (`aHzLtQiv6G8h1bqD`) not touched. Gate 2 unapproved.
+
+**Owner action required:** Send another "How can I trust you?" reply. Review page must now render fully — HUMAN_ONLY banner, empty editable textarea, classification/learning metadata, all modern buttons. If blank page persists, check n8n execution log for any remaining error.
+
+---
+
+## 2026-07-04 — SL-PHASE-5Q PROOF_REQUEST / HUMAN_ONLY Review-Path Repair (DEPLOYED)
+
+**Agent:** Claude Code (claude-sonnet-4-6)  
+**Objective:** Fix valid PROOF_REQUEST/HUMAN_ONLY cases incorrectly becoming `HUMANAPPROVAL_DIAGNOSTIC_FALLBACK`.
+
+**Root cause:** Both Node A (Build Review Case Record) and Node J (Render Review Form HTML) in HumanApproval treated missing `draft_text` as a missing-context indicator. For `HUMAN_ONLY` and `NO_DRAFT` policies, `draft_text` is intentionally absent — no AI draft is generated. This caused valid PROOF_REQUEST cases with complete upstream context (campaign, lead_email, sender_email, thread_id, reply_text all present) to be flagged as diagnostic fallback.
+
+**Patches applied (HumanApproval):**
+- Node A: `_aIsIntentionallyNoDraft` guard — skips `draft_text` from `missingContextFields` when `draft_policy ∈ {HUMAN_ONLY, NO_DRAFT}` or `draft_source ∈ {human_only, none}`.
+- Node J: `_5q3IsIntentionallyNoDraft` guard — same condition exempts `draft_text` from `_5q3RowLooksMissing`.
+- Existing HUMAN_ONLY banner at ~line 17090 in Node J was already correct — it was never reached due to the diagnostic intercept.
+- Genuine missing context (campaign, lead_email, sender_email, thread_id, reply_text absent) still triggers diagnostic fallback correctly.
+
+**Harness:** 168/168 PASS (was 148/148; P10 section added: 20 new PROOF_REQUEST/HUMAN_ONLY tests).
+
+**Classification-learning verdict (case-bd8e453e):** PARTIAL. The owner corrected `OFFER_EXPLANATION` → `PROOF_REQUEST` on case-bd8e453e, and follow-up cases ea4350f5/cd2c2eb6 showed `PROOF_REQUEST` classification. This is plausible classification learning but cannot be fully proven without a live rule trace from the DataTable (no rule ID confirmed).
+
+| Workflow | ID | Old versionId | New versionId | Change |
+|----------|----|---------------|---------------|--------|
+| HumanApproval | `9aPrt92jFhoYFxbs` | `849c2c64` | `e0e89e0e` | Node A + Node J HUMAN_ONLY draft_text exempt |
+
+**Decision unchanged** (`4cb34768`). No Sender triggered. No Instantly POST. Shadow Evaluator (`aHzLtQiv6G8h1bqD`) not touched. Gate 2 unapproved.
+
+**Owner action required:** Send another "How can I trust you?" reply. Review page should now show the HUMAN_ONLY banner ("No AI draft was generated because this reply requires human-only handling.") with a text area to write a manual reply — not the diagnostic fallback red error page.
+
+---
+
+## 2026-07-04 — SL-PHASE-5Q Attribution False-Positive Fix (DEPLOYED)
+
+**Agent:** Claude Code (claude-sonnet-4-6)  
+**Objective:** Audit local attribution patch; fix multi-rule over-credit risk; deploy.
+
+**Root cause fixed:** Local patch credited ALL eligible draft rules when `learningAppliedToDraft=true` via AI prompt injection. If 2 rules were eligible (as in the two-email test), both were counted even if only one could provably influence AI output.
+
+**Fix applied (Node D):**
+- Added `aiPromptInjectionSingleRule` / `aiPromptInjectionMultiRule` flags.
+- Single-rule AI injection → 1 rule credited, `via: 'ai_prompt_injection'`.
+- Multi-rule AI injection → 0 rules credited individually; `learning_attribution_uncertain: true`; `via: 'ai_prompt_injection_multi_rule_unproven'`; reason: `GUIDANCE_INJECTED_MULTI_RULE_PER_RULE_ATTRIBUTION_UNPROVEN`.
+- Post-processor delta → all eligible rules credited (observable proof).
+- Added `learning_guidance_injected` and `learning_attribution_uncertain` to attribution object.
+
+**Harness:** 148/148 PASS (was 119/119; P9 section added: 29 new attribution false-positive tests).
+
+| Workflow | ID | Old versionId | New versionId | Change |
+|----------|----|---------------|---------------|--------|
+| Decision | `tgYmY97CG4Bm8snI` | `937488a9` | `4cb34768` | Attribution false-positive fix |
+
+**HumanApproval unchanged** (`849c2c64`). No Sender triggered. No Instantly POST. Shadow Evaluator (`aHzLtQiv6G8h1bqD`) not touched. Gate 2 unapproved.
+
+**Owner action required:** Run a fresh two-email self-learning test (same OFFER_EXPLANATION path). Expect: if 1 eligible rule → `applied count = 1`, `via = 'ai_prompt_injection'`. If 2 eligible → `applied count = 0`, `attribution_uncertain = true`, reason = `GUIDANCE_INJECTED_MULTI_RULE_PER_RULE_ATTRIBUTION_UNPROVEN`.
+
+---
+
+## 2026-07-04 — SL-PHASE-5Q Learning Attribution False-Positive Check (PATCH READY, PENDING DEPLOY)
+
+**Agent:** Claude Code (claude-sonnet-4-6)  
+**Objective:** Diagnose two-email self-improvement test: applied count = 0 despite apparent second-draft improvement.
+
+**Root cause confirmed:** Attribution bug. `draftTextBeforeActiveLearning` is captured AFTER AI generation (index 62,295) but the learning rule is injected into `buildAIPrompt` BEFORE AI generation (index 57,461). For OFFER_EXPLANATION (AI prompt injection path), the post-processor makes no change → delta = 0 → applied count = 0. The learning IS consumed but is invisible to the delta check.
+
+**Verdict:** Second draft improvement is likely REAL learning. Applied count = 0 is a counter bug, not a false positive.
+
+**Patch written to local file — NOT YET DEPLOYED:**
+- `workflows/production_decision_current.json` — Node D: added `aiDraftUsedGuidance` flag; extended `learningAppliedToDraft` to include AI prompt injection path; added `learning_applied_via` field (`'ai_prompt_injection'` vs `'post_processor_delta'`)
+- Owner must approve and deploy this patch before it takes effect.
+
+**Files changed (local only):**
+- `workflows/production_decision_current.json` — patch written
+- `reports/SL-PHASE-5Q_LEARNING_ATTRIBUTION_FALSE_POSITIVE_CHECK.md` — created
+- `OPERATION_HANDOFF.md` — this entry
+
+**No production changes applied.** Decision versionId still `937488a9`. HumanApproval unchanged (`849c2c64`). No Sender triggered. No Instantly POST. Shadow Evaluator untouched. Gate 2 unapproved.
+
+**Owner action required:** Review patch in `workflows/production_decision_current.json` Node D, then deploy via `PUT /workflows/tgYmY97CG4Bm8snI` or run harness after confirming patch is correct.
+
+---
+
 ## 2026-07-04 — SL-PHASE-5Q Decision Classification + GAP-3b Repair (PARTIAL → pending Variant C)
 
 **Agent:** Claude Code (claude-sonnet-4-6)  

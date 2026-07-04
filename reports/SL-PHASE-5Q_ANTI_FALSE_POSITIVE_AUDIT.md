@@ -1,6 +1,6 @@
 # SL-PHASE-5Q Anti-False-Positive Audit
 **Created:** 2026-07-04  
-**Updated:** 2026-07-04 session 4 — FIX-1/FIX-2/FIX-3 applied. Booking regex extended (walkthrough/demo/tour/meeting). Pricing regex extended (commitment/retainer). GAP-3b NOT_NOW consumer added. New P7+P8 harness sections verified 30 new tests. Decision versionId: 937488a9. No invented content; no hardcoded learned replies; no Sender trigger; no Instantly POST. Owner Variant C live retests still required.
+**Updated:** 2026-07-04 session 7 — Node J JS syntax crash fixed. Orphaned `const // comment` + undeclared `_5q3RowLooksMissing` (SyntaxError) patched. P11 harness section added (22 new tests including `node --check` syntax validation). Harness 190/190 PASS. HumanApproval deployed: old `e0e89e0e` → new `c51ac1f3`. No invented content; no hardcoded proof replies; no Sender trigger; no Instantly POST. Decision unchanged (`4cb34768`).
 
 ---
 
@@ -51,13 +51,17 @@
 
 ---
 
-## Metadata-only success prevented
+## Metadata-only success prevented (updated session 5)
 
 | Check | Verdict |
 |-------|---------|
-| `learningAppliedToDraft` requires actual delta | YES — `draftLearningDelta.changed` must be true |
-| `learningNotAppliedReason: RULE_FOUND_BUT_NO_OUTPUT_DELTA` used correctly | YES — emitted when rules eligible but no text change |
-| `learning_applied_to_draft: true` requires real delta | YES |
+| `learningAppliedToDraft` requires delta OR ai_draft_used_guidance | YES — either delta changed or guidance was injected into AI prompt |
+| Single-rule AI injection: 1 rule credited | YES — `aiPromptInjectionSingleRule` gates individual rule credit |
+| Multi-rule AI injection: 0 rules credited, uncertainty flagged | YES — `aiPromptInjectionMultiRule` suppresses per-rule credit; sets `learning_attribution_uncertain=true` |
+| Multi-rule AI injection reason | `GUIDANCE_INJECTED_MULTI_RULE_PER_RULE_ATTRIBUTION_UNPROVEN` |
+| Post-processor delta: all eligible rules credited | YES — observable text change is sufficient proof |
+| `learning_applied_to_draft: true` requires real delta OR injected guidance | YES |
+| `learning_guidance_injected` field | Added — `true` when AI path used guidance; independent of applied count |
 
 ---
 
