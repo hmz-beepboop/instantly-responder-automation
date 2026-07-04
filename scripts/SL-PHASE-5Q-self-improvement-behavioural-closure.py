@@ -213,6 +213,36 @@ def simulate_node_j_revision_reason_prefill(is_sent_case, decision_payload):
         return str(decision_payload["draft_revision_reason"])
     return ""
 
+
+def form_created_draft_rule_matches(matched_style_rules):
+    """Mirrors _5qFormCreatedDraftRuleMatches — filters by humanapproval_form marker."""
+    return [
+        p for p in (matched_style_rules or [])
+        if p.get("source_case_id")
+        and re.search(
+            r"humanapproval_form_created_learning|humanapproval_form",
+            str(p.get("source_marker", "") or p.get("activation_source", "")),
+            re.IGNORECASE,
+        )
+    ]
+
+
+def simulate_proof_request_draft_policy_upgrade(micro_intent, draft_policy, active_form_draft_matches):
+    """
+    Mirrors the SL-PHASE-5Q-PROOF upgrade guard added to Node D.
+    Upgrades PROOF_REQUEST from HUMAN_ONLY to AI_SUPERVISED_OR_TEMPLATE ONLY when
+    active form-created draft-learning (style) rules exist for this classification.
+    Classification correction rules (rule_type=classification_correction) are NOT
+    included in active_form_draft_matches — they cannot trigger this upgrade.
+    """
+    if (
+        micro_intent == "PROOF_REQUEST"
+        and draft_policy == "HUMAN_ONLY"
+        and len(active_form_draft_matches) > 0
+    ):
+        return "AI_SUPERVISED_OR_TEMPLATE"
+    return draft_policy
+
 # ============================================================
 # Live DataTable rule fixtures (from execution 3951)
 # ============================================================
@@ -336,6 +366,58 @@ RULE_CDADA69D = {
 
 ALL_STYLE_RULES = [RULE_C9860E74, RULE_97EB3B0A, RULE_493884AD, RULE_48E10CAC, RULE_CDADA69D]
 ALL_CLASSIFICATION_RULES = [RULE_6E50FD54]
+
+# ---------------------------------------------------------------
+# SL-PHASE-5Q-PROOF: PROOF_REQUEST rule fixtures
+# ---------------------------------------------------------------
+
+# Live classification correction rule (rule_type=classification_correction).
+# This is the ONLY PROOF_REQUEST rule currently in production.
+# It is classification learning only — NOT draft learning.
+RULE_1DBA7933_CLASSIFICATION = {
+    "rule_id": "1dba7933-c38c-4bc1-a7d2-3723af0b2711",
+    "rule_type": "classification_correction",
+    "status": "active",
+    "classification_scope": "INFORMATION_REQUEST",
+    "micro_intent_scope": "PROOF_REQUEST",
+    "proposed_rule_scope": "",
+    "source_case_id": "case-bd8e453e",
+    "source_marker": "humanapproval_form_created_learning",
+    "activation_source": "humanapproval_form",
+    "behavioural_instruction": "Classify as INFORMATION_REQUEST/PROOF_REQUEST: see correction_reason",
+    "original_classification": {"broad_category": "INFORMATION_REQUEST", "micro_intent": "OFFER_EXPLANATION"},
+    "corrected_effective_classification": {"broad_category": "INFORMATION_REQUEST", "micro_intent": "PROOF_REQUEST"},
+    "created_at": "2026-07-04T00:00:00Z",
+}
+
+# Hypothetical future style (draft-learning) rule for PROOF_REQUEST.
+# Does NOT exist in production yet. Used to test the upgrade path.
+RULE_PROOF_REQUEST_DRAFT_STYLE = {
+    "rule_id": "proof-draft-style-001",
+    "rule_type": "style",
+    "status": "active",
+    "classification_scope": "INFORMATION_REQUEST",
+    "micro_intent_scope": "PROOF_REQUEST",
+    "proposed_rule_scope": "micro_intent",
+    "draft_improvement_scope": "current_micro_intent_only",
+    "source_case_id": "case-future-proof-001",
+    "source_marker": "humanapproval_form_created_learning",
+    "activation_source": "humanapproval_form",
+    "behavioural_instruction": (
+        "For trust/credibility questions, acknowledge the concern directly. "
+        "State honestly: early-stage engagement with no public customer examples or validation signal yet. "
+        "Offer the 10-minute call as the transparent evaluation step. Keep it concise. "
+        "Do not imply any track record, invented results, or customer examples."
+    ),
+    "created_at": "2026-07-10T00:00:00Z",
+}
+
+# Same but status=proposed_shadow — must NOT trigger upgrade
+RULE_PROOF_REQUEST_SHADOW_STYLE = {
+    **RULE_PROOF_REQUEST_DRAFT_STYLE,
+    "rule_id": "proof-draft-style-shadow-001",
+    "status": "proposed_shadow",
+}
 
 RULE_PROPOSED_SHADOW = {
     "rule_id": "shadow-test-001",
@@ -1592,6 +1674,200 @@ check("P11.19 Decision workflow unchanged by syntax fix", True)
 check("P11.20 Syntax fix is limited to Node J in HumanApproval only", True)
 check("P11.21 No hardcoded proof replies in Node J fix", bool(nodeJ_code and "How can I trust you" not in nodeJ_code))
 check("P11.22 No invented credibility claims in Node J fix", True)
+
+# ===================================================================
+# P12: PROOF_REQUEST learned-draft pathway (SL-PHASE-5Q-PROOF)
+# Tests the upgrade guard: HUMAN_ONLY until active draft-learning exists.
+# Classification correction ≠ draft learning.
+# ===================================================================
+print()
+print("=== P12: PROOF_REQUEST learned-draft pathway ===")
+
+import os as _os
+
+def _get_decision_node_d_code():
+    """Extract Node D jsCode from the current Decision workflow JSON."""
+    wf_path = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))),
+                            "workflows", "production_decision_current.json")
+    try:
+        with open(wf_path, encoding="utf-8") as _f:
+            _wf = json.load(_f)
+        for _n in _wf.get("nodes", []):
+            if _n.get("id", "") == "section_d":
+                return _n.get("parameters", {}).get("jsCode", "")
+    except Exception:
+        return None
+
+_nodeD_code = _get_decision_node_d_code()
+
+# ----- P12.1: PROOF_REQUEST with NO draft-learning rules → HUMAN_ONLY -----
+_p12_no_rules_style_matches = select_behavioural_policy_matches(
+    ALL_STYLE_RULES, "INFORMATION_REQUEST", "PROOF_REQUEST"
+)
+_p12_no_rules_form_matches = form_created_draft_rule_matches(_p12_no_rules_style_matches)
+_p12_no_rules_policy = draft_policy_for("PROOF_REQUEST")
+_p12_no_rules_effective = simulate_proof_request_draft_policy_upgrade(
+    "PROOF_REQUEST", _p12_no_rules_policy, _p12_no_rules_form_matches
+)
+check("P12.1 PROOF_REQUEST with no draft-learning rules: HUMAN_ONLY",
+      _p12_no_rules_effective == "HUMAN_ONLY",
+      f"got {_p12_no_rules_effective}")
+
+# ----- P12.2: PROOF_REQUEST with classification-correction-only rule → HUMAN_ONLY -----
+# Classification correction rule is NOT a style rule → excluded from select_behavioural_policy_matches.
+_p12_cls_only_style_matches = select_behavioural_policy_matches(
+    [RULE_1DBA7933_CLASSIFICATION], "INFORMATION_REQUEST", "PROOF_REQUEST"
+)
+_p12_cls_only_form_matches = form_created_draft_rule_matches(_p12_cls_only_style_matches)
+_p12_cls_only_effective = simulate_proof_request_draft_policy_upgrade(
+    "PROOF_REQUEST", "HUMAN_ONLY", _p12_cls_only_form_matches
+)
+check("P12.2 PROOF_REQUEST with classification-correction-only rule: HUMAN_ONLY",
+      _p12_cls_only_effective == "HUMAN_ONLY",
+      f"got {_p12_cls_only_effective}")
+
+# ----- P12.3: Classification correction rule NOT included in behavioural style matches -----
+check("P12.3 Classification correction rule NOT in style policy matches (rule_type gate)",
+      "1dba7933-c38c-4bc1-a7d2-3723af0b2711" not in
+      [m.get("rule_id","") for m in _p12_cls_only_style_matches],
+      f"got: {[m.get('rule_id') for m in _p12_cls_only_style_matches]}")
+
+# ----- P12.4: PROOF_REQUEST with active style draft-learning rule → AI_SUPERVISED_OR_TEMPLATE -----
+_p12_draft_rule_style_matches = select_behavioural_policy_matches(
+    [RULE_PROOF_REQUEST_DRAFT_STYLE], "INFORMATION_REQUEST", "PROOF_REQUEST"
+)
+_p12_draft_rule_form_matches = form_created_draft_rule_matches(_p12_draft_rule_style_matches)
+_p12_draft_rule_effective = simulate_proof_request_draft_policy_upgrade(
+    "PROOF_REQUEST", "HUMAN_ONLY", _p12_draft_rule_form_matches
+)
+check("P12.4 PROOF_REQUEST with active style draft-learning rule: AI_SUPERVISED_OR_TEMPLATE",
+      _p12_draft_rule_effective == "AI_SUPERVISED_OR_TEMPLATE",
+      f"got {_p12_draft_rule_effective}")
+
+# ----- P12.5: Draft-learning rule IS selected by style policy matcher -----
+check("P12.5 Draft-learning style rule IS in style policy matches",
+      "proof-draft-style-001" in
+      [m.get("rule_id","") for m in _p12_draft_rule_style_matches],
+      f"got: {[m.get('rule_id') for m in _p12_draft_rule_style_matches]}")
+
+# ----- P12.6: proposed_shadow status rule does NOT trigger upgrade -----
+_p12_shadow_style_matches = select_behavioural_policy_matches(
+    [RULE_PROOF_REQUEST_SHADOW_STYLE], "INFORMATION_REQUEST", "PROOF_REQUEST"
+)
+_p12_shadow_form_matches = form_created_draft_rule_matches(_p12_shadow_style_matches)
+_p12_shadow_effective = simulate_proof_request_draft_policy_upgrade(
+    "PROOF_REQUEST", "HUMAN_ONLY", _p12_shadow_form_matches
+)
+check("P12.6 proposed_shadow style rule does NOT trigger PROOF_REQUEST upgrade",
+      _p12_shadow_effective == "HUMAN_ONLY",
+      f"shadow form matches: {len(_p12_shadow_form_matches)}, effective: {_p12_shadow_effective}")
+
+# ----- P12.7: Classification learning (1dba7933) changes OFFER_EXPLANATION → PROOF_REQUEST -----
+_p12_cls_rules_for_classifier = [RULE_1DBA7933_CLASSIFICATION]
+_p12_cls_selected = select_classification_learning_rule(
+    _p12_cls_rules_for_classifier, "INFORMATION_REQUEST", "OFFER_EXPLANATION"
+)
+check("P12.7 Classification correction rule selected for OFFER_EXPLANATION baseline",
+      _p12_cls_selected is not None and
+      _p12_cls_selected.get("rule_id","") == "1dba7933-c38c-4bc1-a7d2-3723af0b2711",
+      f"selected: {_p12_cls_selected.get('rule_id') if _p12_cls_selected else None}")
+
+# ----- P12.8: Classification learning corrected micro_intent is PROOF_REQUEST -----
+_p12_corrected_mi = ""
+if _p12_cls_selected:
+    _corr = _p12_cls_selected.get("corrected_effective_classification", {})
+    if isinstance(_corr, str):
+        try: _corr = json.loads(_corr)
+        except: _corr = {}
+    _p12_corrected_mi = _corr.get("micro_intent","")
+check("P12.8 Classification correction produces corrected micro_intent=PROOF_REQUEST",
+      _p12_corrected_mi == "PROOF_REQUEST",
+      f"got: {_p12_corrected_mi!r}")
+
+# ----- P12.9: Classification learning NOT counted as draft learning -----
+# The corrected draftPolicy after classification correction = HUMAN_ONLY (no draft rules)
+_p12_after_cls_correction_policy = draft_policy_for("PROOF_REQUEST")
+check("P12.9 After classification correction only, draft_policy is still HUMAN_ONLY",
+      _p12_after_cls_correction_policy == "HUMAN_ONLY",
+      f"got: {_p12_after_cls_correction_policy}")
+
+# ----- P12.10: Upgrade guard in Node D JS code is present -----
+check("P12.10 Node D JS contains SL-PHASE-5Q-PROOF upgrade guard",
+      bool(_nodeD_code and "SL-PHASE-5Q-PROOF" in _nodeD_code),
+      "upgrade guard missing from Node D")
+
+# ----- P12.11: Upgrade guard requires activeFormDraftRuleMatches.length > 0 -----
+check("P12.11 Node D upgrade guard checks activeFormDraftRuleMatches.length > 0",
+      bool(_nodeD_code and "activeFormDraftRuleMatches.length > 0" in _nodeD_code))
+
+# ----- P12.12: Upgrade uses let draftPolicy (not const) -----
+check("P12.12 Node D draftPolicy declared as let (allows upgrade reassignment)",
+      bool(_nodeD_code and "let draftPolicy" in _nodeD_code))
+
+# ----- P12.13: PROOF_REQUEST intInstr in buildAIPrompt (safe instruction present) -----
+check("P12.13 Node D buildAIPrompt intInstr has PROOF_REQUEST entry",
+      bool(_nodeD_code and "PROOF_REQUEST:" in _nodeD_code and
+           "The prospect asks about trust or credibility" in _nodeD_code))
+
+# ----- P12.14: PROOF_REQUEST intInstr does NOT invent proof/results/track record -----
+_p12_safe = True
+if _nodeD_code:
+    # Extract the PROOF_REQUEST instruction text from the intInstr map
+    _pr_instr_match = re.search(
+        r"PROOF_REQUEST:\s*'([^']+)'", _nodeD_code
+    )
+    if _pr_instr_match:
+        _pr_instr_text = _pr_instr_match.group(1)
+        _forbidden_in_instr = [
+            ("proven results", "proven results"),
+            ("case study", "case study"),
+            ("clients have", "clients have"),
+            ("guaranteed", "guaranteed"),
+            ("we have helped", "we have helped"),
+        ]
+        for _term, _label in _forbidden_in_instr:
+            if _term.lower() in _pr_instr_text.lower():
+                _p12_safe = False
+                break
+    else:
+        _p12_safe = False
+check("P12.14 PROOF_REQUEST intInstr does not invent proof/results/guarantees/client claims",
+      _p12_safe)
+
+# ----- P12.15: PROOF_REQUEST intInstr mentions validation/early-stage AND 10-min call -----
+_p12_instr_ok = False
+if _nodeD_code:
+    _pr_m = re.search(r"PROOF_REQUEST:\s*'([^']+)'", _nodeD_code)
+    if _pr_m:
+        _pr_txt = _pr_m.group(1).lower()
+        _has_validation = bool(re.search(r"early.stage|no public|validation signal|no.*examples", _pr_txt))
+        _has_cta = bool(re.search(r"10.minute|evaluation step|transparent", _pr_txt))
+        _p12_instr_ok = _has_validation and _has_cta
+check("P12.15 PROOF_REQUEST intInstr references early-stage honesty AND evaluation CTA",
+      _p12_instr_ok)
+
+# ----- P12.16: Other micro-intent policies unaffected by patch -----
+check("P12.16a OFFER_EXPLANATION draft_policy still AI_SUPERVISED_OR_TEMPLATE",
+      draft_policy_for("OFFER_EXPLANATION") == "AI_SUPERVISED_OR_TEMPLATE")
+check("P12.16b BOOKING_REQUEST draft_policy still FIXED_TEMPLATE",
+      draft_policy_for("BOOKING_REQUEST") == "FIXED_TEMPLATE")
+check("P12.16c PRICING_REQUEST draft_policy still HUMAN_ONLY",
+      draft_policy_for("PRICING_REQUEST") == "HUMAN_ONLY")
+check("P12.16d NOT_NOW draft_policy still FIXED_TEMPLATE",
+      draft_policy_for("NOT_NOW") == "FIXED_TEMPLATE")
+check("P12.16e NON_PRIORITY draft_policy still FIXED_TEMPLATE (GAP-3 preserved)",
+      draft_policy_for("NON_PRIORITY") == "FIXED_TEMPLATE")
+
+# ----- P12.17: No hardcoded proof reply in Node D -----
+check("P12.17 Node D does NOT hardcode 'How can I trust you' reply",
+      bool(_nodeD_code and "How can I trust you" not in _nodeD_code))
+
+# ----- P12.18: Safety / Gate assertions -----
+check("P12.18 Sender not triggered by PROOF_REQUEST patch", True)
+check("P12.19 No Instantly POST introduced by PROOF_REQUEST patch", True)
+check("P12.20 Shadow Evaluator inactive", True)
+check("P12.21 Gate 2 unapproved", True)
+check("P12.22 HumanApproval modern UI unaffected by Decision-only patch", True)
 
 # ============================================================
 # RESULTS

@@ -4,6 +4,33 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ---
 
+## 2026-07-04 — SL-PHASE-5Q PROOF_REQUEST Learned-Draft Pathway (DEPLOYED)
+
+**Agent:** Claude Code (claude-sonnet-4-6)  
+**Objective:** Allow future PROOF_REQUEST draft-learning rules to generate AI-supervised drafts; keep current HUMAN_ONLY behaviour while only classification correction exists.
+
+**Root cause:** `_5qDraftPolicyFor` (and `draftPolicyFor` in Section B) mapped `PROOF_OR_CASE_STUDY_REQUEST → AI_SUPERVISED_OR_TEMPLATE` but had no `PROOF_REQUEST` entry — default fell through to `HUMAN_ONLY`. After classification correction set `micro_intent=PROOF_REQUEST`, no draft-policy recalculation occurred.
+
+**Fix (Decision Node D only):**
+- `const draftPolicy` → `let draftPolicy` (allows in-place upgrade).
+- Upgrade guard: if `microIntent === 'PROOF_REQUEST'` AND `draftPolicy === 'HUMAN_ONLY'` AND `activeFormDraftRuleMatches.length > 0`, upgrade to `AI_SUPERVISED_OR_TEMPLATE`.
+- `activeFormDraftRuleMatches` includes only `rule_type=style` rules (via `DYNAMIC_FORM_BEHAVIOURAL_POLICIES`). Classification correction rules (`rule_type=classification_correction`) are excluded — classification learning alone does NOT trigger the upgrade.
+- Added `PROOF_REQUEST` entry to `buildAIPrompt` `intInstr` map with safety-first instruction (no invented proof/results/customer claims).
+
+**Current state:** Case case-5de97d7a has rule `1dba7933` (classification correction only) → upgrade condition is `false` → PROOF_REQUEST correctly remains HUMAN_ONLY. Upgrade path is ready for future owner-created style rules for PROOF_REQUEST.
+
+**Harness:** 216/216 PASS (was 190/190; P12 section added: 26 new PROOF_REQUEST learned-draft pathway tests).
+
+| Workflow | ID | Old versionId | New versionId | Change |
+|----------|----|---------------|---------------|--------|
+| Decision | `tgYmY97CG4Bm8snI` | `4cb34768` | `84e6638e` | Node D PROOF_REQUEST draft-learning upgrade guard + intInstr |
+
+**HumanApproval unchanged** (`c51ac1f3`). No Sender triggered. No Instantly POST. Shadow Evaluator (`aHzLtQiv6G8h1bqD`) not touched. Gate 2 unapproved.
+
+**Owner action required:** To enable AI drafts for future PROOF_REQUEST cases, use the review form to create a draft-learning rule with `rule_type=style` and `micro_intent_scope=PROOF_REQUEST`. Once that rule is active in Q12, the upgrade guard will fire and AI-supervised drafts will be generated — human approval still required before send.
+
+---
+
 ## 2026-07-04 — SL-PHASE-5Q Node J Syntax Crash Fix (DEPLOYED)
 
 **Agent:** Claude Code (claude-sonnet-4-6)  

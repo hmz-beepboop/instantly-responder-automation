@@ -1,6 +1,8 @@
 # SL-PHASE-5Q Anti-False-Positive Audit
 **Created:** 2026-07-04  
-**Updated:** 2026-07-04 session 7 — Node J JS syntax crash fixed. Orphaned `const // comment` + undeclared `_5q3RowLooksMissing` (SyntaxError) patched. P11 harness section added (22 new tests including `node --check` syntax validation). Harness 190/190 PASS. HumanApproval deployed: old `e0e89e0e` → new `c51ac1f3`. No invented content; no hardcoded proof replies; no Sender trigger; no Instantly POST. Decision unchanged (`4cb34768`).
+**Updated:** 2026-07-04 session 8 — PROOF_REQUEST learned-draft pathway patch (SL-PHASE-5Q-PROOF). Node D patched: `const draftPolicy` → `let draftPolicy`; upgrade guard added (PROOF_REQUEST + HUMAN_ONLY + active form-created draft-learning rules → AI_SUPERVISED_OR_TEMPLATE); PROOF_REQUEST entry added to buildAIPrompt intInstr. Harness 216/216 PASS. Decision deployed: old `4cb34768` → new `84e6638e`. No hardcoded proof replies; no invented credibility claims; no Sender trigger; no Instantly POST. HumanApproval unchanged (`c51ac1f3`).
+
+**Previous:** 2026-07-04 session 7 — Node J JS syntax crash fixed. Orphaned `const // comment` + undeclared `_5q3RowLooksMissing` (SyntaxError) patched. P11 harness section added (22 new tests including `node --check` syntax validation). Harness 190/190 PASS. HumanApproval deployed: old `e0e89e0e` → new `c51ac1f3`. No invented content; no hardcoded proof replies; no Sender trigger; no Instantly POST. Decision unchanged (`4cb34768`).
 
 ---
 
@@ -75,6 +77,9 @@
 | Legal/safety blocks not bypassed | CONFIRMED — learning policies skipped for UNSUBSCRIBE/LEGAL/COMPLAINT categories |
 | Human review not bypassed | CONFIRMED — all supervised draft paths still require human review |
 | Proposed_shadow rules not applied | CONFIRMED — Q12 filters `status = active`; proposed_shadow would require different status |
+| PROOF_REQUEST upgrade: classification correction alone does NOT trigger | CONFIRMED — upgrade requires `activeFormDraftRuleMatches.length > 0`; classification correction rules (rule_type=classification_correction) are excluded from `DYNAMIC_FORM_BEHAVIOURAL_POLICIES` (which filters for `rule_type=style` only) |
+| PROOF_REQUEST upgrade: no hardcoded proof replies | CONFIRMED — upgrade only enables AI supervised draft path; no hardcoded content injected |
+| PROOF_REQUEST intInstr does not invent results/customer claims | CONFIRMED — P12.14 harness verified |
 
 ---
 
