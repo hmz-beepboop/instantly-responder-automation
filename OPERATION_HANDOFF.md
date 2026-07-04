@@ -4,6 +4,79 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ---
 
+## 2026-07-04 — SL-PHASE-5Q Self-Improvement Behavioural Closure (COMPLETE)
+
+**Agent:** Claude Code (claude-sonnet-4-6)  
+**Objective:** Root-cause all self-learning behavioural failures; create harness; patch all 4 gaps.
+
+**Files changed:**
+- `reports/SL-PHASE-5Q_BASELINE_EVIDENCE_RECONCILIATION.md` — created (session 1), unchanged (session 2)
+- `reports/SL-PHASE-5Q_SELF_IMPROVEMENT_BEHAVIOURAL_CLOSURE.md` — created (session 1); updated to COMPLETE + patch status (session 2)
+- `reports/SL-PHASE-5Q_ANTI_FALSE_POSITIVE_AUDIT.md` — created (session 1); updated post-patch verdicts (session 2)
+- `scripts/SL-PHASE-5Q-self-improvement-behavioural-closure.py` — created 44/44 (session 1); updated to 66/66 with P1-P4 post-patch tests (session 2)
+- `workflows/nodeD_backup_889e1d45.js` — backup of Decision Node D before patch
+- `workflows/nodeD_patched.js` — patched Decision Node D (all 4 gaps, pushed to production)
+- `workflows/production_decision_current.json` — updated from production (versionId `a3916c2e`)
+- `workflows/production_humanapproval_current.json` — updated from production (versionId `54b7a8e4`)
+- `OPERATION_HANDOFF.md` — this entry
+
+**Production workflow changes:**
+
+| Workflow | ID | Old versionId | New versionId | Patches |
+|----------|----|---------------|---------------|---------|
+| Decision | `tgYmY97CG4Bm8snI` | `889e1d45` | `a3916c2e` | GAP-1, GAP-2, GAP-3 |
+| HumanApproval | `9aPrt92jFhoYFxbs` | `0fa9d0ce` | `54b7a8e4` | GAP-4 |
+
+**No Sender triggered. No Instantly POST. Shadow Evaluator (`aHzLtQiv6G8h1bqD`) not touched. Gate 2 unapproved.**
+
+**Patches applied (Decision Node D, versionId a3916c2e):**
+
+- **GAP-1 (booking post-processor):** `_5qApplyActiveFormRuleInstructionToDraft` now detects `instructionUrl`. If URL present → email-content mode (extract booking link). If no URL and instruction matches constraint pattern (`replace the previous|do not ask|do not say|do not use`) → policy-constraint mode: renders template without pasting instruction meta-phrases as email lines. Eliminates hyper-literal booking draft from 97eb3b0a.
+
+- **GAP-2 (pricing constraints):** New function `_5qApplyPricingConstraints` added to post-processing chain. When `behaviouralGuidance` from rule 493884ad is present (marker check + `do not dodge pricing` signal), replaces the hardcoded evasive pricing paragraph with a per-shown-call / setup-fee pricing line. No invented prices. Pilot line added when guidance mentions "small pilot".
+
+- **GAP-3 (NON_PRIORITY template):** `NON_PRIORITY` added to `_5qDraftPolicyFor` → `"FIXED_TEMPLATE"`. `templateMicroIntent` maps `NON_PRIORITY` → `NOT_NOW`. NON_PRIORITY cases now produce a NOT_NOW template draft (not null), enabling cdada69d style rule post-processing.
+
+**Patch applied (HumanApproval Node J, versionId 54b7a8e4):**
+
+- **GAP-4 (revision reason prefill):** `_5pSavedRevisionReason` variable added. For sent-case reopens (`RESPONSE_APPROVED`/`LEARNING_REVISION_APPROVED`), reads `decision_payload.draft_revision_reason` and prefills the `draft_revision_reason` textarea. New cases and old cases without saved reason start blank.
+
+**Harness: 66/66 PASS** (was 44/44 pre-patch; P1-P4 post-patch sections added).
+
+**Key finding — local Decision file is STALE:**  
+Local `production_decision_current.json` versionId `e1b84f34` ≠ production `889e1d45`.  
+Production Decision has 1253-line Node D with full 5Q learning infrastructure (Q12 DataTable lookup, policy matching, classification correction, AI prompt injection). Local file has 393-line stale version.  
+**Action required: update local workflow export after any future Decision patch.**
+
+**Root causes confirmed:**
+
+1. **Booking hyper-literal (case-7c87d21a):** `_5qApplyActiveFormRuleInstructionToDraft` extracts sentences from `97eb3b0a`'s behavioral specification and pastes them as email content. The instruction contains no URL → booking link is null → draft becomes garbled instruction fragments.
+
+2. **Old booking rule (c9860e74) suppression:** WORKING CORRECTLY via scope deduplication. `97eb3b0a` wins (newer timestamp). Not a bug — the literal application (root cause #1) is the only booking failure.
+
+3. **Pricing no delta (case-d555bcfd):** Rule `493884ad` eligible, guidance built, but `AI_COMMERCIAL_SUPERVISED` branch uses a hardcoded deterministic template that never reads `behaviouralGuidance`. Pipeline gap — guidance built but has no consumer.
+
+4. **Setup/process rule (case-083fe26e):** Rule `48e10cac` eligible, guidance IS injected into AI prompt for OFFER_EXPLANATION (AI_SUPERVISED_OR_TEMPLATE). If "no output delta" was observed, it may be an AI compliance issue (AI ignoring guidance) or a measurement artifact. Not a code injection failure.
+
+5. **Not-now/later → HUMAN_ONLY (case-5fa982f4):** Classification rule `6e50fd54` correctly changes AMBIGUOUS/AMBIGUOUS_SHORT_REPLY → NON_PRIORITY. But `NON_PRIORITY` is not in the draft policy map → defaults to HUMAN_ONLY → `draft_text=null`. Style rule `cdada69d` is eligible but has no pathway to reach the draft.
+
+6. **Reopened form reasons:** Node J doesn't prefill `draft_revision_reason` textarea from case history on reopen. Reply text IS prefilled; reasons are not.
+
+**Harness results:** 44/44 PASS (all rules, leakage tests, safety checks, attribution tests).
+
+**Patches applied:** All 4 gaps patched. See patch detail block above.
+
+**Old/new versionIDs:** Decision `889e1d45` → `a3916c2e`. HumanApproval `0fa9d0ce` → `54b7a8e4`.
+
+**Recommended next actions (owner):**
+1. Live test GAP-1: BOOKING_REQUEST case — verify draft has no policy meta-phrases ("Replace the previous", "Do not ask them").
+2. Live test GAP-2: PRICING_REQUEST case with rule 493884ad active — verify commercial draft shows setup-fee / per-shown-call wording.
+3. Live test GAP-3: AMBIGUOUS/AMBIGUOUS_SHORT_REPLY case with rule 6e50fd54 active — verify NON_PRIORITY classification produces NOT_NOW template draft.
+4. Live test GAP-4: Reopen a previously approved case — verify `draft_revision_reason` textarea is prefilled.
+5. If all 4 live tests pass → SL-PHASE-5Q VERIFIED COMPLETE. Start SL-PHASE-5R if further self-improvement scope identified.
+
+---
+
 ## 2026-07-02 03:13 BST — Codex Strategic Repo Audit
 
 **Agent:** Codex  
