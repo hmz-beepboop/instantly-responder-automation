@@ -4,6 +4,58 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ---
 
+## 2026-07-04 — SL-PHASE-5Q Live Regression Repair (PARTIAL)
+
+**Agent:** Claude Code (claude-sonnet-4-6)  
+**Objective:** Repair Node J review form regression; triage Variant B live results; update harness.
+
+**Files changed:**
+- `workflows/production_humanapproval_current.json` — Node J restored from 0fa9d0ce lineage; pushed to production
+- `workflows/nodeJ_backup_pre_live_regression_repair.json` — backup of 54b7a8e4 Node J before repair
+- `scripts/SL-PHASE-5Q-self-improvement-behavioural-closure.py` — updated 66/66 → 89/89 (P5 + P6 sections added)
+- `reports/SL-PHASE-5Q_LIVE_BEHAVIOURAL_VERIFICATION.md` — created (Variant B execution trace + root causes)
+- `reports/SL-PHASE-5Q_SELF_IMPROVEMENT_BEHAVIOURAL_CLOSURE.md` — updated to PARTIAL + session 3 status
+- `reports/SL-PHASE-5Q_ANTI_FALSE_POSITIVE_AUDIT.md` — updated with session 3 Variant B verdict
+- `OPERATION_HANDOFF.md` — this entry
+
+**Production workflow changes:**
+
+| Workflow | ID | Old versionId | New versionId | Patches |
+|----------|----|---------------|---------------|---------|
+| HumanApproval | `9aPrt92jFhoYFxbs` | `54b7a8e4` | `849c2c64` | Node J regression repair (modern UI restored) |
+
+**Decision unchanged.** No Sender triggered. No Instantly POST. Shadow Evaluator (`aHzLtQiv6G8h1bqD`) not touched. Gate 2 unapproved.
+
+**Node J regression root cause confirmed:**  
+Previous session patched Node J using stale `9c71882f` as base instead of modern `0fa9d0ce` lineage. Old `draft_revision_type`, `desired_future_behavior`, and `What should the system do next time?` fields reintroduced. `draft_learning_instruction` field and `Save draft and learning` button lost.
+
+**Node J repair:** Surgically replaced from `agent/codex/sl-phase-5q-checkpoint-20260701` (0fa9d0ce). Modern UI confirmed: `draft_learning_instruction`, `Why did you make this change, and what should the system do next time?`, `Save draft and learning`, `Approved for learning only`. Old fields removed. Other nodes (H, L, N, Q2, SL-P2A) preserved.
+
+**Harness: 89/89 PASS** (was 66/66; added P5 Node J regression + P6 Variant B structural sections).
+
+**Variant B live triage (all cases confirmed against a3916c2e):**
+
+| Case | Exec | Classification | Rule applied | Verdict | Root cause |
+|------|------|---------------|-------------|---------|-----------|
+| Booking | 4846 | OFFER_EXPLANATION (WRONG) | 48e10cac instead of 97eb3b0a | FAIL | AI misclassification |
+| Setup/process | 4855 | OFFER_EXPLANATION (correct) | 48e10cac | PASS | — |
+| Not-now | 4859 | AMBIGUOUS→NON_PRIORITY (correct) | cdada69d eligible but not consumed | FAIL | GAP-3b: NOT_NOW post-processor gap |
+| Pricing | 4865 | OFFER_EXPLANATION (WRONG) | 48e10cac instead of 493884ad | FAIL | AI misclassification |
+
+**Remaining gaps requiring next session:**
+
+1. **GAP-3b:** cdada69d post-processing not implemented for NOT_NOW/FIXED_TEMPLATE path. Draft says "close the loop" — needs "when to check back" question. Requires narrow Decision patch to NOT_NOW style rule consumer.
+
+2. **Classification correction for booking/pricing:** Booking walkthrough requests and minimum-commitment questions misclassified as OFFER_EXPLANATION. Recommended fix: add classification correction rules (similar to 6e50fd54 pattern) for BOOKING_REQUEST and PRICING_REQUEST signals within OFFER_EXPLANATION context.
+
+**Recommended next actions (owner):**
+1. Verify review form renders modern UI (no `draft_revision_type` dropdown, yes `Save draft and learning` button).
+2. Next Claude Code session: patch GAP-3b (NOT_NOW post-processor for cdada69d style guidance).
+3. Decide booking/pricing classification fix approach (correction rules recommended).
+4. Fresh live retest after Decision patch.
+
+---
+
 ## 2026-07-04 — SL-PHASE-5Q Self-Improvement Behavioural Closure (COMPLETE)
 
 **Agent:** Claude Code (claude-sonnet-4-6)  

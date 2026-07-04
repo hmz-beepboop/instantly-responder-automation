@@ -1,5 +1,6 @@
 # SL-PHASE-5Q Anti-False-Positive Audit
-**Created:** 2026-07-04
+**Created:** 2026-07-04  
+**Updated:** 2026-07-04 session 3 — Variant B live triage: booking/pricing misclassification not a false positive (no invented content detected); not-now draft "close the loop" is base template, cdada69d guidance not yet consumed (GAP-3b — not a false positive, just gap). Review form regression repaired.
 
 ---
 

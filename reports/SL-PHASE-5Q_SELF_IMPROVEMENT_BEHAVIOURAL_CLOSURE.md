@@ -1,6 +1,7 @@
 # SL-PHASE-5Q Self-Improvement Behavioural Closure
 **Created:** 2026-07-04  
-**Session verdict:** COMPLETE — all 4 gaps patched, 66/66 harness PASS, production changes applied 2026-07-04
+**Session verdict:** PARTIAL — 4 gaps patched; live regression repair applied 2026-07-04 session 3; GAP-3b + classification correction still pending  
+**Session 3 update (2026-07-04):** Node J review form regression repaired (54b7a8e4 → 849c2c64). Harness 89/89 PASS. Variant B live triage complete — booking/pricing misclassified (AI gap), not-now cdada69d post-processing not consuming guidance (GAP-3b). See `reports/SL-PHASE-5Q_LIVE_BEHAVIOURAL_VERIFICATION.md`.
 
 ---
 
