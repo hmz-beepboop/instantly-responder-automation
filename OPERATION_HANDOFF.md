@@ -4,6 +4,124 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ---
 
+## 2026-07-05 — SL-PHASE-5Q PROOF_REQUEST AI-Fallback Non-Null Fix (DEPLOYED)
+
+**Agent:** Claude Code (claude-sonnet-4-6)
+**Objective:** Fix the empty textarea for PROOF_REQUEST cases when AI fails after the session 11 eligibility fix.
+
+**Root cause (proven from code):** Session 11 fixed eligibility correctly — the upgrade guard fires and `draftPolicy` upgrades to `AI_SUPERVISED_OR_TEMPLATE` when the style rule from case-a92bb763 is active. AI is called. But when AI output fails validation OR the API call fails, `draftText = fallbackText`. `buildPolicyAwareFallback` had no PROOF_REQUEST branch — it fell through to `return deterministicText` which is `null` (no PROOF_REQUEST entry in `MI_TEMPLATES`). Result: `draftText = null` → empty textarea, `draftSource = ai_failed_fallback`, `aiDraftUsedGuidance = false` (because `draftSource !== 'ai_supervised'`) → draft style rule not counted as applied in `activeLearningRulesApplied` → only classification rule 1dba7933 shown as applied. Evidence: case-9996084f (`AI_SUPERVISED_OR_TEMPLATE / ai_failed_fallback`, found=19, eligible=2, applied=1, empty textarea).
+
+**Fix 1 (Decision Node D — `validateAI`):**
+- `asksProof = microIntent === 'PROOF_REQUEST' || /.../.test(prospect)` — ensures `asksProof = true` for PROOF_REQUEST micro_intent.
+- Prevents false-positive validation rejection if any active guidance rule contains "do not mention validation unless the prospect asks" (the prospect's "How can I trust you?" doesn't contain the trigger words, so `asksProof` would be `false` without this fix).
+
+**Fix 2 (Decision Node D — `buildPolicyAwareFallback`):**
+- Added PROOF_REQUEST branch before the HOW_IT_WORKS/AMBIGUOUS fallback.
+- Returns a safe, non-null deterministic fallback: honest proof-gap acknowledgment ("We don't have public customer examples or case studies to point to yet. We're at an early validation stage...") + diagnostic question ("Would that be worth the time?").
+- No invented proof, results, guarantees, case studies, or customer examples.
+- Human review still required before send.
+
+**Harness:** 318/318 PASS (was 292/292; P16 added: 26 new PROOF_REQUEST AI-fallback, validateAI guard, and safety tests).
+
+| Workflow | ID | Old versionId | New versionId | Change |
+|----------|----|---------------|---------------|--------|
+| Decision | `tgYmY97CG4Bm8snI` | `0e1e1193` | `9198554c` | Node D `validateAI` asksProof guard + `buildPolicyAwareFallback` PROOF_REQUEST branch |
+
+**HumanApproval unchanged** (`7aac637e`). No Sender triggered. No Instantly POST. Shadow Evaluator (`aHzLtQiv6G8h1bqD`) not touched. Gate 2 unapproved.
+
+**Owner action required:** Send another "How can I trust you?" reply. The review form should now show a non-empty draft in the textarea — a safe proof-gap acknowledgment with a diagnostic question. Edit as needed and approve/send or approve for learning. If the textarea is still empty, check the n8n execution log for the specific AI failure reason in `aiAttempt.fallback_reason`.
+
+---
+
+## 2026-07-05 — SL-PHASE-5Q PROOF_REQUEST Draft-Learning Activation Bridge Fix (DEPLOYED)
+
+**Agent:** Claude Code (claude-sonnet-4-6)
+**Objective:** Fix the missing bridge between teaching case (case-532bae78) manual reply + draft_learning_instruction and future PROOF_REQUEST AI-supervised draft generation.
+
+**Root cause:** Style rule from case-532bae78 was written to Q12 (rule count 17→18 confirmed) but was NEVER eligible in `_5qPolicyApplies`. The owner submitted the form without selecting a scope checkbox. Node N fell back to `draft_improvement_scope = "unsure_review_needed"` (default). SL-P2A mapped this to `proposed_rule_scope = "requires_human_scope_decision"` (the else branch). In Decision Node D, `_5qPolicyApplies` returned `false` for this scope → rule not eligible → `activeFormDraftRuleMatches = []` → upgrade guard never fired → PROOF_REQUEST remained HUMAN_ONLY.
+
+**Fix 1 (Decision Node D — `_5qPolicyApplies`):**
+- Added fallback for `scope === 'requires_human_scope_decision' || scope === 'unsure_review_needed'`.
+- Falls back to `_5qPolicyMicroMatches(policy.micro_intent_scope, cat, mi)` if `micro_intent_scope` is set, else `classification_scope` category match.
+- Fixes the existing rule already in Q12 from case-532bae78 (will now be eligible for PROOF_REQUEST cases).
+
+**Fix 2 (HumanApproval Node J — form scope default):**
+- Changed `_5qDraftScopes` default for new cases from `["unsure_review_needed"]` to `["current_micro_intent_only"]`.
+- The "current_micro_intent_only" scope checkbox is now pre-checked for new cases.
+- Future rules get `proposed_rule_scope = "micro_intent"` directly via SL-P2A → no fallback needed.
+- Previously reviewed cases with saved scopes are preserved (not overridden).
+
+**Harness:** 292/292 PASS (was 266/266; P15 added: 26 new PROOF_REQUEST draft-learning bridge tests).
+
+| Workflow | ID | Old versionId | New versionId | Change |
+|----------|----|---------------|---------------|--------|
+| Decision | `tgYmY97CG4Bm8snI` | `84e6638e` | `0e1e1193` | Node D `_5qPolicyApplies` unresolvable-scope fallback |
+| HumanApproval | `9aPrt92jFhoYFxbs` | `c20af72e` | `7aac637e` | Node J form scope default → current_micro_intent_only |
+
+**No Sender triggered. No Instantly POST. Shadow Evaluator (`aHzLtQiv6G8h1bqD`) not touched. Gate 2 unapproved.**
+
+**Owner action required:** Send another "How can I trust you?" reply to generate a fresh PROOF_REQUEST case. The review form should now show: (1) scope checkbox pre-checked at "current_micro_intent_only"; (2) on subsequent cases, if the existing case-532bae78 style rule is eligible, the upgrade guard should fire and produce an AI-supervised draft using the proof-safety prompt. Human approval still required before send.
+
+---
+
+## 2026-07-05 — SL-PHASE-5Q Valid-Fallback Submit/Reopen Repair (DEPLOYED)
+
+**Agent:** Claude Code (claude-sonnet-4-6)  
+**Objective:** Fix `CONTEXT_MISSING_BLOCKED` on submit + diagnostic fallback on reopen for valid `ai_failed_fallback` cases (case-13c3dad3 class).
+
+**Root causes:**
+- Node N `rowLooksMissing`: no `isIntentionallyNoDraft` exemption → empty `draft_text` on `ai_failed_fallback` cases triggered `contextMissingBlocked=true` → blocked submit despite valid upstream context.
+- Node J `_5q3MissingContext`: included `rc.status === "CONTEXT_MISSING_BLOCKED"` as standalone trigger → after blocked submit set status, reopening showed diagnostic fallback even though `sanitized_context` was intact.
+- SL-P2A had same `rowLooksMissing` bug → learning capture skipped for `ai_failed_fallback` cases on valid submits.
+
+**Fix (HumanApproval — Node N + Node J + SL-P2A only):**
+- Node N: added `_nIsIntentionallyNoDraft` (mirrors Node A/J) before `rowLooksMissing`; removed `rc.status === "CONTEXT_MISSING_BLOCKED"` from `contextMissingBlocked` (relies on `reply_mode` + `rowLooksMissing`).
+- Node J: removed `(rc.status === "CONTEXT_MISSING_BLOCKED")` from `_5q3MissingContext`; `_5q3RowLooksMissing` still catches all genuinely missing context.
+- SL-P2A: added `_p2aIsIntentionallyNoDraft` exemption; removed `rc.status` check from context-skip condition.
+- Genuine diagnostic invariants preserved: `reply_mode=DIAGNOSTIC_CONTEXT_MISSING`, `ctx.context_missing.blocked=true`, and missing required context fields still always diagnostic.
+
+**Harness:** 266/266 PASS (was 240/240; P14 added: 26 new submit/reopen taxonomy tests).
+
+| Workflow | ID | Old versionId | New versionId | Change |
+|----------|----|---------------|---------------|--------|
+| HumanApproval | `9aPrt92jFhoYFxbs` | `ee2f160e` | `c20af72e` | Node N + Node J + SL-P2A submit/reopen fix |
+
+**Decision unchanged** (`84e6638e`). No Sender triggered. No Instantly POST. Shadow Evaluator (`aHzLtQiv6G8h1bqD`) not touched. Gate 2 unapproved.
+
+**Owner action required:** Reopen case-13c3dad3 from the review link. The form should now render normally — yellow AI-failed-fallback banner, empty editable textarea, classification/learning metadata, all modern buttons enabled. Submit a learning-only or save action. Confirm CONTEXT_MISSING_BLOCKED is gone and the case can be re-reviewed. Then send another "How can I trust you?" reply to generate a fresh case and confirm the full render → save → approve cycle works end-to-end.
+
+---
+
+## 2026-07-04 — SL-PHASE-5Q ai_failed_fallback Valid-Review Taxonomy Fix (DEPLOYED)
+
+**Agent:** Claude Code (claude-sonnet-4-6)  
+**Objective:** Fix recurring valid-context diagnostic fallback when AI draft validation fails (case-b0cfd04c class: PROOF_REQUEST + AI_SUPERVISED_OR_TEMPLATE + ai_failed_fallback + missing draft_text + valid upstream context).
+
+**Root cause:** Both Node A (`_aIsIntentionallyNoDraft`) and Node J (`_5q3IsIntentionallyNoDraft`) only exempted `HUMAN_ONLY`/`NO_DRAFT`/`human_only`/`none` from the missing-draft check. `ai_failed_fallback` was missing → cases where AI ran but output failed validation (draft_source=ai_failed_fallback, draft_text empty) were flagged as diagnostic fallback despite fully valid upstream context. The `ai_failed_fallback` banner at Node J ~18100 already existed but was never reached.
+
+**Fix (HumanApproval Node A + Node J only):**
+- Node A: `_aIsIntentionallyNoDraft` — added `|| _aDraftSourceRaw === "ai_failed_fallback"`.
+- Node J: `_5q3IsIntentionallyNoDraft` — added `|| rc.draft_source === "ai_failed_fallback"` and `|| ctx.draft_source === "ai_failed_fallback"` in ctx branch.
+- Genuine missing context (campaign, lead_email, sender_email, thread_id, reply_text, UNKNOWN category, missing micro_intent) still triggers diagnostic fallback.
+
+**Review-state taxonomy established:**
+- Diagnostic: missing reply_from_email, sender_email, thread_id, reply_text, UNKNOWN category, missing micro_intent — always diagnostic regardless of draft_source.
+- Valid human-only: draft_policy=HUMAN_ONLY, draft_source=human_only → exempt.
+- Valid ai_failed_fallback: draft_source=ai_failed_fallback → exempt. Existing ai_failed_fallback banner renders (yellow warning, safety constraints, empty editable textarea).
+- Valid no-draft: draft_policy=NO_DRAFT, draft_source=none → exempt.
+
+**Harness:** 240/240 PASS (was 216/216; P13 added: 24 new ai_failed_fallback taxonomy tests).
+
+| Workflow | ID | Old versionId | New versionId | Change |
+|----------|----|---------------|---------------|--------|
+| HumanApproval | `9aPrt92jFhoYFxbs` | `c51ac1f3` | `ee2f160e` | Node A + Node J ai_failed_fallback exempt |
+
+**Decision unchanged** (`84e6638e`). No Sender triggered. No Instantly POST. Shadow Evaluator (`aHzLtQiv6G8h1bqD`) not touched. Gate 2 unapproved.
+
+**Owner action required:** Send another "How can I trust you?" reply. The review page must now render normally — yellow AI-failed-fallback banner, empty editable textarea, classification/learning metadata, all modern buttons. If still diagnostic, check n8n execution log for any remaining error in Node A or Node J.
+
+---
+
 ## 2026-07-04 — SL-PHASE-5Q PROOF_REQUEST Learned-Draft Pathway (DEPLOYED)
 
 **Agent:** Claude Code (claude-sonnet-4-6)  

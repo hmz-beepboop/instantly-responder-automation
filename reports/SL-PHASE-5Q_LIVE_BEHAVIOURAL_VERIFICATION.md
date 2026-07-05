@@ -1,7 +1,11 @@
 # SL-PHASE-5Q Live Behavioural Verification
 **Created:** 2026-07-04 (session 3 — 5Q-LIVE-REGRESSION repair)  
-**Decision versionId:** `a3916c2e` (confirmed in all Variant B executions)  
-**HumanApproval versionId:** `849c2c64` (live regression repair applied 2026-07-04)
+**Decision versionId:** `9198554c` (session 12 PROOF_REQUEST AI-fallback non-null fix)  
+**HumanApproval versionId:** `7aac637e` (session 11 Node J scope default → current_micro_intent_only)
+
+**Session 12 update (2026-07-05):** PROOF_REQUEST AI-fallback non-null fix. Root cause (deeper layer): session 11 eligibility fix worked correctly — the upgrade guard fires and `draftPolicy` upgrades to `AI_SUPERVISED_OR_TEMPLATE` for future PROOF_REQUEST cases with an active style rule. But when AI output fails validation OR the API call fails, `draftText = fallbackText` which was `null` for PROOF_REQUEST (no branch in `buildPolicyAwareFallback`). Result: empty textarea, `ai_failed_fallback` source, draft style rule not counted as applied (only classification rule in `activeLearningRulesApplied`). Evidence: case-9996084f shows `AI_SUPERVISED_OR_TEMPLATE / ai_failed_fallback`, eligible=2, applied=1 (classification). Fix 1: `validateAI` — `asksProof = true` when `microIntent === 'PROOF_REQUEST'` prevents false-positive validation rejection when guidance contains "do not mention validation" restrictions. Fix 2: `buildPolicyAwareFallback` — PROOF_REQUEST branch added returning a safe, non-null fallback: honest proof-gap acknowledgment + diagnostic question. No invented proof, results, or credibility claims. Human review still required. Decision deployed: `0e1e1193` → `9198554c`. HumanApproval unchanged (`7aac637e`). Harness: 318/318 PASS (+26 P16 tests).
+
+**Session 11 update (2026-07-05):** PROOF_REQUEST draft-learning activation bridge fix. Root cause: teaching case case-532bae78 style rule was written to Q12 with `proposed_rule_scope=requires_human_scope_decision` (no scope checkbox checked by owner → Node N default → SL-P2A else branch). `_5qPolicyApplies` returned false → rule not eligible → upgrade guard never fired in case-380ae677. Fix 1: Node D `_5qPolicyApplies` adds fallback for unresolvable scope → micro_intent/broad_category matching. Fix 2: Node J form pre-checks `current_micro_intent_only` for new cases → future rules get `micro_intent` scope directly. Decision deployed: `84e6638e` → `0e1e1193`. HumanApproval deployed: `c20af72e` → `7aac637e`. Harness: 292/292 PASS (+26 P15 tests).
 
 ---
 
