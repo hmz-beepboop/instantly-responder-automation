@@ -4,6 +4,83 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ---
 
+## 2026-07-05 00:00 BST — GitHub Checkpoint / Build Preservation (IN PROGRESS)
+
+**Agent:** Codex
+**Objective:** Documentation and Git/GitHub checkpoint only. Preserve the current largely working SL-PHASE-5Q responder build before any further repair work.
+
+**Current known production version IDs (from handoff/reports, not freshly queried via n8n API):**
+
+| Workflow | ID | Current known versionId | Status |
+|----------|----|-------------------------|--------|
+| Decision | `tgYmY97CG4Bm8snI` | `afe08974-b635-4a56-be42-d005ba7f3520` / short `afe08974` | Latest known trust/proof variant repair deployed |
+| HumanApproval | `9aPrt92jFhoYFxbs` | `7aac637e-e57a-44b3-91c4-96b9e4f0d064` / short `7aac637e` | Latest known modern review/scope/default repair deployed |
+
+**Current known status:** Largely working, approximately 97% ready, and should be preserved before more changes. Latest harness reported `349/349 PASS`. Exact proof/trust classification path is mostly working after the trust/proof variant repair. `trust`, `trustworthy`, `credible`, `believe`, and proof/evidence variants were patched into the Decision classifier priority and NON_PRIORITY leakage guard. Sender remains untouched. Shadow Evaluator remains inactive. Gate 2 remains unapproved. Autonomous remains disabled.
+
+**What is working:** Decision and HumanApproval current known versions reflect SL-PHASE-5Q fixes through the trust/proof variant repair. PROOF_REQUEST classification learning and style-rule eligibility are materially improved. Context/token regression was repaired. Review form modern path and fallback taxonomy are documented as repaired in the current handoff/reports. No Sender trigger, no Instantly POST, no autonomous activation, and no Gate 2 approval are recorded for these latest repairs.
+
+**Not yet fully verified:** A fresh live owner retest is still required after the trust/proof variant repair. Production version metadata was not re-queried in this checkpoint session; `scripts/assert-hmz-production-target.ps1` passed, but no n8n API metadata call was made. SL-PHASE-5Q live verification and anti-false-positive audit remain the gating evidence before any autonomous or 5R work.
+
+**Current blocker / next task:** Remaining known issue is `AI_OUTPUT_VALIDATION_FAILED` / safe fallback banner appearing too often on proof/trust cases. Next repair task is to reduce fallback frequency on proof/trust cases without inventing proof, results, guarantees, customer examples, or credibility claims.
+
+**Do-not-regress rules:** Do not regress to older `README.md` or local dry-run project state. Do not touch Sender. Do not activate Shadow Evaluator. Do not approve Gate 2. Do not enable autonomous. Do not start SL-PHASE-5R before SL-PHASE-5Q live verification and anti-false-positive audit are complete. Keep `OPERATION_HANDOFF.md` as the source of truth when it conflicts with README or older docs.
+
+**Files changed in checkpoint session:** `OPERATION_HANDOFF.md`, `README.md`, `CLAUDE.md`, `AGENTS.md` if safety checks pass. No application code or workflow logic intentionally changed.
+
+**Git branch:** `codex/5q-context-token-forensic-20260705` before checkpoint; preferred checkpoint branch is `checkpoint/sl-phase-5q-largely-working-20260705`, but branch switch may be skipped because the worktree is already dirty with many pre-existing non-documentation changes.
+
+**Commit / push / tag result:** Pending safety checks.
+
+**Exact next recommended owner/action:** Preserve this checkpoint, then run a fresh live proof/trust retest (`Ah, I don't know if you are trustworthy.`). If classification is `INFORMATION_REQUEST / PROOF_REQUEST` but the safe fallback banner appears too often, start a narrow Decision-only repair session for AI validation/fallback-frequency on proof/trust cases. Do not start autonomous or SL-PHASE-5R first.
+
+---
+
+## 2026-07-05 — SL-PHASE-5Q Trust/Proof Variant Classification-Learning Repair (DEPLOYED)
+
+**Agent:** Codex
+**Objective:** Prove and repair why `Ah, I don't know if you are trustworthy.` remained `AMBIGUOUS / NON_PRIORITY` after the owner corrected `case-e6e99b67` to `INFORMATION_REQUEST / PROOF_REQUEST`.
+
+**Root cause (live-proven):** The correction was submitted and stored, but not consumable for the follow-up baseline. `case-e6e99b67` produced correction event row `66` (`approval_decision=approve`, `status=captured_only`, old `AMBIGUOUS/NON_PRIORITY`, corrected `INFORMATION_REQUEST/PROOF_REQUEST`) and active Q12 rows: classification rule `b90ff779-5593-4b02-9a98-6aebd40ef7e8` scoped from `AMBIGUOUS/NON_PRIORITY`, plus PROOF_REQUEST style rule `9f7c332d-651d-4931-bae3-a17ed2caa131`. Follow-up `case-3a05c80c` started as `AMBIGUOUS/AMBIGUOUS_SHORT_REPLY`, so `b90ff779` was not eligible. Older rule `6e50fd54` promoted it to `NON_PRIORITY`, then NON_PRIORITY draft rules `877c3d75` and `cdada69d` generated the wrong check-back draft.
+
+**Fix:** Decision only. Section B now gives trust/proof variants (`trust`, `trustworthy`, `credible`, `believe`, proof/evidence wording) deterministic priority as `INFORMATION_REQUEST / PROOF_REQUEST`. Node D now blocks NON_PRIORITY classification-rule promotion when the reply has trust/proof intent. No proof claims or reply text were hardcoded.
+
+**Harness:** 349/349 PASS (was 326/326; P18 added 23 trust/proof variant, NON_PRIORITY leakage, source-case rule eligibility, attribution, and safety tests).
+
+| Workflow | ID | Old versionId | New versionId | Change |
+|----------|----|---------------|---------------|--------|
+| Decision | `tgYmY97CG4Bm8snI` | `f6d5b731` | `afe08974` | Trust/proof classifier priority + NON_PRIORITY classification guard |
+
+**HumanApproval unchanged** (`7aac637e`). Backup created: `workflows/decision_backup_f6d5b731_pre_trust_variant_fix.json`. Local Decision export refreshed from production. Sender untouched and not triggered. No Instantly POST. Shadow Evaluator (`aHzLtQiv6G8h1bqD`) confirmed inactive. Gate 2 remains unapproved.
+
+**Owner action required:** Send a fresh `Ah, I don't know if you are trustworthy.` reply. Expected: `INFORMATION_REQUEST / PROOF_REQUEST`; PROOF_REQUEST style learning eligible; no NON_PRIORITY check-back draft.
+
+---
+
+## 2026-07-05 — SL-PHASE-5Q Context/Token Upstream Regression Repair (DEPLOYED)
+
+**Agent:** Codex
+**Objective:** Prove why `case-68110963` rendered as `HUMANAPPROVAL_DIAGNOSTIC_FALLBACK` with `Invalid or unexpected token` and all upstream context missing.
+
+**Root cause (live-proven):** Not review-link token validation, case lookup, Google Chat URL corruption, Intake payload loss, or owner/test misuse. Production execution `5263` showed Decision received valid upstream context before Node D (`campaign_id=531e64ed-c225-4baf-97a9-4ec90dc34eb0`, lead email present, sender `hamzah@teamhmzautomations.com`, subject/reply text present, classifier `INFORMATION_REQUEST / OFFER_EXPLANATION`). Decision Node D then failed before its in-node catch could preserve context and emitted only `{ error: "Invalid or unexpected token " }`. HumanApproval execution `5264` created `case-68110963` from that error-only item, generated a diagnostic fallback identity (`DIAGNOSTIC_MISSING_INTAKE_...`), and stored `context_missing.blocked=true`, `status=HUMANAPPROVAL_DIAGNOSTIC_FALLBACK`, all required fields missing, and `upstream_error="Invalid or unexpected token "`. Review execution `5265` proved `token_valid=true`, `token_invalid_reason=OK`; the token was not the cause.
+
+**Exact code bug:** Decision Node D PROOF_REQUEST fallback branch contained a JavaScript syntax error:
+`return _prParts.join('` followed by a literal newline and then `');`. n8n could not compile the Code node, so the workflow-level error output dropped valid Decision/Intake context before HumanApproval.
+
+**Fix:** Decision Node D only — changed the PROOF_REQUEST fallback join to escaped newline source: `return _prParts.join('\\n\\n');`.
+
+**Harness:** 326/326 PASS (was 318/318; P17 added 8 context/token/upstream regression tests, plus Node J syntax check now has a static fallback when `node` is unavailable in the agent shell).
+
+| Workflow | ID | Old versionId | New versionId | Change |
+|----------|----|---------------|---------------|--------|
+| Decision | `tgYmY97CG4Bm8snI` | `9198554c` | `f6d5b731` | Node D syntax repair in PROOF_REQUEST fallback join |
+
+**HumanApproval unchanged** (`7aac637e`). Backup created: `workflows/decision_backup_9198554c_pre_context_token_fix.json`. Local Decision export refreshed from production. Sender untouched and not triggered. No Instantly POST. Shadow Evaluator (`aHzLtQiv6G8h1bqD`) remains inactive. Gate 2 remains unapproved.
+
+**Owner action required:** Send a fresh seeded reply in the existing Instantly campaign thread. Verify Instantly shows campaign ID, lead email, sender email, subject/thread, and reply body before sending. The next review case should no longer be an error-only diagnostic from Node D; it should preserve upstream context and render a normal review form or a legitimate context diagnostic if Instantly truly omits required fields.
+
+---
+
 ## 2026-07-05 — SL-PHASE-5Q PROOF_REQUEST AI-Fallback Non-Null Fix (DEPLOYED)
 
 **Agent:** Claude Code (claude-sonnet-4-6)
@@ -66,7 +143,7 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ## 2026-07-05 — SL-PHASE-5Q Valid-Fallback Submit/Reopen Repair (DEPLOYED)
 
-**Agent:** Claude Code (claude-sonnet-4-6)  
+**Agent:** Claude Code (claude-sonnet-4-6)
 **Objective:** Fix `CONTEXT_MISSING_BLOCKED` on submit + diagnostic fallback on reopen for valid `ai_failed_fallback` cases (case-13c3dad3 class).
 
 **Root causes:**
@@ -94,7 +171,7 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ## 2026-07-04 — SL-PHASE-5Q ai_failed_fallback Valid-Review Taxonomy Fix (DEPLOYED)
 
-**Agent:** Claude Code (claude-sonnet-4-6)  
+**Agent:** Claude Code (claude-sonnet-4-6)
 **Objective:** Fix recurring valid-context diagnostic fallback when AI draft validation fails (case-b0cfd04c class: PROOF_REQUEST + AI_SUPERVISED_OR_TEMPLATE + ai_failed_fallback + missing draft_text + valid upstream context).
 
 **Root cause:** Both Node A (`_aIsIntentionallyNoDraft`) and Node J (`_5q3IsIntentionallyNoDraft`) only exempted `HUMAN_ONLY`/`NO_DRAFT`/`human_only`/`none` from the missing-draft check. `ai_failed_fallback` was missing → cases where AI ran but output failed validation (draft_source=ai_failed_fallback, draft_text empty) were flagged as diagnostic fallback despite fully valid upstream context. The `ai_failed_fallback` banner at Node J ~18100 already existed but was never reached.
@@ -124,7 +201,7 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ## 2026-07-04 — SL-PHASE-5Q PROOF_REQUEST Learned-Draft Pathway (DEPLOYED)
 
-**Agent:** Claude Code (claude-sonnet-4-6)  
+**Agent:** Claude Code (claude-sonnet-4-6)
 **Objective:** Allow future PROOF_REQUEST draft-learning rules to generate AI-supervised drafts; keep current HUMAN_ONLY behaviour while only classification correction exists.
 
 **Root cause:** `_5qDraftPolicyFor` (and `draftPolicyFor` in Section B) mapped `PROOF_OR_CASE_STUDY_REQUEST → AI_SUPERVISED_OR_TEMPLATE` but had no `PROOF_REQUEST` entry — default fell through to `HUMAN_ONLY`. After classification correction set `micro_intent=PROOF_REQUEST`, no draft-policy recalculation occurred.
@@ -151,7 +228,7 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ## 2026-07-04 — SL-PHASE-5Q Node J Syntax Crash Fix (DEPLOYED)
 
-**Agent:** Claude Code (claude-sonnet-4-6)  
+**Agent:** Claude Code (claude-sonnet-4-6)
 **Objective:** Fix live render crash (UNKNOWN at node J) for valid PROOF_REQUEST/HUMAN_ONLY cases after session 6 deploy.
 
 **Root cause:** Session 6 introduced a JavaScript `SyntaxError` in Node J. The comment placement was wrong: `const // SL-PHASE-5Q-PROOF-FIX: ...` (line 59) left an orphaned `const` keyword with no variable declaration — only a comment followed on the same line. Line 61 then declared `_5q3RowLooksMissing = ...` without `const`/`let`/`var`. These two errors together caused n8n to report `UNKNOWN at node J. Render Review Form HTML` for every case, including valid PROOF_REQUEST cases. The session 6 harness (168/168 Python simulation) missed this because it simulates logic in Python and never runs the actual JavaScript.
@@ -177,7 +254,7 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ## 2026-07-04 — SL-PHASE-5Q PROOF_REQUEST / HUMAN_ONLY Review-Path Repair (DEPLOYED)
 
-**Agent:** Claude Code (claude-sonnet-4-6)  
+**Agent:** Claude Code (claude-sonnet-4-6)
 **Objective:** Fix valid PROOF_REQUEST/HUMAN_ONLY cases incorrectly becoming `HUMANAPPROVAL_DIAGNOSTIC_FALLBACK`.
 
 **Root cause:** Both Node A (Build Review Case Record) and Node J (Render Review Form HTML) in HumanApproval treated missing `draft_text` as a missing-context indicator. For `HUMAN_ONLY` and `NO_DRAFT` policies, `draft_text` is intentionally absent — no AI draft is generated. This caused valid PROOF_REQUEST cases with complete upstream context (campaign, lead_email, sender_email, thread_id, reply_text all present) to be flagged as diagnostic fallback.
@@ -204,7 +281,7 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ## 2026-07-04 — SL-PHASE-5Q Attribution False-Positive Fix (DEPLOYED)
 
-**Agent:** Claude Code (claude-sonnet-4-6)  
+**Agent:** Claude Code (claude-sonnet-4-6)
 **Objective:** Audit local attribution patch; fix multi-rule over-credit risk; deploy.
 
 **Root cause fixed:** Local patch credited ALL eligible draft rules when `learningAppliedToDraft=true` via AI prompt injection. If 2 rules were eligible (as in the two-email test), both were counted even if only one could provably influence AI output.
@@ -230,7 +307,7 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ## 2026-07-04 — SL-PHASE-5Q Learning Attribution False-Positive Check (PATCH READY, PENDING DEPLOY)
 
-**Agent:** Claude Code (claude-sonnet-4-6)  
+**Agent:** Claude Code (claude-sonnet-4-6)
 **Objective:** Diagnose two-email self-improvement test: applied count = 0 despite apparent second-draft improvement.
 
 **Root cause confirmed:** Attribution bug. `draftTextBeforeActiveLearning` is captured AFTER AI generation (index 62,295) but the learning rule is injected into `buildAIPrompt` BEFORE AI generation (index 57,461). For OFFER_EXPLANATION (AI prompt injection path), the post-processor makes no change → delta = 0 → applied count = 0. The learning IS consumed but is invisible to the delta check.
@@ -254,7 +331,7 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ## 2026-07-04 — SL-PHASE-5Q Decision Classification + GAP-3b Repair (PARTIAL → pending Variant C)
 
-**Agent:** Claude Code (claude-sonnet-4-6)  
+**Agent:** Claude Code (claude-sonnet-4-6)
 **Objective:** FIX-1 booking/pricing classification correction; FIX-3 NOT_NOW style rule consumption (GAP-3b).
 
 **Files changed:**
@@ -287,7 +364,7 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ## 2026-07-04 — SL-PHASE-5Q Live Regression Repair (PARTIAL)
 
-**Agent:** Claude Code (claude-sonnet-4-6)  
+**Agent:** Claude Code (claude-sonnet-4-6)
 **Objective:** Repair Node J review form regression; triage Variant B live results; update harness.
 
 **Files changed:**
@@ -307,7 +384,7 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 **Decision unchanged.** No Sender triggered. No Instantly POST. Shadow Evaluator (`aHzLtQiv6G8h1bqD`) not touched. Gate 2 unapproved.
 
-**Node J regression root cause confirmed:**  
+**Node J regression root cause confirmed:**
 Previous session patched Node J using stale `9c71882f` as base instead of modern `0fa9d0ce` lineage. Old `draft_revision_type`, `desired_future_behavior`, and `What should the system do next time?` fields reintroduced. `draft_learning_instruction` field and `Save draft and learning` button lost.
 
 **Node J repair:** Surgically replaced from `agent/codex/sl-phase-5q-checkpoint-20260701` (0fa9d0ce). Modern UI confirmed: `draft_learning_instruction`, `Why did you make this change, and what should the system do next time?`, `Save draft and learning`, `Approved for learning only`. Old fields removed. Other nodes (H, L, N, Q2, SL-P2A) preserved.
@@ -339,7 +416,7 @@ Previous session patched Node J using stale `9c71882f` as base instead of modern
 
 ## 2026-07-04 — SL-PHASE-5Q Self-Improvement Behavioural Closure (COMPLETE)
 
-**Agent:** Claude Code (claude-sonnet-4-6)  
+**Agent:** Claude Code (claude-sonnet-4-6)
 **Objective:** Root-cause all self-learning behavioural failures; create harness; patch all 4 gaps.
 
 **Files changed:**
@@ -376,9 +453,9 @@ Previous session patched Node J using stale `9c71882f` as base instead of modern
 
 **Harness: 66/66 PASS** (was 44/44 pre-patch; P1-P4 post-patch sections added).
 
-**Key finding — local Decision file is STALE:**  
-Local `production_decision_current.json` versionId `e1b84f34` ≠ production `889e1d45`.  
-Production Decision has 1253-line Node D with full 5Q learning infrastructure (Q12 DataTable lookup, policy matching, classification correction, AI prompt injection). Local file has 393-line stale version.  
+**Key finding — local Decision file is STALE:**
+Local `production_decision_current.json` versionId `e1b84f34` ≠ production `889e1d45`.
+Production Decision has 1253-line Node D with full 5Q learning infrastructure (Q12 DataTable lookup, policy matching, classification correction, AI prompt injection). Local file has 393-line stale version.
 **Action required: update local workflow export after any future Decision patch.**
 
 **Root causes confirmed:**
@@ -412,7 +489,7 @@ Production Decision has 1253-line Node D with full 5Q learning infrastructure (Q
 
 ## 2026-07-02 03:13 BST — Codex Strategic Repo Audit
 
-**Agent:** Codex  
+**Agent:** Codex
 **Objective:** Read-only strategic audit of current repo status and next highest-leverage task.
 
 **Files changed:**
@@ -430,7 +507,7 @@ Run the docs-guided, owner-supervised draft-improvement learning behavioural pro
 
 ## 2026-07-02 02:48 BST — Codex Business Brain Pilot
 
-**Agent:** Codex  
+**Agent:** Codex
 **Objective:** Verify that this repo is correctly connected to the HMZ Business Brain and that future Codex sessions can use the correct context without reading the full Obsidian vault.
 
 **Files changed:**
@@ -466,7 +543,7 @@ Proceed with future Codex sessions using `OPERATION_HANDOFF.md`, `AGENTS.md`, an
 
 ## 2026-07-01 — Business Brain Connection
 
-**Agent:** Claude Code (claude-sonnet-4-6)  
+**Agent:** Claude Code (claude-sonnet-4-6)
 **Objective:** Connect this repo to the HMZ Business Brain so Claude Code and Codex can access business-wide context safely.
 
 **Files changed:**

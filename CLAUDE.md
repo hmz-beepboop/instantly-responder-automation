@@ -37,6 +37,7 @@ This system supports **HMZ's own initial US B2B validation campaign only**. It i
 Any future use of this system to monitor or respond to replies on behalf of a client (rather than HMZ's own outreach) is **out of scope** until all of the following are separately produced and approved: a client-specific approved knowledge base, a client-specific approved reply policy, a confirmed sender identity and workspace/permissions model for that client, a compliance review for that client's jurisdiction and offer, and controlled testing in that client's environment. None of this exists yet. Do not build toward it implicitly.
 
 ## Source of truth
+- Current execution state / latest handoff: `OPERATION_HANDOFF.md`. This takes precedence over README, older reports, Obsidian notes, and stale local workflow assumptions.
 - Business facts / maturity / strategy: `docs/SOURCE_PRIORITY.md` (Abs Plan → Offer Intake → reconciled approved reply rules → Alpha Offer is future-only).
 - Approved reply policy: `docs/HMZ_APPROVED_REPLY_RULES.md` (reconciled).
 - Approved runtime facts: `docs/HMZ_APPROVED_KNOWLEDGE_BASE.md` only. Anything absent is `UNKNOWN` → escalate.
@@ -46,7 +47,7 @@ Any future use of this system to monitor or respond to replies on behalf of a cl
 1. **Use the lightest reliable interface.** Inspect and edit local workflow JSON first. Prefer deterministic local tests and the n8n CLI/API for bounded import, retrieval and runtime checks. Use n8n MCP only for narrowly targeted schema questions, validation or execution inspection that cannot be done reliably from local files or the CLI. Never retrieve full workflows or full node schemas through MCP when a local export already exists.
 2. **Verify Instantly behaviour** against current official Instantly documentation. Do not invent API fields, endpoints, payloads, or plan tiers.
 3. **Status discipline.** Label important technical facts `VERIFIED` / `PROVISIONAL` / `BLOCKED` / `NOT REQUIRED FOR VALIDATION MVP`. Implementation is blocked where a required capability is unverified.
-4. **Non-production only.** Work only in a confirmed non-production n8n workspace or isolated workflow copies. Never touch production.
+4. **Production-cloud targeting discipline.** The active responder is on the production n8n cloud target above. Run `scripts/assert-hmz-production-target.ps1` before any n8n API call. Do not use local/Docker targets unless the owner explicitly says "local dev" in the current session.
 5. **`DRY_RUN=true` is the default.** No real send leaves the system until `DRY_RUN=false` AND the exact campaign ID is on the `LIVE_CAMPAIGNS` allowlist AND every send gate passes — all with explicit owner approval.
 6. **No secrets in files, exports, or logs.** Credentials live only in n8n credentials / `.env`, never in chat, workflow JSON, or logs.
 7. **No real sends, activations, deletions, or production changes without explicit approval.**
@@ -79,6 +80,8 @@ The five-minute objective does **not** mean every prospect receives a reply with
 18. **Preserve the original business source documents** (`*.docx`). Never edit them. Do not delete the Grill Me brainstorm record.
 19. **Run synthetic validation** before recommending any live test.
 20. **Do not claim controlled-live-test, deployment, or production readiness without evidence.**
+21. **Preserve current handoff state.** Read `OPERATION_HANDOFF.md` first, avoid redoing completed work, and do not regress to stale README/local dry-run assumptions.
+22. **Do not touch Sender/autonomous/Gate 2 without explicit current-session approval.** Sender remains gated, Shadow Evaluator remains inactive unless approved, Gate 2 remains unapproved, and autonomous remains disabled.
 
 ## Notes
 - Use installed n8n workflow / validation / node-config / expression / JavaScript / MCP skills where relevant.
@@ -88,6 +91,7 @@ The five-minute objective does **not** mean every prospect receives a reply with
 - One narrow objective per Claude session.
 - No full-repository scan unless explicitly authorised.
 - Hard cap tool calls when MCP is used.
+- Update `OPERATION_HANDOFF.md` after major context boundaries or state-changing sessions.
 
 ## Business Brain Context
 

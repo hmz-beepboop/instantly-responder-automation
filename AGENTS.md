@@ -8,8 +8,8 @@ This repo is a single-tenant Instantly.ai + n8n reply-handling responder for HMZ
 
 ## Production target
 
-All n8n operations must target **`https://n8n.hmzaiautomation.com/api/v1`** (production cloud).  
-Local/Docker targets are forbidden unless the owner explicitly says "local dev" in the current session.  
+All n8n operations must target **`https://n8n.hmzaiautomation.com/api/v1`** (production cloud).
+Local/Docker targets are forbidden unless the owner explicitly says "local dev" in the current session.
 Run `scripts/assert-hmz-production-target.ps1` before any n8n API call.
 
 ## Safety defaults
@@ -52,6 +52,10 @@ Business-wide context for HMZ may exist at:
 
 ## Session discipline
 
+- Read `OPERATION_HANDOFF.md` first and treat it as the current execution state.
+- Do not rely on stale README/local dry-run assumptions when they conflict with the handoff.
+- Do not redo completed SL-PHASE-5Q repairs unless the current handoff says verification failed.
+- Do not touch Sender, Shadow Evaluator, Gate 2, or autonomous mode without explicit current-session owner approval.
 - One narrow objective per session.
 - Record assumptions in `docs/ASSUMPTIONS_AND_UNKNOWNS.md`; do not silently guess.
 - At major context boundaries, update `OPERATION_HANDOFF.md` with a concise handoff entry.
