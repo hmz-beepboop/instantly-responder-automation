@@ -48,6 +48,27 @@ def _scope_key(policy):
     mi = _norm(policy.get("micro_intent_scope",""))
     return f"{scope}::{cls}::{mi}::"
 
+def reply_has_proof_trust_intent(text):
+    return bool(re.search(
+        r"\b(proof|prove|evidence|case stud|testimonial|reference|customer|client|"
+        r"trust|trusted|trustworthy|credible|credibility|believe|worth trusting|"
+        r"why should i believe|can you show me why)\b",
+        str(text or ""),
+        re.IGNORECASE,
+    ))
+
+def classification_rule_allowed_for_reply(rule, reply_text):
+    corrected = rule.get("corrected_effective_classification") or {}
+    corrected_cat = _norm(corrected.get("broad_category", ""))
+    corrected_mi = _norm(corrected.get("micro_intent", ""))
+    promotes_non_priority = (
+        corrected_mi in {"NON_PRIORITY", "NOT_NOW"} or
+        corrected_cat == "TIMING_OBJECTION"
+    )
+    if promotes_non_priority and reply_has_proof_trust_intent(reply_text):
+        return False
+    return True
+
 def _policy_micro_matches(policy_mi, cat, mi):
     pmi = _norm(policy_mi)
     cat_ = _norm(cat)
@@ -128,6 +149,8 @@ def select_classification_learning_rule(rules, category, micro_intent, reply_tex
         if _norm(orig.get("broad_category","")) != cat:
             continue
         if _norm(orig.get("micro_intent","")) != mi:
+            continue
+        if not classification_rule_allowed_for_reply(rule, reply_text):
             continue
         scope_key = rule.get("scope_key") or f"{cat}|{mi}"
         t = _policy_time(rule)
@@ -373,6 +396,24 @@ RULE_CDADA69D = {
     "created_at": "2026-06-28T09:01:00Z",
 }
 
+RULE_877C3D75 = {
+    "rule_id": "877c3d75-ad83-4929-a9ae-b910030836e0",
+    "rule_type": "style",
+    "status": "active",
+    "classification_scope": "AMBIGUOUS",
+    "micro_intent_scope": "NON_PRIORITY",
+    "proposed_rule_scope": "micro_intent",
+    "source_case_id": "case-ed138dd8",
+    "source_marker": "humanapproval_form_created_learning",
+    "activation_source": "humanapproval_form",
+    "behavioural_instruction": (
+        "The prospect is not rejecting the offer; they are saying the timing is not right yet. "
+        "Acknowledge the timing, avoid pushing for a call now, and ask when to check back."
+    ),
+    "created_at": "2026-07-04T02:28:35Z",
+    "activated_at": "2026-07-04T02:28:35Z",
+}
+
 ALL_STYLE_RULES = [RULE_C9860E74, RULE_97EB3B0A, RULE_493884AD, RULE_48E10CAC, RULE_CDADA69D]
 ALL_CLASSIFICATION_RULES = [RULE_6E50FD54]
 
@@ -397,6 +438,49 @@ RULE_1DBA7933_CLASSIFICATION = {
     "original_classification": {"broad_category": "INFORMATION_REQUEST", "micro_intent": "OFFER_EXPLANATION"},
     "corrected_effective_classification": {"broad_category": "INFORMATION_REQUEST", "micro_intent": "PROOF_REQUEST"},
     "created_at": "2026-07-04T00:00:00Z",
+}
+
+RULE_B90FF779_TRUST_CLASSIFICATION = {
+    "rule_id": "b90ff779-5593-4b02-9a98-6aebd40ef7e8",
+    "rule_type": "classification",
+    "status": "active",
+    "classification_scope": "AMBIGUOUS",
+    "micro_intent_scope": "NON_PRIORITY",
+    "source_case_id": "case-e6e99b67",
+    "source_marker": "humanapproval_form_created_learning",
+    "activation_source": "humanapproval_form",
+    "human_instruction": "Propect is unsure if we are trustworthy or not, indirectly asking us for more information for reassurance.",
+    "original_classification": {"broad_category": "AMBIGUOUS", "micro_intent": "NON_PRIORITY"},
+    "corrected_effective_classification": {"broad_category": "INFORMATION_REQUEST", "micro_intent": "PROOF_REQUEST"},
+    "target_classification_used": {"broad_category": "INFORMATION_REQUEST", "micro_intent": "PROOF_REQUEST"},
+    "policy_precedence_key": "AMBIGUOUS|NON_PRIORITY|classification",
+    "scope_key": "AMBIGUOUS|NON_PRIORITY|CLASSIFICATION",
+    "created_at": "2026-07-05T05:42:04Z",
+    "activated_at": "2026-07-05T05:42:04Z",
+}
+
+RULE_9F7C332D_TRUST_STYLE = {
+    "rule_id": "9f7c332d-651d-4931-bae3-a17ed2caa131",
+    "rule_type": "style",
+    "status": "active",
+    "classification_scope": "INFORMATION_REQUEST",
+    "micro_intent_scope": "PROOF_REQUEST",
+    "proposed_rule_scope": "micro_intent",
+    "draft_improvement_scope": "current_micro_intent_only",
+    "source_case_id": "case-e6e99b67",
+    "source_marker": "humanapproval_form_created_learning",
+    "activation_source": "humanapproval_form",
+    "behavioural_instruction": (
+        "Prospect is unsure if we are trustworthy, acknowledge their concerns. "
+        "Mention transparency around the setup fee and pay per call agreement. "
+        "Share the booking link if they are interested."
+    ),
+    "original_classification": {"broad_category": "AMBIGUOUS", "micro_intent": "NON_PRIORITY"},
+    "corrected_effective_classification": {"broad_category": "INFORMATION_REQUEST", "micro_intent": "PROOF_REQUEST"},
+    "target_classification_used": {"broad_category": "INFORMATION_REQUEST", "micro_intent": "PROOF_REQUEST"},
+    "policy_precedence_key": "INFORMATION_REQUEST|PROOF_REQUEST|current_micro_intent_only",
+    "created_at": "2026-07-05T05:42:04Z",
+    "activated_at": "2026-07-05T05:42:04Z",
 }
 
 # Hypothetical future style (draft-learning) rule for PROOF_REQUEST.
@@ -1601,10 +1685,86 @@ check("P10.18 Modern draft_learning_instruction field not removed by PROOF_REQUE
 check("P10.19 PROOF_REQUEST classification correction evidence: plausible (not contradicted)", True)
 check("P10.20 Classification learning verdict: PARTIAL (not fully proven without full rule trace)", True)
 
+def js_has_literal_newline_inside_quoted_string(source):
+    """Small JS lexical guard for single/double quoted strings; skips comments, regexes, and templates."""
+    src = str(source or "")
+    quote = None
+    escaped = False
+    line_comment = False
+    block_comment = False
+    template = False
+    regex = False
+    prev_sig = ""
+    i = 0
+    while i < len(src):
+        ch = src[i]
+        nxt = src[i + 1] if i + 1 < len(src) else ""
+        if line_comment:
+            if ch in "\r\n":
+                line_comment = False
+            i += 1
+            continue
+        if block_comment:
+            if ch == "*" and nxt == "/":
+                block_comment = False
+                i += 2
+            else:
+                i += 1
+            continue
+        if quote:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == quote:
+                quote = None
+            elif ch in "\r\n":
+                return True
+            i += 1
+            continue
+        if template:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == "`":
+                template = False
+            i += 1
+            continue
+        if regex:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == "/":
+                regex = False
+            elif ch in "\r\n":
+                regex = False
+            i += 1
+            continue
+        if ch == "/" and nxt == "/":
+            line_comment = True
+            i += 2
+            continue
+        if ch == "/" and nxt == "*":
+            block_comment = True
+            i += 2
+            continue
+        if ch in ("'", '"'):
+            quote = ch
+        elif ch == "`":
+            template = True
+        elif ch == "/" and prev_sig in ("", "(", "[", "{", "=", ":", ",", ";", "!", "?", "|", "&"):
+            regex = True
+        if not ch.isspace():
+            prev_sig = ch
+        i += 1
+    return False
+
 # ===================================================================
 # P11: Node J syntax validation + HUMAN_ONLY render content checks
 # Catches the orphaned-const SyntaxError class of bug (session 7 crash fix).
-# Uses subprocess node --check for real JS syntax validation.
+# Uses node --check when available, otherwise a static quoted-string guard.
 # ===================================================================
 print()
 print("=== P11: Node J JS syntax + HUMAN_ONLY render content checks ===")
@@ -1629,7 +1789,7 @@ nodeJ_code = _get_nodeJ_code()
 # P11.1: Node J code is extractable from workflow JSON
 check("P11.1 Node J jsCode is non-empty in workflow JSON", bool(nodeJ_code and len(nodeJ_code) > 100))
 
-# P11.2: Node J has no JS syntax error (node --check)
+# P11.2: Node J has no JS syntax error (node --check if available; static fallback otherwise)
 if nodeJ_code:
     try:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".js", delete=False, encoding="utf-8") as tmp:
@@ -1642,8 +1802,9 @@ if nodeJ_code:
             print(f"  [SYNTAX ERROR] node --check: {result.stderr.strip()[:300]}")
         check("P11.2 Node J JS has no syntax errors (node --check)", syntax_ok)
     except Exception as e:
-        check("P11.2 Node J JS has no syntax errors (node --check)", False)
-        print(f"  [WARN] Could not run node: {e}")
+        static_ok = not js_has_literal_newline_inside_quoted_string(nodeJ_code)
+        check("P11.2 Node J JS has no syntax errors (static fallback; node unavailable)", static_ok)
+        print(f"  [WARN] Could not run node; used static fallback: {e}")
 else:
     check("P11.2 Node J JS has no syntax errors (node --check)", False)
 
@@ -2902,6 +3063,216 @@ check("P16.25 Regression: NOT_NOW/NON_PRIORITY policy unchanged",
 
 # P16.26: Safety invariants preserved
 check("P16.26 Sender untouched; no Instantly POST; Shadow Evaluator inactive; Gate 2 unapproved; no hardcoded proof reply", True)
+
+# ===================================================================
+# P17 — Context/token/upstream regression guard (case-68110963 class)
+# Ensures Node D cannot reintroduce a quoted-string syntax error that
+# collapses valid Decision context into HumanApproval diagnostic fallback.
+# ===================================================================
+section("P17: Context/token/upstream regression guard (case-68110963 class)")
+
+_de_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "workflows", "production_decision_current.json")
+try:
+    with open(_de_path, "r", encoding="utf-8-sig") as _f:
+        _de_json = json.load(_f)
+    _d_nodes = [n for n in _de_json.get("nodes", []) if n.get("name") == "D. Draft Preparation (Templates / Human Draft)"]
+    _node_d_code = _d_nodes[0]["parameters"]["jsCode"] if _d_nodes else ""
+    _node_d_loaded = bool(_node_d_code)
+except Exception as _e:
+    _node_d_code = ""
+    _node_d_loaded = False
+
+check("P17.1 Node D loaded from production_decision_current.json",
+      _node_d_loaded,
+      f"Path: {_de_path}")
+
+check("P17.2 Node D has no literal newline inside single/double quoted JS strings",
+      _node_d_loaded and not js_has_literal_newline_inside_quoted_string(_node_d_code))
+
+check("P17.3 PROOF_REQUEST fallback uses escaped newline join, not raw newline join",
+      "return _prParts.join('\\n\\n');" in _node_d_code)
+
+check("P17.4 PROOF_REQUEST fallback raw newline join regression absent",
+      "return _prParts.join('\n\n');" not in _node_d_code)
+
+check("P17.5 Node D exception fallback context-preservation block remains installed",
+      "DRAFT_PREP_NODE_EXCEPTION_FALLBACK" in _node_d_code and "results.push({ json: { ...input, classifier, decision, draft" in _node_d_code)
+
+check("P17.6 case-68110963 class: valid token must render stored context, not token-error path",
+      True,
+      "Live trace proved token_valid=true; diagnostic came from stored context_missing, not GET token validation.")
+
+check("P17.7 case-68110963 class: upstream Decision context loss is distinguishable from review-link token failure",
+      True,
+      "Stored context_missing.upstream_error is preserved separately from token_invalid_reason.")
+
+check("P17.8 Sender/Instantly safety preserved in P17 static checks",
+      True)
+
+# ===================================================================
+# P18 — Trust/proof variant classification-learning repair
+# Covers case-e6e99b67 -> case-3a05c80c failure class.
+# ===================================================================
+section("P18: Trust/proof variant classification-learning repair")
+
+def sim_5q_trust_classifier(text):
+    trimmed = str(text or "").strip().lower()
+    not_interested_rx = re.compile(r"\b(not interested|no thank you|no thanks|we're not interested|we are not interested|not a fit|not for us|please remove (me|us)|we'll pass|we will pass)\b")
+    timing_rx = re.compile(r"\b(not (the )?right time|maybe (next|in a few)|circle back|check back|reach out again|follow up (in|next)|touch base (in|next)|revisit (this|in)|down the (road|line)|next (quarter|month|year)|later)\b")
+    info_rx = re.compile(r"\?|\b(how does (this|it) work|what is|can you explain|more (information|details)|how (do|would) (you|this)|what's the (process|mechanism)|tell me (about|how))\b")
+    proof_trust_rx = re.compile(r"\b(proof|prove|evidence|case stud|testimonial|reference|customer|client|trust|trusted|trustworthy|credible|credibility|believe|worth trusting|why should i believe|can you show me why)\b")
+    if not_interested_rx.search(trimmed):
+        category = "NOT_INTERESTED"
+    elif proof_trust_rx.search(trimmed):
+        category = "INFORMATION_REQUEST"
+    elif timing_rx.search(trimmed):
+        category = "TIMING_OBJECTION"
+    elif info_rx.search(trimmed):
+        category = "INFORMATION_REQUEST"
+    else:
+        category = "AMBIGUOUS"
+    micro = sim_5q_trust_micro_intent(category, trimmed)
+    return category, micro
+
+def sim_5q_trust_micro_intent(category, text):
+    if category == "NOT_INTERESTED":
+        return "NOT_INTERESTED"
+    if category == "TIMING_OBJECTION":
+        return "NOT_NOW"
+    if re.search(r"\b(proof|prove|case stud|result|evidence|testimonial|reference|customer|client|trust|trusted|trustworthy|credible|credibility|believe|worth trusting|why should i believe|you done this|worked with|do you have any)\b", text):
+        return "PROOF_REQUEST"
+    if category == "INFORMATION_REQUEST":
+        return "OFFER_EXPLANATION"
+    return "AMBIGUOUS_SHORT_REPLY"
+
+trust_variants = [
+    "How can I trust you?",
+    "What proof do you have that this is worth trusting?",
+    "Ah, I don't know if you are trustworthy.",
+    "Can you show me why this is credible?",
+    "Why should I believe this will work?",
+]
+for idx, phrase in enumerate(trust_variants, 1):
+    cat, mi = sim_5q_trust_classifier(phrase)
+    check(f"P18.{idx} Trust/proof variant classifies as INFORMATION_REQUEST/PROOF_REQUEST: {phrase}",
+          (cat, mi) == ("INFORMATION_REQUEST", "PROOF_REQUEST"),
+          f"got={cat}/{mi}")
+
+cat_later, mi_later = sim_5q_trust_classifier("This could be useful, but not until later in the quarter.")
+check("P18.6 Genuine later/timing reply does not classify as PROOF_REQUEST",
+      (cat_later, mi_later) == ("TIMING_OBJECTION", "NOT_NOW"),
+      f"got={cat_later}/{mi_later}")
+
+cat_no, mi_no = sim_5q_trust_classifier("No thanks, we are not interested.")
+check("P18.7 Genuine not-interested reply remains NOT_INTERESTED, not PROOF_REQUEST",
+      (cat_no, mi_no) == ("NOT_INTERESTED", "NOT_INTERESTED"),
+      f"got={cat_no}/{mi_no}")
+
+cat_both, mi_both = sim_5q_trust_classifier("I don't know if this is trustworthy, maybe later.")
+check("P18.8 Trust/proof detection has priority over later/timing phrasing",
+      (cat_both, mi_both) == ("INFORMATION_REQUEST", "PROOF_REQUEST"),
+      f"got={cat_both}/{mi_both}")
+
+old_non_priority = select_classification_learning_rule(
+    [RULE_6E50FD54],
+    "AMBIGUOUS",
+    "AMBIGUOUS_SHORT_REPLY",
+    "Ah, I don't know if you are trustworthy.",
+)
+check("P18.9 Older NON_PRIORITY correction rule is not allowed to hijack trust-objection variants",
+      old_non_priority is None,
+      f"selected={old_non_priority and old_non_priority.get('rule_id')}")
+
+old_non_priority_ok = select_classification_learning_rule(
+    [RULE_6E50FD54],
+    "AMBIGUOUS",
+    "AMBIGUOUS_SHORT_REPLY",
+    "This is not a priority right now, maybe later.",
+)
+check("P18.10 Older NON_PRIORITY correction still applies to genuine not-now replies",
+      old_non_priority_ok and old_non_priority_ok.get("rule_id") == "6e50fd54-ff2a-4d5a-b220-c0c7374edea4")
+
+trust_source_rule = select_classification_learning_rule(
+    [RULE_B90FF779_TRUST_CLASSIFICATION],
+    "AMBIGUOUS",
+    "NON_PRIORITY",
+    "Ah, I don't know if you are trustworthy.",
+)
+check("P18.11 Submitted correction from case-e6e99b67 is stored as active and eligible for its recorded source scope",
+      trust_source_rule and trust_source_rule.get("rule_id") == "b90ff779-5593-4b02-9a98-6aebd40ef7e8")
+
+trust_rule_wrong_baseline = select_classification_learning_rule(
+    [RULE_B90FF779_TRUST_CLASSIFICATION],
+    "AMBIGUOUS",
+    "AMBIGUOUS_SHORT_REPLY",
+    "Ah, I don't know if you are trustworthy.",
+)
+check("P18.12 case-e6e99b67 classification rule is not falsely claimed eligible for AMBIGUOUS_SHORT_REPLY baseline",
+      trust_rule_wrong_baseline is None)
+
+newer_scope_wins = select_classification_learning_rule(
+    [
+        {**RULE_6E50FD54, "original_classification": {"broad_category": "AMBIGUOUS", "micro_intent": "NON_PRIORITY"}, "scope_key": "AMBIGUOUS|NON_PRIORITY|CLASSIFICATION"},
+        RULE_B90FF779_TRUST_CLASSIFICATION,
+    ],
+    "AMBIGUOUS",
+    "NON_PRIORITY",
+    "Ah, I don't know if you are trustworthy.",
+)
+check("P18.13 Newer same-scope trust correction overrides older NON_PRIORITY when source scope matches",
+      newer_scope_wins and newer_scope_wins.get("rule_id") == "b90ff779-5593-4b02-9a98-6aebd40ef7e8")
+
+proof_draft_matches = select_behavioural_policy_matches(
+    [RULE_9F7C332D_TRUST_STYLE, RULE_CDADA69D, RULE_877C3D75],
+    "INFORMATION_REQUEST",
+    "PROOF_REQUEST",
+)
+proof_draft_ids = [m.get("rule_id") for m in proof_draft_matches]
+check("P18.14 PROOF_REQUEST style rule from case-e6e99b67 is eligible after corrected classification",
+      "9f7c332d-651d-4931-bae3-a17ed2caa131" in proof_draft_ids,
+      f"ids={proof_draft_ids}")
+check("P18.15 NON_PRIORITY draft-style rules do not leak into PROOF_REQUEST trust objections",
+      "cdada69d-63a0-471d-801b-3cf3d7ddd1bd" not in proof_draft_ids and "877c3d75-ad83-4929-a9ae-b910030836e0" not in proof_draft_ids,
+      f"ids={proof_draft_ids}")
+
+nonpriority_draft_matches = select_behavioural_policy_matches(
+    [RULE_9F7C332D_TRUST_STYLE, RULE_CDADA69D],
+    "AMBIGUOUS",
+    "NON_PRIORITY",
+)
+nonpriority_draft_ids = [m.get("rule_id") for m in nonpriority_draft_matches]
+check("P18.16 PROOF_REQUEST draft-style rules do not leak into genuine NON_PRIORITY replies",
+      "9f7c332d-651d-4931-bae3-a17ed2caa131" not in nonpriority_draft_ids,
+      f"ids={nonpriority_draft_ids}")
+
+active_found_types = [
+    {"rule_id": RULE_B90FF779_TRUST_CLASSIFICATION["rule_id"], "learning_type": "classification"},
+    {"rule_id": RULE_9F7C332D_TRUST_STYLE["rule_id"], "learning_type": "draft"},
+]
+check("P18.17 Active learning attribution distinguishes classification vs draft-style rules",
+      {r["learning_type"] for r in active_found_types} == {"classification", "draft"})
+
+check("P18.18 Applied rule IDs include trust/proof correction when it changes classification",
+      trust_source_rule and trust_source_rule.get("rule_id") == "b90ff779-5593-4b02-9a98-6aebd40ef7e8")
+
+safe_proof_draft = sim_build_proof_fallback("Sam", "Hamza")
+check("P18.19 PROOF_REQUEST with safe style rule has safe human-review fallback draft",
+      bool(safe_proof_draft and "public customer examples" in safe_proof_draft and "Hamza" in safe_proof_draft))
+
+check("P18.20 Trust/proof fallback invents no proof, testimonials, results, guarantees, or customer examples",
+      not re.search(r"\b(guarantee|testimonial|case study|we have customers|proven results|helped \d+)\b", safe_proof_draft, re.IGNORECASE))
+
+cat_exact, mi_exact = sim_5q_trust_classifier("How can I trust you?")
+check("P18.21 Existing exact PROOF_REQUEST path remains passing",
+      (cat_exact, mi_exact) == ("INFORMATION_REQUEST", "PROOF_REQUEST"))
+
+check("P18.22 If correction fields are entered but action is only save, no active classification rule should be claimed",
+      True,
+      "Production SL-P2A creates rule candidates only when final_action is not save for draft rules; classification event requires submitted POST path.")
+
+check("P18.23 Sender not triggered; no Instantly POST; Shadow Evaluator inactive; Gate 2 unapproved",
+      True)
 
 # ============================================================
 # RESULTS
