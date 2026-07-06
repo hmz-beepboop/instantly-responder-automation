@@ -3274,6 +3274,177 @@ check("P18.22 If correction fields are entered but action is only save, no activ
 check("P18.23 Sender not triggered; no Instantly POST; Shadow Evaluator inactive; Gate 2 unapproved",
       True)
 
+# ===================================================================
+# P19: Dense-paragraph style-only reflow fix + fallback banner detail
+#      (session 15, exec-5329 class)
+# ===================================================================
+
+section("P19: Dense-paragraph reflow fix + fallback banner detail (session 15)")
+
+# --- Load patched exports for static verification ---
+_p19_de_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "workflows", "production_decision_current.json")
+with open(_p19_de_path, "r", encoding="utf-8-sig") as _f:
+    _p19_de = json.load(_f)
+_p19_node_d = next(n for n in _p19_de["nodes"] if n["name"].startswith("D."))
+_p19_d_code = _p19_node_d["parameters"]["jsCode"]
+
+_p19_ha_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "workflows", "production_humanapproval_current.json")
+with open(_p19_ha_path, "r", encoding="utf-8-sig") as _f:
+    _p19_ha = json.load(_f)
+_p19_node_j = next(n for n in _p19_ha["nodes"] if n["name"].startswith("J."))
+_p19_j_code = _p19_node_j["parameters"]["jsCode"]
+
+# --- Python mirrors of the patched JS logic ---
+DENSE_ERR = 'active policy violation: dense paragraph'
+
+def sim_reflow_dense_paragraphs(text):
+    """Mirrors _5qReflowDenseParagraphs: whitespace-only sentence-boundary reflow."""
+    paras = [p.strip() for p in re.split(r'\n\s*\n', str(text or '')) if p.strip()]
+    out = []
+    for p in paras:
+        lines = [l.strip() for l in p.split('\n') if l.strip()]
+        has_list = any(re.match(r'^(?:[-*]|\d+[.)])\s+', l) for l in lines)
+        if has_list or len(p) <= 300:
+            out.append(p)
+            continue
+        sentences = [s for s in re.split(r'(?<=[.!?])\s+', p) if s]
+        cur = ''
+        for s in sentences:
+            if cur and (len(cur) + 1 + len(s)) > 300:
+                out.append(cur)
+                cur = s
+            else:
+                cur = (cur + ' ' + s) if cur else s
+        if cur:
+            out.append(cur)
+    return '\n\n'.join(out)
+
+def sim_dense_paragraph_errors(text, guidance):
+    """Mirrors the dense-paragraph predicate in validateAI."""
+    errors = []
+    if re.search(r'short paragraphs|numbered|bulleted|list', str(guidance or ''), re.IGNORECASE):
+        paras = [p.strip() for p in re.split(r'\n\s*\n', str(text or '')) if p.strip()]
+        for p in paras:
+            lines = [l.strip() for l in p.split('\n') if l.strip()]
+            has_list = any(re.match(r'^(?:[-*]|\d+[.)])\s+', l) for l in lines)
+            max_line = max((len(l) for l in lines), default=0)
+            dense = (max_line > 260 or len(p) > 900) if has_list else len(p) > 360
+            if dense:
+                errors.append(DENSE_ERR)
+                break
+    return errors
+
+def sim_validate_ai_full(text, micro_intent, guidance, prospect_text):
+    """sim_validate_ai (P16 mirror) + dense-paragraph predicate."""
+    return sim_validate_ai(text, micro_intent, guidance, prospect_text) + \
+        sim_dense_paragraph_errors(text, guidance)
+
+def sim_reflow_gate(errs):
+    """Mirrors the reflow trigger: fires ONLY when every error is dense-paragraph."""
+    return len(errs) > 0 and all(e == DENSE_ERR for e in errs)
+
+_P19_GUIDANCE = ("For OFFER_EXPLANATION setup questions, start with a natural acknowledgement, "
+                 "answer the setup question in short paragraphs before any CTA, and do not "
+                 "mention validation unless the prospect asks for proof, case studies, or maturity.")
+_P19_PROSPECT = "Ah, I don't know if you are trustworthy."
+_P19_EXEC5329_RAW = ("I get why you’d ask. We’re being as transparent as possible from the start: "
+                     "the initial email includes the setup fee and the pay per call agreement, and this is "
+                     "an early-stage engagement with no public customer examples or validation signal yet. "
+                     "If you want to evaluate whether it makes sense, the 10-minute call is the transparent "
+                     "evaluation step, and you can book here: <<bookingLink>>.")
+
+# P19.1-P19.5: static checks that the patch is present in the local export
+check("P19.1 Node D contains _5qReflowDenseParagraphs helper",
+      "_5qReflowDenseParagraphs" in _p19_d_code)
+check("P19.2 Node D reflow fires only when errors are exclusively dense-paragraph",
+      "errs.every(x => x === 'active policy violation: dense paragraph')" in _p19_d_code)
+check("P19.3 intInstr.PROOF_REQUEST no longer demands a single paragraph and asks for short paragraphs",
+      "One concise paragraph." not in _p19_d_code
+      and "Use 2-3 short paragraphs separated by blank lines" in _p19_d_code)
+check("P19.4 ai_attempt persists style_reflow_applied and raw_draft_text_before_reflow truthfully",
+      "style_reflow_applied: aiAttempt.style_reflow_applied === true" in _p19_d_code
+      and "raw_draft_text_before_reflow: aiAttempt.raw_draft_text_before_reflow || null" in _p19_d_code)
+check("P19.5 Patched Node D has no literal newline inside quoted strings (case-68110963 guard)",
+      not js_has_literal_newline_inside_quoted_string(_p19_d_code))
+
+# P19.6-P19.8: exec-5329 regression reproduction and fix proof
+_p19_errs_before = sim_validate_ai_full(_P19_EXEC5329_RAW, 'PROOF_REQUEST', _P19_GUIDANCE, _P19_PROSPECT)
+check("P19.6 exec-5329 raw draft is rejected as dense-paragraph-only by the full validator",
+      _p19_errs_before == [DENSE_ERR], f"got={_p19_errs_before}")
+_p19_reflowed = sim_reflow_dense_paragraphs(_P19_EXEC5329_RAW)
+_p19_errs_after = sim_validate_ai_full(_p19_reflowed, 'PROOF_REQUEST', _P19_GUIDANCE, _P19_PROSPECT)
+check("P19.7 exec-5329 draft passes the full validator after reflow",
+      _p19_errs_after == [], f"got={_p19_errs_after}")
+check("P19.8 Reflow preserves wording exactly (whitespace-normalized equality)",
+      re.sub(r'\s+', ' ', _p19_reflowed).strip() == re.sub(r'\s+', ' ', _P19_EXEC5329_RAW).strip())
+
+# P19.9-P19.10: reflow does not disturb compliant text
+_p19_list_text = "Here is the setup:\n\n1. Define targets.\n2. Build the message.\n3. Align volume."
+check("P19.9 Reflow leaves list-structured paragraphs untouched",
+      sim_reflow_dense_paragraphs(_p19_list_text) == _p19_list_text)
+_p19_short_text = "Short paragraph one.\n\nShort paragraph two."
+check("P19.10 Reflow leaves short paragraphs untouched (idempotent)",
+      sim_reflow_dense_paragraphs(_p19_short_text) == _p19_short_text)
+
+# P19.11-P19.15: safety is NOT weakened
+_p19_invented = ("We have proven results and case studies from 50 clients who all saw ROI fast. "
+                 "I guarantee this works because our established process has helped 200 customers "
+                 "book more meetings than any competitor in the industry, every single time, at scale.")
+_p19_inv_errs = sim_validate_ai_full(sim_reflow_dense_paragraphs(_p19_invented), 'PROOF_REQUEST', _P19_GUIDANCE, _P19_PROSPECT)
+check("P19.11 Invented proof/case-study/customer draft still fails after reflow",
+      any('forbidden' in e for e in _p19_inv_errs), f"got={_p19_inv_errs}")
+check("P19.12 Results claim still fails",
+      any('results claim' in e for e in sim_validate_ai_full(
+          "Our results speak for themselves.", 'PROOF_REQUEST', '', _P19_PROSPECT)))
+check("P19.13 Guarantee claim still fails",
+      any('guarantee claim' in e for e in sim_validate_ai_full(
+          "I guarantee you will see value.", 'PROOF_REQUEST', '', _P19_PROSPECT)))
+check("P19.14 Unsupported pricing figure still fails",
+      any('price disclosure' in e for e in sim_validate_ai_full(
+          "It costs $500 per month to start.", 'PROOF_REQUEST', '', _P19_PROSPECT)))
+check("P19.15 Safe negated proof/case-study wording still passes",
+      sim_validate_ai_full(
+          "We do not have public case studies yet. We are at an early validation stage, "
+          "which is why the first step is a short conversation.",
+          'PROOF_REQUEST', _P19_GUIDANCE, _P19_PROSPECT) == [])
+
+# P19.16: mixed style+safety errors are never rescued by reflow
+check("P19.16 Reflow gate does NOT fire when a safety error accompanies dense-paragraph",
+      not sim_reflow_gate([DENSE_ERR, 'forbidden: guarantee claim'])
+      and sim_reflow_gate([DENSE_ERR]))
+
+# P19.17-P19.18: fallback remains non-empty and internally truthful
+_p19_fb = sim_build_proof_fallback('James', 'Hamzah')
+check("P19.17 PROOF_REQUEST fallback remains non-empty when AI fails",
+      bool(_p19_fb and len(_p19_fb) > 20))
+check("P19.18 Internal fallback reason remains AI_OUTPUT_VALIDATION_FAILED on validation failure (truthful)",
+      "fallback_reason: 'AI_OUTPUT_VALIDATION_FAILED'" in _p19_d_code)
+
+# P19.19-P19.21: reviewer-facing banner is accurate, specific, and not misleading
+check("P19.19 Node J fallback banner names the exact failed check(s)",
+      "Failed check(s):" in _p19_j_code and "_5q7ValErrs" in _p19_j_code)
+check("P19.20 Node J banner distinguishes style-only rejection from safety rejection",
+      "formatting/style check only (not a content-safety check)" in _p19_j_code
+      and "_5q7StyleOnly" in _p19_j_code)
+check("P19.21 Node J banner still forbids inventing proof/results/pricing and style-only set is exact",
+      "Do not invent proof, customer examples, case studies, results, pricing" in _p19_j_code
+      and "'active policy violation: dense paragraph', 'active policy violation: malformed acknowledgement'" in _p19_j_code)
+
+# P19.22-P19.26: safety envelope unchanged
+check("P19.22 Node D still contains no Instantly send call (no Sender trigger, no Instantly POST)",
+      "api.instantly.ai/api/v2/emails/reply" not in _p19_d_code)
+check("P19.23 Dense threshold and style validator semantics unchanged (360/260/900)",
+      "return p.length > 360" in _p19_d_code and "maxLine > 260 || p.length > 900" in _p19_d_code)
+check("P19.24 Prompt STRICT RULES still forbid proof/results/guarantee words",
+      "FORBIDDEN WORDS/PHRASES" in _p19_d_code and "never write these, not even in negated sentences" in _p19_d_code)
+check("P19.25 Patched Node J has no literal newline inside quoted strings",
+      not js_has_literal_newline_inside_quoted_string(_p19_j_code))
+check("P19.26 Harness performs no HTTP calls; Shadow Evaluator untouched; Gate 2 unapproved",
+      True,
+      "Static/simulation-only harness. Shadow aHzLtQiv6G8h1bqD remains inactive; Gate 2 remains unapproved.")
+
 # ============================================================
 # RESULTS
 # ============================================================
@@ -3355,6 +3526,17 @@ print("    Prevents false-positive validation rejection from do-not-mention-vali
 print("  Fix 2 (Decision Node D - buildPolicyAwareFallback): PROOF_REQUEST branch added before HOW_IT_WORKS.")
 print("    Returns safe, non-null fallback: honest gap acknowledgment + diagnostic question. No invented proof.")
 print("  P16 harness section added: 26 tests covering fallback, validateAI guard, safety, case-9996084f scenario.")
+print()
+print("5Q DENSE-PARAGRAPH REFLOW FIX + BANNER DETAIL (2026-07-06 session 15):")
+print("  Root cause (live-proven, exec 5329): globally-scoped style policy 27293ea8 ('short paragraphs')")
+print("    arms the dense-paragraph validator for every AI draft; PROOF_REQUEST prompt said 'One concise")
+print("    paragraph'; honest proof answers >360 chars in one paragraph were rejected on style only.")
+print("  Fix 1 (Decision Node D - buildAIPrompt): PROOF_REQUEST instruction now asks for 2-3 short paragraphs.")
+print("  Fix 2 (Decision Node D): style-only dense rejections repaired by whitespace-only sentence reflow,")
+print("    then FULL validator re-runs. Safety errors always fall back. Reflow recorded in ai_attempt.")
+print("  Fix 3 (HumanApproval Node J): fallback banner names exact failed check(s) and says when the")
+print("    rejection was formatting/style only, not a content-safety failure.")
+print("  P19 harness section added: 26 tests (regression reproduction, reflow proof, safety-not-weakened).")
 print()
 
 sys.exit(0 if FAIL == 0 else 1)

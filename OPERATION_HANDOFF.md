@@ -4,6 +4,46 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ---
 
+## 2026-07-06 — SL-PHASE-5Q Session 15: Dense-Paragraph Fallback Fix + Fault Ledger + Scale Gates (DEPLOYED)
+
+**Agent:** Claude Code (Fable 5)
+**Objective:** Trace and repair the remaining blocker (`AI_OUTPUT_VALIDATION_FAILED` / safe-fallback banner too frequent on proof/trust cases); create the complete fault ledger and scale-readiness gates; preserve checkpoint state.
+
+**Checkpoint status resolved:** The 2026-07-05 handoff entry said the push was blocked; verified via `git ls-remote` that branch `codex/5q-context-token-forensic-20260705` and tag `sl-phase-5q-largely-working-20260705` ARE on origin. The uncommitted working-tree changes from sessions 13-14 (afe08974 export, 349-test harness, reports, backups) were committed (`dec5c2f`) and pushed before any new work.
+
+**Blocker root cause (live-proven, exec 5329):** AI provider returned a fully safe, honest, correctly-negated PROOF_REQUEST draft; the ONLY validation error was `active policy violation: dense paragraph` — a style predicate, not a safety predicate. Cause chain: globally-scoped owner style policy `27293ea8` ("short paragraphs", scope `all_ai_drafts`) arms the dense-paragraph check (>360 chars/paragraph) for every AI draft, while `intInstr.PROOF_REQUEST` demanded "One concise paragraph" — the prompt invited exactly the shape the validator rejects. Boundary confirmed: exec 5286 (~336 chars) passed, exec 5329 (~386 chars) failed. The older proof-mention false positive (execs 4976/4980) was confirmed already fixed by session 12 (`asksProof` guard) — current executions 5286/5296 pass it.
+
+**Fixes deployed:**
+- Decision Node D `buildAIPrompt`: PROOF_REQUEST instruction now asks for 2-3 short paragraphs (each <300 chars), CTA in its own final paragraph.
+- Decision Node D: new `_5qReflowDenseParagraphs` — when validation errors are EXCLUSIVELY dense-paragraph, the draft is reflowed at sentence boundaries (whitespace-only; wording never altered) and the FULL validator re-runs. Any safety error still falls back unchanged. Smoke-tested in Node.js against the exact exec-5329 draft: rejected before, passes after, wording preserved, invented-proof drafts still fail.
+- Decision Node D: `ai_attempt` now records `style_reflow_applied` and `raw_draft_text_before_reflow` (truthful metadata).
+- HumanApproval Node J: ai_failed_fallback banner now names the exact failed check(s) and states when the rejection was a formatting/style check only, not a content-safety check. Safety wording ("Do not invent proof...") retained.
+- Proof safety NOT weakened: invented proof/case studies/testimonials/results/guarantees/pricing still hard-fail (harness P19.11-P19.16).
+
+**Harness:** 375/375 PASS (was 349/349; P19 added 26 tests: exec-5329 regression reproduction, reflow fix proof, wording preservation, safety-not-weakened, banner accuracy, JS literal-newline guards on both patched nodes, no-Instantly-POST check). Re-run green against production-refreshed exports.
+
+| Workflow | ID | Old versionId | New versionId | Change |
+|----------|----|---------------|---------------|--------|
+| Decision | `tgYmY97CG4Bm8snI` | `afe08974` | `4474c96a` | PROOF_REQUEST prompt paragraphs + dense-reflow rescue + truthful reflow metadata |
+| HumanApproval | `9aPrt92jFhoYFxbs` | `7aac637e` | `0054f20b` | Fallback banner names failed checks; style-only vs safety distinction |
+
+**Backups:** `workflows/decision_backup_afe08974_pre_dense_reflow_fix.json`, `workflows/humanapproval_backup_7aac637e_pre_fallback_banner_detail.json`. Local exports refreshed from production post-deploy (versionIds verified matching). Both workflows remain active. Production guard passed before every API call. Sender untouched and not triggered. No Instantly POST. Shadow Evaluator (`aHzLtQiv6G8h1bqD`) confirmed inactive via API post-deploy. Gate 2 unapproved. Autonomous disabled. No live email tests run.
+
+**New governance docs:**
+- `docs/INSTANTLY_RESPONDER_FAULT_LEDGER_AND_SCALE_READINESS.md` — 15 fault classes, honest statuses, evidence, false-positive risks, ranked open faults. Notable open item 10(c): FORBIDDEN_AI negation-window gaps (`can't/cannot/won't` missing; post-keyword negation not exempted) — deliberately NOT patched (no live occurrence; do not patch without a live case).
+- `docs/SCALE_READY_ACCEPTANCE_GATES.md` — gates S1 (supervised live) through S5 (multi-campaign). S1 effectively open pending fresh trust retest; S3-S5 not met by design; autonomous remains NOT APPROVED.
+- New scripts: `scripts/SL-PHASE-5Q-apply-dense-reflow-fix.py`, `scripts/SL-PHASE-5Q-apply-fallback-banner-detail.py`, `scripts/SL-PHASE-5Q-deploy-workflow-update.py` (reusable PUT deploy helper).
+
+**Owner action required (manual live test matrix):**
+1. Send a fresh trust/proof reply (e.g. `Ah, I don't know if you are trustworthy.`). Expect: `INFORMATION_REQUEST / PROOF_REQUEST`; an AI-supervised draft in 2-3 short paragraphs (possibly `style_reflow_applied=true` in metadata); NOT an empty textarea; NOT a diagnostic page.
+2. If a fallback still occurs, the yellow banner must name the exact failed check(s) — report the named check.
+3. Regression: send one OFFER_EXPLANATION setup question — expect short-paragraph/list draft as before.
+4. Regression: send one not-now reply — expect NON_PRIORITY NOT_NOW template with check-back question.
+
+**Do-not-regress rules unchanged:** Do not touch Sender. Do not activate Shadow. Do not approve Gate 2. Do not enable autonomous. Do not start SL-PHASE-5R before the SL-PHASE-5Q live retest matrix above is complete.
+
+---
+
 ## 2026-07-05 00:00 BST — GitHub Checkpoint / Build Preservation (PARTIAL: LOCAL COMMIT/TAG CREATED, PUSH BLOCKED)
 
 **Agent:** Codex
