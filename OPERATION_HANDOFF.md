@@ -4,6 +4,45 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ---
 
+## 2026-07-07 — SL-PHASE-5Q Session 16: S2 Closure — Upgrade Engine + PROOF Promotion Gate + Truthful Metadata (DEPLOYED)
+
+**Agent:** Claude Code (Fable 5)
+**Objective:** Close Gate S2. Trace owner-reported live cases `case-64589b37` / `case-269eed7f` / `case-5afa61d3` ("forms remain deterministic/human drafts despite applied learning"), prove exact root causes, patch only what is proven.
+
+**Live trace (production Review Cases DataTable `WMTmI6UNjZZgSU3h`, via REST `/data-tables`; production versionIds verified matching local exports before any change):**
+- **case-64589b37** (not-now): learning WORKED — classification rule `6e50fd54` + style rules `877c3d75`/`cdada69d` consumed via `post_processor_delta` with visible draft effect ("When would be a good time to check back in?"). Stayed deterministic because NON_PRIORITY→FIXED_TEMPLATE and the upgrade guard was PROOF_REQUEST-only. Exact blocking predicate: `microIntent === 'PROOF_REQUEST' && draftPolicy === 'HUMAN_ONLY'` + `canTryAI` requiring `AI_SUPERVISED_OR_TEMPLATE`.
+- **case-269eed7f** (trust): SUCCESS — real AI-supervised draft (`ai_attempt.ok=true`, zero validation errors) with style rule `ea15095a` injected (applied=1, `ai_prompt_injection`). Defects: empty `learning_impact_summary` for the injection path; row `reply_mode=HUMAN_ONLY`.
+- **case-5afa61d3** (setup question): CLASSIFICATION FALSE POSITIVE — active OFFER_EXPLANATION→PROOF_REQUEST correction rules `d82e94d7`/`1dba7933` fired on a reply with zero trust/proof signal (`_5qClassificationRuleAllowedForReply` gated booking and NON_PRIORITY promotions but not PROOF_REQUEST). Trust guidance leaked into a setup answer; stale `reply_draft_status=NO_DRAFT_HUMAN_ONLY` sat next to a real AI draft.
+- **All rows** stored `reply_mode=HUMAN_ONLY` because Decision never emitted `reply_mode` (HumanApproval Node A default).
+
+**Fixes deployed (Decision Node D ONLY; HumanApproval untouched):**
+1. `SL-PHASE-5Q-S2-PROOF-GATE` — rules promoting to PROOF_REQUEST require a trust/proof signal in the reply. Genuine trust variants still pass.
+2. `SL-PHASE-5Q-S2-UPGRADE` — generalized safe deterministic/human→AI upgrade engine. Allowlist: PROOF_REQUEST (from HUMAN_ONLY), NON_PRIORITY and NOT_NOW (from FIXED_TEMPLATE/HUMAN_ONLY). Requires ≥1 active form-created style rule for the EFFECTIVE classification; classification correction alone never upgrades. Unsubscribe/legal/hostile/suppress/no-reply/pricing/booking classes never upgrade (booking deterministic by design). Auditable per case: `ai_upgrade_eligible`, `ai_upgrade_reason`, `ai_upgrade_blocked_reason`, `effective_classification_used_for_draft_policy` in `learning_attribution` (considered/consumed reuse `active_learning_rules_found`/`applied_learning_rule_ids`).
+3. New `intInstr` NON_PRIORITY/NOT_NOW AI instructions (acknowledge timing, ONE check-back question, no pitch). AI failure falls back to the non-null NOT_NOW template + post-processing (textarea never empty).
+4. `SL-PHASE-5Q-S2-STATUS-SYNC` — `reply_draft_status` flipped only when contradicted by the real draft; NOT_APPLICABLE never rewritten.
+5. `SL-PHASE-5Q-S2-REPLY-MODE` — Decision emits `decision.reply_mode` (AI_DRAFT_APPROVAL / FIXED_TEMPLATE_APPROVAL / HUMAN_ONLY / NO_REPLY); case rows now truthful; fallback drafts are never labelled AI.
+6. `SL-PHASE-5Q-S2-SUMMARY` — single-rule AI injection now writes a truthful non-empty impact summary; multi-rule stays attribution-uncertain.
+
+**Harness:** 425/425 PASS (was 375/375; P20 added 50 tests: reproductions of all three live cases, upgrade allowlist + every blocked-reason branch, high-risk/unsubscribe/no-reply never-upgrade protections, pricing exclusion, status-sync/reply-mode truthfulness, injection-summary truthfulness, rollback/deactivation offline drill P20.38-40, newer-overrides-older, scope containment, JS `node --check`, no-Instantly-POST). Re-run green against the production-refreshed export. P12.11 updated to recognise the S2 form of the rule-gate (same invariant).
+
+| Workflow | ID | Old versionId | New versionId | Change |
+|----------|----|---------------|---------------|--------|
+| Decision | `tgYmY97CG4Bm8snI` | `4474c96a` | `84b941a4` | S2 upgrade engine + PROOF promotion gate + reply_mode/status/summary truthfulness |
+
+**Backup:** `workflows/decision_backup_4474c96a_pre_s2_upgrade_engine.json`. Local export refreshed from production post-deploy (versionId verified matching). HumanApproval unchanged (`0054f20b`). Production guard passed before every API call. Sender untouched and not triggered. No Instantly POST. Shadow Evaluator (`aHzLtQiv6G8h1bqD`) confirmed inactive via API post-deploy. Gate 2 unapproved. Autonomous disabled. No live email tests run. New reusable script: `scripts/SL-PHASE-5Q-S2-inject-node-code.py`.
+
+**Rollback/deactivation procedure (S2.6):** documented in `reports/SL-PHASE-5Q_SELF_IMPROVEMENT_BEHAVIOURAL_CLOSURE.md` — operator sets a Q12 rule's `status` to `deactivated`/`rejected`/`superseded` (n8n Data Table UI or REST); Decision ignores it on the next case; newer same-scope rules already override older ones. Offline drill proven (P20.38-40); live drill pending.
+
+**Owner action required (manual live test matrix, ~3 emails):**
+1. Not-now reply ("This could be useful but not until later in the quarter.") → expect an AI-supervised draft (blue "AI-generated draft" banner) acknowledging timing + ONE check-back question; metadata `ai_upgrade_eligible=true`. If AI fails, the NOT_NOW template with the check-back question must appear (never empty).
+2. Setup question ("Before I book, can you give me a quick breakdown of what you set up?") → expect `INFORMATION_REQUEST / OFFER_EXPLANATION` (NOT PROOF_REQUEST) and a setup-steps draft.
+3. Trust reply ("I don't know if you are trustworthy.") → expect PROOF_REQUEST AI draft as before, now with a non-empty learning impact summary.
+4. Optional S2.6 live drill: set one Q12 rule to `deactivated`, send a matching probe, confirm the rule no longer applies, then restore.
+
+**Do-not-regress rules unchanged:** Do not touch Sender. Do not activate Shadow. Do not approve Gate 2. Do not enable autonomous. Do not start SL-PHASE-5R before the live retest matrix above is complete.
+
+---
+
 ## 2026-07-06 — SL-PHASE-5Q Session 15: Dense-Paragraph Fallback Fix + Fault Ledger + Scale Gates (DEPLOYED)
 
 **Agent:** Claude Code (Fable 5)

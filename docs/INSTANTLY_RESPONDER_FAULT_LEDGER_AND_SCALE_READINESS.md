@@ -5,11 +5,11 @@
 
 **Status vocabulary:** `FIXED` (deployed + regression-covered), `PARTIALLY FIXED`, `OPEN`, `UNVERIFIED` (no fresh evidence either way), `GATED` (intentionally not active).
 
-**Reference state at time of writing:**
-- Decision `tgYmY97CG4Bm8snI` versionId `4474c96a-d48b-49af-abc9-d016e94ef5d8` (active)
+**Reference state (updated 2026-07-07, session 16):**
+- Decision `tgYmY97CG4Bm8snI` versionId `84b941a4-bc6d-4f48-be27-36dad1510c8d` (active)
 - HumanApproval `9aPrt92jFhoYFxbs` versionId `0054f20b-2090-41e4-be76-95e8b71921de` (active)
 - Shadow Evaluator `aHzLtQiv6G8h1bqD` inactive; Gate 2 unapproved; autonomous disabled; Sender untouched
-- Harness `scripts/SL-PHASE-5Q-self-improvement-behavioural-closure.py`: 375/375 PASS
+- Harness `scripts/SL-PHASE-5Q-self-improvement-behavioural-closure.py`: 425/425 PASS
 
 ---
 
@@ -64,9 +64,9 @@
 
 | Item | Detail |
 |---|---|
-| Faults | (a) Booking walkthrough/demo requests misclassified OFFER_EXPLANATION (exec 4846); (b) pricing/minimum-commitment misclassified (exec 4865); (c) trust/proof variants stuck at AMBIGUOUS/NON_PRIORITY after owner correction — older rule 6e50fd54 hijacked variants (case-e6e99b67 → case-3a05c80c) |
-| Status | FIXED (deterministic layers); AI-misclassification residue OPEN at low severity |
-| Evidence | FIX-1/FIX-2 regex (`937488a9`); trust/proof priority + NON_PRIORITY promotion guard (`afe08974`) |
+| Faults | (a) Booking walkthrough/demo requests misclassified OFFER_EXPLANATION (exec 4846); (b) pricing/minimum-commitment misclassified (exec 4865); (c) trust/proof variants stuck at AMBIGUOUS/NON_PRIORITY after owner correction — older rule 6e50fd54 hijacked variants (case-e6e99b67 → case-3a05c80c); (d) **session 16:** OFFER_EXPLANATION→PROOF_REQUEST correction rules (d82e94d7/1dba7933) hijacked a genuine setup question with no trust/proof signal (case-5afa61d3) — promotion-to-PROOF_REQUEST had no content gate |
+| Status | FIXED (deterministic layers + promotion gates); AI-misclassification residue OPEN at low severity |
+| Evidence | FIX-1/FIX-2 regex (`937488a9`); trust/proof priority + NON_PRIORITY promotion guard (`afe08974`); PROOF_REQUEST promotion gate (`84b941a4`, P20.9-14) |
 | Affected | Decision Section B classifier, Node D rule-eligibility |
 | Regression coverage | P7 (12), P18 (23) |
 | Remaining risk | Medium — deterministic regexes cover known phrasings only; unseen phrasings fall to AI classification which has misclassified before |
@@ -100,13 +100,13 @@
 
 | Item | Detail |
 |---|---|
-| Faults | (a) Owner-created style rule never eligible due to unresolvable scope (`requires_human_scope_decision`, case-532bae78); (b) form scope default caused (a); (c) learning capture skipped on ai_failed_fallback submits |
-| Status | FIXED; end-to-end behavioural closure PARTIALLY VERIFIED |
-| Evidence | Decision `0e1e1193` (scope fallback), HumanApproval `7aac637e` (default scope), `c20af72e` (capture); classification learning live-proven (rule `1dba7933`, cases d24661f0/3838bcee); full-loop proof recorded 2026-06-24 (SIP-FINAL 4/4) |
-| Affected | Decision Node D `_5qPolicyApplies`; HumanApproval J/N/SL-P2A |
-| Regression coverage | P15 (26), P14, P13 |
-| Remaining risk | Medium — draft-style learning consumption is proven in harness + rule eligibility, but fresh live two-email proof after the session 14-15 changes is outstanding |
-| Acceptance proof needed | Live: correction → follow-up variant consumes rule (classification) and style rule visibly shapes next draft |
+| Faults | (a) Owner-created style rule never eligible due to unresolvable scope (`requires_human_scope_decision`, case-532bae78); (b) form scope default caused (a); (c) learning capture skipped on ai_failed_fallback submits; (d) **session 16:** safe deterministic classes (NON_PRIORITY/NOT_NOW) could never upgrade to AI-supervised drafting despite active approved style rules — upgrade guard covered PROOF_REQUEST only (case-64589b37); (e) **session 16:** case rows stored `reply_mode=HUMAN_ONLY` for every case (Decision never emitted reply_mode) and `reply_draft_status` went stale after upgrades (case-5afa61d3) |
+| Status | FIXED; end-to-end behavioural closure LIVE-VERIFIED for consumption (session 16 traces); post-upgrade-engine live retest pending |
+| Evidence | Decision `0e1e1193` (scope fallback), HumanApproval `7aac637e` (default scope), `c20af72e` (capture); live traces session 16: rule 6e50fd54 + 877c3d75/cdada69d consumed with visible delta (case-64589b37); rule ea15095a injected into real AI draft (case-269eed7f); S2 upgrade engine + reply_mode + status sync (`84b941a4`, P20) |
+| Affected | Decision Node D `_5qPolicyApplies`, upgrade engine, reply_mode/status emission; HumanApproval J/N/SL-P2A |
+| Regression coverage | P15 (26), P14, P13, P20 (50) |
+| Remaining risk | Low-medium — consumption live-proven; the new upgrade pathway itself (not-now → AI draft) has harness proof but no live occurrence yet |
+| Acceptance proof needed | Owner live retest: not-now reply → AI-supervised draft with ai_upgrade_eligible=true; setup question stays OFFER_EXPLANATION; live rollback drill (S2.6) |
 
 ## 9. Active learning attribution
 
@@ -193,6 +193,8 @@
 2. **Banner over-alarm.** `AI_OUTPUT_VALIDATION_FAILED` implied unsafe output to the reviewer when the rejection was formatting-only. Fixed session 15 (banner detail).
 3. **Residual false-positive surface (open, ledger item 10c):** negation-list gaps (`can't`/`won't`/`cannot`) and post-keyword negation. Not patched — no observed occurrence; do not patch without a live case.
 4. **Residual false-negative surface (open, ledger item 10c):** any negation word early in a sentence exempts a later positive claim in the same sentence. Mitigated by the prompt-level word ban and mandatory human review. Watch for this in review; if observed live, tighten the window (proximity-based) rather than the word list.
+5. **(session 16, FIXED)** Classification-learning false positive: correction rules promoting to PROOF_REQUEST fired on replies with no trust/proof signal (case-5afa61d3 — a setup question). Fixed by the PROOF_REQUEST promotion content gate (`84b941a4`).
+6. **(session 16, FIXED)** Reporting false positives/negatives: every case row claimed `reply_mode=HUMAN_ONLY` even for AI-supervised drafts; `reply_draft_status` claimed NO_DRAFT_HUMAN_ONLY next to a real AI draft; single-rule AI injection reported an EMPTY impact summary making real learning invisible. All fixed (`84b941a4`); fallback drafts are still never labelled AI.
 
 ## Highest-risk open faults (ranked)
 

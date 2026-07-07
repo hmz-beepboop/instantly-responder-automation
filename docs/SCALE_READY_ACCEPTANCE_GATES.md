@@ -11,10 +11,10 @@ Companion fault inventory: `docs/INSTANTLY_RESPONDER_FAULT_LEDGER_AND_SCALE_READ
 
 Purpose: the responder may keep operating in VALIDATION mode with human-approved sends on the single allowlisted campaign.
 
-| # | Criterion | Evidence required | Status 2026-07-06 |
+| # | Criterion | Evidence required | Status 2026-07-07 |
 |---|---|---|---|
-| S1.1 | Harness fully green | 375/375 PASS on current exports | PASS |
-| S1.2 | Local exports match production versionIds | Decision `4474c96a`, HumanApproval `0054f20b` | PASS |
+| S1.1 | Harness fully green | 425/425 PASS on current exports (session 16) | PASS |
+| S1.2 | Local exports match production versionIds | Decision `84b941a4`, HumanApproval `0054f20b` | PASS |
 | S1.3 | No diagnostic-fallback false positives on valid cases | P13/P14 + owner live confirmation of form render | PASS (harness) / owner re-confirm pending |
 | S1.4 | Proof/trust cases produce a non-empty draft or a truthful, specific fallback banner | Fresh live trust reply post-session-15 | **PENDING — next owner action** |
 | S1.5 | Manual send path verified (thread, sender, body) | Last proven 2026-06-23 (cases c0dd8298/7434572c/c9b32e56); re-confirm on next approved send | PARTIAL (stale evidence) |
@@ -26,12 +26,13 @@ Purpose: owner corrections and draft-learning rules may keep feeding live behavi
 
 | # | Criterion | Evidence required | Status |
 |---|---|---|---|
-| S2.1 | Classification learning proven live | Rule `1dba7933` trace (cases d24661f0/3838bcee) | PASS |
-| S2.2 | Draft-style learning proven live end-to-end | Fresh two-email test after sessions 14-15: correction → next variant consumes rule with visible draft effect | **PENDING** |
-| S2.3 | Attribution conservative and truthful | P9; multi-rule → attribution_uncertain | PASS |
-| S2.4 | Learning never bypasses safety | Learning skipped for UNSUBSCRIBE/LEGAL/COMPLAINT; classification correction alone cannot enable AI drafting | PASS (harness) |
-| S2.5 | Rule store hygiene | Q12 filters status=active; superseded/shadow rules excluded (S7/S8) | PASS |
-| S2.6 | Bad-rule rollback path documented and drilled once | Owner deactivates a rule in Q12 and next case ignores it | **PENDING** |
+| S2.1 | Classification learning proven live | Rule `1dba7933` trace (cases d24661f0/3838bcee); rule `6e50fd54` live trace (case-64589b37, session 16) | PASS |
+| S2.2 | Draft-style learning proven live end-to-end | **Live-proven session 16:** case-64589b37 — rules 877c3d75/cdada69d consumed with visible draft delta (post_processor_delta); case-269eed7f — rule ea15095a injected into a real AI-supervised draft (ai_prompt_injection, applied=1). Post-S2-upgrade-engine retest (not-now → AI draft) still pending | PASS (pre-upgrade-engine) / retest pending |
+| S2.3 | Attribution conservative and truthful | P9 + P20.35-37; multi-rule → attribution_uncertain; injection summary now non-empty and truthful; fallback never labelled AI (P20.34/44) | PASS |
+| S2.4 | Learning never bypasses safety | Learning skipped for UNSUBSCRIBE/LEGAL/COMPLAINT; classification correction alone cannot enable AI drafting (P20.19); upgrade engine never fires for high-risk/suppress/no-reply/pricing (P20.20-27) | PASS (harness) |
+| S2.5 | Rule store hygiene | Q12 filters status=active; superseded/shadow rules excluded (S7/S8); PROOF_REQUEST promotion now content-gated (P20.9-12) | PASS |
+| S2.6 | Bad-rule rollback path documented and drilled once | Procedure documented (closure report session 16); offline drill P20.38-40 PASS (deactivated rule excluded; newer wins; deactivated not selected). Live drill (owner flips one rule status + probe email) | PARTIAL — offline drilled, live drill pending |
+| S2.7 | Deterministic/human-to-AI upgrade truthful and auditable (added session 16) | S2 upgrade engine deployed (`84b941a4`); `ai_upgrade_eligible`/`ai_upgrade_reason`/`ai_upgrade_blocked_reason`/`effective_classification_used_for_draft_policy` recorded per case; P20.15-27 | PASS (harness) / live retest pending |
 
 ## Gate S3 — Autonomous shadow mode (Gate 2 precondition)
 
@@ -77,5 +78,5 @@ Purpose: responder handles >1 campaign and/or >1 sender identity. **Out of curre
 ## Current honest position
 
 - **Gate S1:** effectively open for continued supervised validation use, with two re-confirmations pending (S1.4 fresh trust-case retest, S1.5 stale send evidence).
-- **Gate S2:** one live behavioural proof (S2.2) and one drill (S2.6) from green.
+- **Gate S2 (updated 2026-07-07, session 16):** substantially closed on evidence. Classification learning, draft-style learning consumption (both post-processor delta and AI prompt injection), conservative attribution, safety non-bypass, rule hygiene, and the new auditable deterministic/human→AI upgrade engine are all proven by live rows + 425/425 harness. Remaining before fully green: (a) one owner live retest of the three fixed behaviours (not-now → AI draft; setup question stays OFFER_EXPLANATION; trust → AI draft with non-empty summary); (b) one live rollback drill (flip a rule status, send a probe).
 - **Gates S3-S5:** not met, by design. No autonomous activation, no Gate 2 approval, no multi-campaign work is authorised by this document.

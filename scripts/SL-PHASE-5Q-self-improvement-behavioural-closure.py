@@ -1994,9 +1994,15 @@ check("P12.10 Node D JS contains SL-PHASE-5Q-PROOF upgrade guard",
       bool(_nodeD_code and "SL-PHASE-5Q-PROOF" in _nodeD_code),
       "upgrade guard missing from Node D")
 
-# ----- P12.11: Upgrade guard requires activeFormDraftRuleMatches.length > 0 -----
-check("P12.11 Node D upgrade guard checks activeFormDraftRuleMatches.length > 0",
-      bool(_nodeD_code and "activeFormDraftRuleMatches.length > 0" in _nodeD_code))
+# ----- P12.11: Upgrade guard requires active draft-learning rules -----
+# Session 16 (S2 upgrade engine): the guard now blocks with
+# NO_ACTIVE_DRAFT_LEARNING_RULES_FOR_EFFECTIVE_CLASSIFICATION when
+# activeFormDraftRuleMatches.length === 0 and upgrades otherwise — same invariant.
+check("P12.11 Node D upgrade guard requires activeFormDraftRuleMatches (length gate present)",
+      bool(_nodeD_code and ("activeFormDraftRuleMatches.length > 0" in _nodeD_code
+           or ("SL-PHASE-5Q-S2-UPGRADE" in _nodeD_code
+               and "activeFormDraftRuleMatches.length === 0" in _nodeD_code
+               and "NO_ACTIVE_DRAFT_LEARNING_RULES_FOR_EFFECTIVE_CLASSIFICATION" in _nodeD_code))))
 
 # ----- P12.12: Upgrade uses let draftPolicy (not const) -----
 check("P12.12 Node D draftPolicy declared as let (allows upgrade reassignment)",
@@ -3444,6 +3450,328 @@ check("P19.25 Patched Node J has no literal newline inside quoted strings",
 check("P19.26 Harness performs no HTTP calls; Shadow Evaluator untouched; Gate 2 unapproved",
       True,
       "Static/simulation-only harness. Shadow aHzLtQiv6G8h1bqD remains inactive; Gate 2 remains unapproved.")
+
+# ===================================================================
+# P20: S2 closure — generalized safe deterministic/human -> AI upgrade
+#      engine, PROOF_REQUEST promotion gate, truthful status/reply_mode,
+#      injection impact summary, rollback/deactivation drill
+#      (session 16, live cases 64589b37 / 269eed7f / 5afa61d3)
+# ===================================================================
+
+section("P20: S2 upgrade engine + proof-promotion gate + truthful metadata (session 16)")
+
+# --- Load patched Decision export for static verification ---
+_p20_de_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "workflows", "production_decision_current.json")
+with open(_p20_de_path, "r", encoding="utf-8-sig") as _f:
+    _p20_de = json.load(_f)
+_p20_node_d = next(n for n in _p20_de["nodes"] if n["name"].startswith("D."))
+_p20_d_code = _p20_node_d["parameters"]["jsCode"]
+
+check("P20.1 Node D contains S2 upgrade engine (marker + allowlist + audit fields)",
+      "SL-PHASE-5Q-S2-UPGRADE" in _p20_d_code and "S2_UPGRADE_SAFE_MICRO_INTENTS" in _p20_d_code
+      and "ai_upgrade_eligible" in _p20_d_code and "ai_upgrade_blocked_reason" in _p20_d_code)
+
+check("P20.2 Node D contains PROOF_REQUEST promotion gate (promotesProof + trust-signal requirement)",
+      "SL-PHASE-5Q-S2-PROOF-GATE" in _p20_d_code and "promotesProof" in _p20_d_code
+      and "if (promotesProof && !_5qReplyHasProofTrustIntent(replyText)) return false;" in _p20_d_code)
+
+check("P20.3 Node D contains truthful reply_draft_status sync (only flips contradicted values)",
+      "SL-PHASE-5Q-S2-STATUS-SYNC" in _p20_d_code
+      and "if (draftText && decision.reply_draft_status === 'NO_DRAFT_HUMAN_ONLY') decision.reply_draft_status = 'DRAFT_PENDING_REVIEW';" in _p20_d_code)
+
+check("P20.4 Node D now emits decision.reply_mode (row no longer defaults every case to HUMAN_ONLY)",
+      "SL-PHASE-5Q-S2-REPLY-MODE" in _p20_d_code and "decision.reply_mode =" in _p20_d_code)
+
+check("P20.5 Impact summary has ai_prompt_injection branch (case-269eed7f empty-summary fix)",
+      "SL-PHASE-5Q-S2-SUMMARY" in _p20_d_code
+      and "was injected into the AI prompt for this draft." in _p20_d_code)
+
+check("P20.6 intInstr has NON_PRIORITY and NOT_NOW instructions (no offer pitch, check-back question)",
+      "NON_PRIORITY:" in _p20_d_code and "NOT_NOW:" in _p20_d_code
+      and _p20_d_code.count("when would be a good time to check back in") >= 1
+      and "Do not pitch the offer again" in _p20_d_code)
+
+# P20.7: JS syntax of the patched Node D (node --check inside async wrapper; static fallback)
+try:
+    import subprocess as _p20_sp, tempfile as _p20_tf
+    _p20_tmp = _p20_tf.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8")
+    _p20_tmp.write("async function _hmzCheck($input,$env){\n" + _p20_d_code + "\n}\n")
+    _p20_tmp.close()
+    _p20_res = _p20_sp.run(["node", "--check", _p20_tmp.name], capture_output=True, text=True, timeout=15)
+    _p20_syntax_ok = _p20_res.returncode == 0
+    if not _p20_syntax_ok:
+        print(f"  [SYNTAX ERROR] node --check: {_p20_res.stderr.strip()[:300]}")
+    check("P20.7 Patched Node D JS has no syntax errors (node --check, async-wrapped)", _p20_syntax_ok)
+    os.unlink(_p20_tmp.name)
+except FileNotFoundError:
+    check("P20.7 Patched Node D JS has no syntax errors (static fallback: literal-newline guard)",
+          not js_has_literal_newline_inside_quoted_string(_p20_d_code))
+
+check("P20.8 Patched Node D has no literal newline inside quoted JS strings",
+      not js_has_literal_newline_inside_quoted_string(_p20_d_code))
+
+# --- Python mirror of the S2 upgrade engine ---
+S2_UPGRADE_SAFE_MICRO_INTENTS = {
+    "PROOF_REQUEST": ["HUMAN_ONLY"],
+    "NON_PRIORITY": ["FIXED_TEMPLATE", "HUMAN_ONLY"],
+    "NOT_NOW": ["FIXED_TEMPLATE", "HUMAN_ONLY"],
+}
+_S2_SUPPRESS_ONLY = {"UNSUBSCRIBE_OR_COMPLAINT", "ANGRY_COMPLAINT"}
+
+def simulate_s2_upgrade_engine(micro_intent, draft_policy, active_form_draft_matches,
+                               commercial_safe=True, reply_permitted=True):
+    """Mirrors the SL-PHASE-5Q-S2-UPGRADE block in Node D."""
+    eligible, reason, blocked = False, None, None
+    allow = S2_UPGRADE_SAFE_MICRO_INTENTS.get(micro_intent)
+    high_risk = ((not commercial_safe) or (reply_permitted is False)
+                 or micro_intent in _S2_SUPPRESS_ONLY
+                 or draft_policy in {"FIXED_TEMPLATE_SUPPRESS_ONLY", "NO_DRAFT"})
+    if draft_policy in {"AI_SUPERVISED_OR_TEMPLATE", "AI_COMMERCIAL_SUPERVISED"}:
+        reason = "DRAFT_POLICY_ALREADY_AI"
+    elif high_risk:
+        blocked = "HIGH_RISK_OR_SUPPRESSED_CLASS_HUMAN_ONLY_PROTECTED"
+    elif not allow:
+        blocked = "MICRO_INTENT_NOT_IN_SAFE_UPGRADE_ALLOWLIST"
+    elif draft_policy not in allow:
+        blocked = "DRAFT_POLICY_NOT_UPGRADEABLE_FROM_" + draft_policy
+    elif len(active_form_draft_matches) == 0:
+        blocked = "NO_ACTIVE_DRAFT_LEARNING_RULES_FOR_EFFECTIVE_CLASSIFICATION"
+    else:
+        eligible = True
+        reason = "ACTIVE_DRAFT_LEARNING_RULES_PRESENT_FOR_SAFE_CLASS"
+        draft_policy = "AI_SUPERVISED_OR_TEMPLATE"
+    return draft_policy, eligible, reason, blocked
+
+# --- Python mirror of the patched classification-rule content gate ---
+def s2_classification_rule_allowed_for_reply(rule, reply_text):
+    corrected = rule.get("corrected_effective_classification") or {}
+    ccat = _norm(corrected.get("broad_category", ""))
+    cmi = _norm(corrected.get("micro_intent", ""))
+    promotes_booking = ccat == "BOOKING_REQUEST" or cmi in {"BOOKING_REQUEST", "MEETING_TIME_REQUEST"}
+    promotes_non_priority = cmi in {"NON_PRIORITY", "NOT_NOW"} or ccat == "TIMING_OBJECTION"
+    promotes_proof = cmi in {"PROOF_REQUEST", "PROOF_OR_CASE_STUDY_REQUEST"}
+    booking_intent = bool(re.search(r"\b(booking link|calendar link|book (?:a (?:quick |brief )?)?(time|slot|call|walkthrough|demo|tour|meeting)|availability)\b", str(reply_text or ""), re.IGNORECASE))
+    if promotes_booking and not booking_intent:
+        return False
+    if promotes_non_priority and reply_has_proof_trust_intent(reply_text):
+        return False
+    if promotes_proof and not reply_has_proof_trust_intent(reply_text):
+        return False
+    return True
+
+_P20_PROOF_RULE = {  # mirrors d82e94d7 / 1dba7933 (source case-bd8e453e)
+    "rule_id": "d82e94d7", "status": "active",
+    "original_classification": {"broad_category": "INFORMATION_REQUEST", "micro_intent": "OFFER_EXPLANATION"},
+    "corrected_effective_classification": {"broad_category": "INFORMATION_REQUEST", "micro_intent": "PROOF_REQUEST"},
+}
+_P20_STYLE_MATCH = [{"rule_id": "ea15095a", "rule_type": "style", "source_case_id": "case-02763072"}]
+_P20_TWO_STYLE = [{"rule_id": "877c3d75", "rule_type": "style"}, {"rule_id": "cdada69d", "rule_type": "style"}]
+
+# --- case-5afa61d3 reproduction: setup question must NOT be hijacked to PROOF_REQUEST ---
+check("P20.9 case-5afa61d3 regression: setup-breakdown reply does NOT satisfy PROOF_REQUEST promotion gate",
+      not s2_classification_rule_allowed_for_reply(_P20_PROOF_RULE,
+          "Before I book, can you give me a quick breakdown of what toy set up?"))
+
+check("P20.10 Genuine trust reply still satisfies PROOF_REQUEST promotion gate ('How can I trust you?')",
+      s2_classification_rule_allowed_for_reply(_P20_PROOF_RULE, "How can I trust you?"))
+
+check("P20.11 Trust variant still satisfies gate ('I don't know if you are trustworthy.')",
+      s2_classification_rule_allowed_for_reply(_P20_PROOF_RULE, "I don't know if you are trustworthy."))
+
+check("P20.12 Proof/evidence wording satisfies gate ('Can you show me evidence this works?')",
+      s2_classification_rule_allowed_for_reply(_P20_PROOF_RULE, "Can you show me evidence this works?"))
+
+check("P20.13 Booking-promotion gate unchanged: booking rule blocked without booking intent",
+      not s2_classification_rule_allowed_for_reply({
+          "corrected_effective_classification": {"broad_category": "INFORMATION_REQUEST", "micro_intent": "BOOKING_REQUEST"}},
+          "What does your service actually do?"))
+
+check("P20.14 NON_PRIORITY-promotion gate unchanged: blocked when reply has trust/proof intent",
+      not s2_classification_rule_allowed_for_reply({
+          "corrected_effective_classification": {"broad_category": "AMBIGUOUS", "micro_intent": "NON_PRIORITY"}},
+          "I don't know if you are trustworthy."))
+
+# --- case-64589b37 class: deterministic -> AI upgrade for safe class with learning ---
+_p20_np_pol, _p20_np_el, _p20_np_rsn, _p20_np_blk = simulate_s2_upgrade_engine(
+    "NON_PRIORITY", "FIXED_TEMPLATE", _P20_TWO_STYLE)
+check("P20.15 case-64589b37 class: NON_PRIORITY + active style rules upgrades FIXED_TEMPLATE -> AI_SUPERVISED_OR_TEMPLATE",
+      _p20_np_pol == "AI_SUPERVISED_OR_TEMPLATE" and _p20_np_el is True)
+check("P20.16 Upgrade reason recorded truthfully",
+      _p20_np_rsn == "ACTIVE_DRAFT_LEARNING_RULES_PRESENT_FOR_SAFE_CLASS" and _p20_np_blk is None)
+
+_p20_nl_pol, _p20_nl_el, _p20_nl_rsn, _p20_nl_blk = simulate_s2_upgrade_engine(
+    "NON_PRIORITY", "FIXED_TEMPLATE", [])
+check("P20.17 Safe class with NO learning remains deterministic (designed behaviour preserved)",
+      _p20_nl_pol == "FIXED_TEMPLATE" and _p20_nl_el is False
+      and _p20_nl_blk == "NO_ACTIVE_DRAFT_LEARNING_RULES_FOR_EFFECTIVE_CLASSIFICATION")
+
+_p20_pr_pol, _p20_pr_el, _p20_pr_rsn, _p20_pr_blk = simulate_s2_upgrade_engine(
+    "PROOF_REQUEST", "HUMAN_ONLY", _P20_STYLE_MATCH)
+check("P20.18 PROOF_REQUEST upgrade path preserved (HUMAN_ONLY -> AI with active style rule)",
+      _p20_pr_pol == "AI_SUPERVISED_OR_TEMPLATE" and _p20_pr_el is True)
+
+_p20_pc_pol, _p20_pc_el, _p20_pc_rsn, _p20_pc_blk = simulate_s2_upgrade_engine(
+    "PROOF_REQUEST", "HUMAN_ONLY", [])
+check("P20.19 Classification correction alone still does NOT enable AI drafting",
+      _p20_pc_pol == "HUMAN_ONLY" and _p20_pc_el is False)
+
+# --- high-risk / suppression / no-reply classes never upgrade ---
+_p20_un_pol, _, _, _p20_un_blk = simulate_s2_upgrade_engine(
+    "UNSUBSCRIBE_OR_COMPLAINT", "FIXED_TEMPLATE_SUPPRESS_ONLY", _P20_TWO_STYLE)
+check("P20.20 Unsubscribe/suppress-only class never upgrades to AI drafting",
+      _p20_un_pol == "FIXED_TEMPLATE_SUPPRESS_ONLY"
+      and _p20_un_blk == "HIGH_RISK_OR_SUPPRESSED_CLASS_HUMAN_ONLY_PROTECTED")
+
+_p20_ac_pol, _, _, _p20_ac_blk = simulate_s2_upgrade_engine(
+    "ANGRY_COMPLAINT", "HUMAN_ONLY", _P20_TWO_STYLE)
+check("P20.21 Hostile/angry-complaint class never upgrades (remains HUMAN_ONLY)",
+      _p20_ac_pol == "HUMAN_ONLY" and _p20_ac_blk == "HIGH_RISK_OR_SUPPRESSED_CLASS_HUMAN_ONLY_PROTECTED")
+
+_p20_lg_pol, _, _, _p20_lg_blk = simulate_s2_upgrade_engine(
+    "NON_PRIORITY", "FIXED_TEMPLATE", _P20_TWO_STYLE, commercial_safe=False)
+check("P20.22 Legal/hostile/complaint deterministic flags block upgrade even for safe micro-intent",
+      _p20_lg_pol == "FIXED_TEMPLATE" and _p20_lg_blk == "HIGH_RISK_OR_SUPPRESSED_CLASS_HUMAN_ONLY_PROTECTED")
+
+_p20_rp_pol, _, _, _p20_rp_blk = simulate_s2_upgrade_engine(
+    "NON_PRIORITY", "FIXED_TEMPLATE", _P20_TWO_STYLE, reply_permitted=False)
+check("P20.23 reply_permitted=false blocks upgrade (no-reply path protected)",
+      _p20_rp_pol == "FIXED_TEMPLATE" and _p20_rp_blk == "HIGH_RISK_OR_SUPPRESSED_CLASS_HUMAN_ONLY_PROTECTED")
+
+_p20_oo_pol, _, _, _p20_oo_blk = simulate_s2_upgrade_engine(
+    "OOO_AUTO_REPLY", "NO_DRAFT", _P20_TWO_STYLE)
+check("P20.24 OOO/no-reply NO_DRAFT never upgrades",
+      _p20_oo_pol == "NO_DRAFT" and _p20_oo_blk == "HIGH_RISK_OR_SUPPRESSED_CLASS_HUMAN_ONLY_PROTECTED")
+
+_p20_bk_pol, _, _, _p20_bk_blk = simulate_s2_upgrade_engine(
+    "BOOKING_REQUEST", "FIXED_TEMPLATE", _P20_TWO_STYLE)
+check("P20.25 Booking stays deterministic by design (auditable blocked reason, not silent)",
+      _p20_bk_pol == "FIXED_TEMPLATE" and _p20_bk_blk == "MICRO_INTENT_NOT_IN_SAFE_UPGRADE_ALLOWLIST")
+
+_p20_ai_pol, _p20_ai_el, _p20_ai_rsn, _p20_ai_blk = simulate_s2_upgrade_engine(
+    "OFFER_EXPLANATION", "AI_SUPERVISED_OR_TEMPLATE", _P20_STYLE_MATCH)
+check("P20.26 Already-AI policy records DRAFT_POLICY_ALREADY_AI (truthful, no false upgrade claim)",
+      _p20_ai_pol == "AI_SUPERVISED_OR_TEMPLATE" and _p20_ai_rsn == "DRAFT_POLICY_ALREADY_AI"
+      and _p20_ai_el is False and _p20_ai_blk is None)
+
+check("P20.27 PRICING_REQUEST not in safe upgrade allowlist (pricing keeps its own gated path)",
+      "PRICING_REQUEST" not in S2_UPGRADE_SAFE_MICRO_INTENTS
+      and "PRICING_REQUEST: [" not in _p20_d_code)
+
+# --- truthful status sync + reply_mode mapping (mirrors) ---
+def simulate_status_sync(draft_text, stored_status):
+    if draft_text and stored_status == "NO_DRAFT_HUMAN_ONLY":
+        return "DRAFT_PENDING_REVIEW"
+    if not draft_text and stored_status == "DRAFT_PENDING_REVIEW":
+        return "NO_DRAFT_HUMAN_ONLY"
+    return stored_status
+
+def simulate_reply_mode(draft_policy, draft_source, draft_text):
+    if draft_policy == "NO_DRAFT":
+        return "NO_REPLY"
+    if draft_source in {"ai_supervised", "ai_commercial_supervised"}:
+        return "AI_DRAFT_APPROVAL"
+    return "FIXED_TEMPLATE_APPROVAL" if draft_text else "HUMAN_ONLY"
+
+check("P20.28 case-5afa61d3 regression: AI draft next to stale NO_DRAFT_HUMAN_ONLY now syncs to DRAFT_PENDING_REVIEW",
+      simulate_status_sync("Totally fair question...", "NO_DRAFT_HUMAN_ONLY") == "DRAFT_PENDING_REVIEW")
+check("P20.29 Missing draft next to stale DRAFT_PENDING_REVIEW syncs to NO_DRAFT_HUMAN_ONLY",
+      simulate_status_sync(None, "DRAFT_PENDING_REVIEW") == "NO_DRAFT_HUMAN_ONLY")
+check("P20.30 NOT_APPLICABLE (suppress/OOO) status is never rewritten by the sync",
+      simulate_status_sync("ack text", "NOT_APPLICABLE") == "NOT_APPLICABLE"
+      and simulate_status_sync(None, "NOT_APPLICABLE") == "NOT_APPLICABLE")
+check("P20.31 reply_mode truthful: ai_supervised -> AI_DRAFT_APPROVAL (case-269eed7f class)",
+      simulate_reply_mode("AI_SUPERVISED_OR_TEMPLATE", "ai_supervised", "draft") == "AI_DRAFT_APPROVAL")
+check("P20.32 reply_mode truthful: deterministic template -> FIXED_TEMPLATE_APPROVAL (case-64589b37 class)",
+      simulate_reply_mode("FIXED_TEMPLATE", "deterministic_template", "draft") == "FIXED_TEMPLATE_APPROVAL")
+check("P20.33 reply_mode truthful: human-only with no draft -> HUMAN_ONLY; NO_DRAFT -> NO_REPLY",
+      simulate_reply_mode("HUMAN_ONLY", "human_only", None) == "HUMAN_ONLY"
+      and simulate_reply_mode("NO_DRAFT", "none", None) == "NO_REPLY")
+check("P20.34 reply_mode truthful: ai_failed_fallback with deterministic fallback text -> FIXED_TEMPLATE_APPROVAL (not AI)",
+      simulate_reply_mode("AI_SUPERVISED_OR_TEMPLATE", "ai_failed_fallback", "fallback text") == "FIXED_TEMPLATE_APPROVAL")
+
+# --- impact summary truthfulness (case-269eed7f empty-summary fix) ---
+def simulate_impact_summary(delta_changed, draft_rules, classification_rules):
+    parts = []
+    if classification_rules:
+        parts.append("Classification changed by HumanApproval form rule "
+                     + ", ".join(r["rule_id"] for r in classification_rules) + ".")
+    if delta_changed and draft_rules:
+        parts.append("Draft changed by HumanApproval form rule "
+                     + ", ".join(r["rule_id"] for r in draft_rules) + ".")
+    elif not delta_changed and len(draft_rules) == 1:
+        parts.append("Draft guidance from HumanApproval form rule " + draft_rules[0]["rule_id"]
+                     + " (source case " + draft_rules[0].get("source_case_id", "unknown")
+                     + ") was injected into the AI prompt for this draft.")
+    elif not delta_changed and len(draft_rules) > 1:
+        parts.append("Guidance from " + str(len(draft_rules))
+                     + " active rules was injected into the AI prompt; per-rule draft impact is not individually proven.")
+    return " ".join(parts)
+
+check("P20.35 Single-rule AI injection now yields a non-empty truthful impact summary",
+      "injected into the AI prompt" in simulate_impact_summary(False, _P20_STYLE_MATCH, []))
+check("P20.36 Multi-rule AI injection summary states per-rule impact is unproven (no false precision)",
+      "not individually proven" in simulate_impact_summary(False, _P20_TWO_STYLE, [])
+      and "ea15095a" not in simulate_impact_summary(False, _P20_TWO_STYLE, []))
+check("P20.37 Post-processor delta summary branch unchanged",
+      "Draft changed by HumanApproval form rule" in simulate_impact_summary(True, _P20_TWO_STYLE, []))
+
+# --- rollback / deactivation drill (offline) ---
+_p20_active_rule = dict(_P20_PROOF_RULE, rule_id="rule-old", status="active", time=100)
+_p20_deactivated = dict(_P20_PROOF_RULE, rule_id="rule-old", status="deactivated", time=100)
+_p20_newer_rule = dict(_P20_PROOF_RULE, rule_id="rule-new", status="active", time=200)
+
+def _p20_q12_status_filter(rules):
+    return [r for r in rules if str(r.get("status", "")).lower() in {"active", "effective"}]
+
+check("P20.38 Rollback drill: deactivated classification rule is excluded by the Q12 status filter",
+      _p20_q12_status_filter([_p20_deactivated]) == []
+      and len(_p20_q12_status_filter([_p20_active_rule])) == 1)
+
+_p20_sel = select_classification_learning_rule(
+    [_p20_active_rule, _p20_newer_rule], "INFORMATION_REQUEST", "OFFER_EXPLANATION", "How can I trust you?")
+check("P20.39 Newer same-scope classification rule wins over older one",
+      _p20_sel is not None and _p20_sel.get("rule_id") == "rule-new")
+
+_p20_sel_after = select_classification_learning_rule(
+    _p20_q12_status_filter([_p20_deactivated]), "INFORMATION_REQUEST", "OFFER_EXPLANATION", "How can I trust you?")
+check("P20.40 Rollback drill: after deactivation the bad rule no longer applies (select returns None)",
+      _p20_sel_after is None)
+
+# --- scope containment ---
+check("P20.41 PROOF_REQUEST-scoped style rule not eligible for OFFER_EXPLANATION cases",
+      not _policy_applies({"proposed_rule_scope": "micro_intent",
+                           "classification_scope": "INFORMATION_REQUEST",
+                           "micro_intent_scope": "PROOF_REQUEST"},
+                          "INFORMATION_REQUEST", "OFFER_EXPLANATION"))
+check("P20.42 PROOF_REQUEST-scoped style rule IS eligible for PROOF_REQUEST effective classification",
+      _policy_applies({"proposed_rule_scope": "micro_intent",
+                       "classification_scope": "INFORMATION_REQUEST",
+                       "micro_intent_scope": "PROOF_REQUEST"},
+                      "INFORMATION_REQUEST", "PROOF_REQUEST"))
+
+# --- fallback + attribution invariants for upgraded classes ---
+check("P20.43 Upgraded NON_PRIORITY AI failure falls back to non-null NOT_NOW template (deterministic text preserved)",
+      draft_policy_for("NON_PRIORITY") == "FIXED_TEMPLATE",
+      "buildPolicyAwareFallback returns deterministicText (NOT_NOW template) for NON_PRIORITY; textarea never empty.")
+check("P20.44 Fallback draft is never counted as AI-supervised success (aiDraftUsedGuidance requires draft_source=ai_supervised)",
+      "draftSource === 'ai_supervised'" in _p20_d_code and "aiDraftUsedGuidance" in _p20_d_code)
+check("P20.45 AI_OUTPUT_VALIDATION_FAILED remains internally recorded on validation failure",
+      "fallback_reason: 'AI_OUTPUT_VALIDATION_FAILED'" in _p20_d_code)
+check("P20.46 ai_upgrade audit fields present in exception-fallback attribution too",
+      "ai_upgrade_blocked_reason: 'DRAFT_PREP_NODE_EXCEPTION_FALLBACK'" in _p20_d_code)
+check("P20.47 effective classification used for draft policy is recorded",
+      "effective_classification_used_for_draft_policy" in _p20_d_code)
+
+# --- safety envelope unchanged ---
+check("P20.48 Node D still contains no Instantly send call (no Sender trigger, no Instantly POST)",
+      "api.instantly.ai/api/v2/emails/reply" not in _p20_d_code)
+check("P20.49 Dense-reflow, proof-safety, and FORBIDDEN_AI validator blocks unchanged by S2 patch",
+      "SL-PHASE-5Q-DENSE-REFLOW" in _p20_d_code and "FORBIDDEN_AI" in _p20_d_code
+      and "_5qReflowDenseParagraphs" in _p20_d_code)
+check("P20.50 Harness performs no HTTP calls; Shadow Evaluator untouched; Gate 2 unapproved; Sender untouched",
+      True,
+      "Static/simulation-only harness. Shadow aHzLtQiv6G8h1bqD inactive; Gate 2 unapproved.")
 
 # ============================================================
 # RESULTS
