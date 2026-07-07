@@ -34,4 +34,14 @@ Scope reminder (CLAUDE.md): this system serves HMZ's own validation campaign onl
 
 ## Completed records
 
-*(none yet — the single current validation campaign `531e64ed-c225-4baf-97a9-4ec90dc34eb0` predates this record; it must receive a backfilled CRR before any S5 scale work, and rows 11-14 for it are last evidenced 2026-06-23 (cases c0dd8298/7434572c/c9b32e56) — stale, re-proof required on next approved send.)*
+*(none completed/signed yet)*
+
+Per-campaign records now live in `docs/campaign-readiness/` (index + campaign-ID reconciliation in
+`docs/campaign-readiness/README.md`). The current validation campaign
+`531e64ed-c225-4baf-97a9-4ec90dc34eb0` has a **backfilled but INCOMPLETE** record
+(`docs/campaign-readiness/CRR-531e64ed.md`, Fable Run 4, 2026-07-07): owner-confirmation fields and
+signature are pending, rows 11-14 are stale (last evidenced 2026-06-23, cases
+c0dd8298/7434572c/c9b32e56) and must be re-proven on the next approved send against the current
+Sender version. **Launch remains blocked until that record is completed and signed.** The old
+campaign ID `bcda01f7-21c9-4e12-9849-0a375b548467` is stale/superseded — see the reconciliation
+table before trusting any older evidence.

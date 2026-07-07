@@ -70,7 +70,7 @@ Purpose: the send path is safe before any volume increase. Audited 2026-07-07 ag
 | SS.1 | Same sender as inbound; no silent fallback sender | `nes.eaccount` + connected-sender allowlist gate + post-send `body.eaccount` verification (mismatch → SEND_UNCERTAIN) | CODE-PROVEN |
 | SS.2 | Recipient is the original lead; no unexpected cc/bcc | `nes.lead_email` expected-recipient check; non-empty cc/bcc rejects sent-object validation | CODE-PROVEN |
 | SS.3 | Thread + subject preserved | `reply_to_uuid` required by gate; `Re:` subject preserved and verified post-send | CODE-PROVEN |
-| SS.4 | Body cannot be blank | Enforced upstream: HumanApproval Node N blocks approve with empty text (`draft_text_required`) + form validation. Sender's own gates do NOT re-check (accepted gap, ledger item 11) | CODE-PROVEN (upstream) |
+| SS.4 | Body cannot be blank | **CLOSED IN SENDER (Fable Run 4, 2026-07-07):** HumanApproval Node N (`draft_text_required`) upstream + Sender now independently blocks — node B `draft_body_gate_passed` BEFORE lock acquisition and node O 15th gate `draft_body_non_empty` immediately BEFORE the POST (missing/blank/whitespace/marker-only all rejected after normalization; Node.js behavioural proof 77/77; harness P22). Sender `dfb310f4 → 00b52f03` | CODE-PROVEN (dual-layer) |
 | SS.5 | Send marker | `hmz-send-key` HTML comment embedded in body | CODE-PROVEN |
 | SS.6 | Duplicate prevention / concurrent lock / sequential rerun | Atomic acquire (hmz-send-state) + `no_prior_terminal_send_state` gate + blocked-duplicate terminal | CODE-PROVEN; live replay drill NOT run |
 | SS.7 | SEND_UNCERTAIN never blindly retried | Terminal state; reconciliation poll needs 2 consecutive single matches; zero/multiple → human review | CODE-PROVEN; no live occurrence |
@@ -92,15 +92,17 @@ Purpose: responder handles >1 campaign and/or >1 sender identity. **Out of curre
 | S5.4 | Volume SLO evidence | Processing SLO (≤300s conclude) held at target volume in a load test | NOT MET |
 | S5.5 | Rate-limit and retry behaviour verified against Instantly API limits | Documented test against current official Instantly docs | NOT MET |
 | S5.6 | Client-delivery preconditions (if any campaign is not HMZ's own) | Per CLAUDE.md scope section: approved client KB, reply policy, compliance review, controlled testing — none exists | NOT MET |
-| S5.7 | Campaign Readiness Record per campaign (added Run 3) | Completed, owner-signed `docs/CAMPAIGN_READINESS_RECORD.md` entry; missing/incomplete CRR blocks launch | TEMPLATE CREATED; no record completed |
+| S5.7 | Campaign Readiness Record per campaign (added Run 3) | Completed, owner-signed record in `docs/campaign-readiness/`; missing/incomplete CRR blocks launch | BACKFILLED for `531e64ed` (Run 4, `docs/campaign-readiness/CRR-531e64ed.md`) — **INCOMPLETE/UNSIGNED, launch blocked**; campaign-ID reconciliation (`bcda01f7` stale) documented |
 | S5.8 | Credential-leak scan of workflow exports | `python scripts/scan-workflow-exports-for-secrets.py` exit 0 | PASS (2026-07-07) — rerun each session that touches exports |
 | S5.9 | Stale-script / stale-harness guard | Runtime proof checklist is the runtime source of truth; old controlled-live acceptance harness never sole evidence; forbidden `run-local-*` scripts unused | DOCUMENTED (CRR rows 10/16) |
 
 ---
 
-## Current honest position (updated 2026-07-07, Fable Run 3)
+## Current honest position (updated 2026-07-07, Fable Run 4)
 
-- **Gate S1:** open for continued supervised validation use. S1.4 now live-proven (trust → real AI draft, case-58e6b3b0). Pending: owner confirms the Run 3 UI (S1.7) on the next live case; S1.5 send evidence remains stale until the next approved send.
-- **Gate S2:** closed on live evidence. The Run 3 row fetch proved the full loop end-to-end for the previously "failing" not-now cases: correction rule consumed (6e50fd54), effective NON_PRIORITY, S2 upgrade fired, real AI drafts, truthful reply_mode. The alleged S2 failures were a UI/reporting visibility issue (now fixed, ledger item 16). Remaining: one live rollback drill (S2.6).
-- **Gate S-SEND:** code-proven end-to-end (Run 3 read-only audit of production export `dfb310f4`); live replay/reconciliation drills outstanding — required before any volume increase.
-- **Gates S3-S5:** not met, by design. No autonomous activation, no Gate 2 approval, no multi-campaign work is authorised by this document. S5 scaffolding (CRR template, credential scan, stale-script guard) now exists.
+- **Gate S1:** open for continued supervised validation use. S1.4 live-proven (Run 3). Pending: owner confirms the Run 3 UI (S1.7) on the next live case; S1.5 send evidence remains stale until the next approved send — and must now be proven against Sender `00b52f03` (Run 4 change invalidates carrying forward older Sender-version evidence).
+- **Gate S2:** closed on live evidence (Run 3). Remaining: one live rollback drill (S2.6) — owner runbook now exists: `docs/S2_ROLLBACK_LIVE_DRILL.md`.
+- **Gate S-SEND:** code-proven end-to-end. **SS.4 blank-body gap closed in Sender itself (Run 4, dual-layer, harness P22 + 77/77 Node.js behavioural proof).** Live replay (B5) and reconciliation (B6) drills still outstanding — required before any volume increase. UI confirmation cases from the Run 3 review (case-e97b60ea / case-ea98043d) closed that pending item.
+- **Gates S3-S4:** not met, by design. Autonomous shadow readiness is now consolidated in `docs/AUTONOMOUS_SHADOW_READINESS.md` (all disabled-state; Shadow inactive API-confirmed 2026-07-07; Gate 2 checklist explicitly NOT APPROVED).
+- **Gate S5:** not met. CRR for `531e64ed` backfilled but incomplete/unsigned (`docs/campaign-readiness/`); launch blocked until owner completes + signs and rows 10-14 are re-proven live.
+- **Ops Console:** Stage 1 built (Run 4, `ops/responder-ops-console.html`) — local-only, no API, no controls, no autonomous-ready status. It changes no gate status; it is an operator aid only.

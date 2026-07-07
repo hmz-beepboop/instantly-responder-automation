@@ -5,12 +5,12 @@
 
 **Status vocabulary:** `FIXED` (deployed + regression-covered), `PARTIALLY FIXED`, `OPEN`, `UNVERIFIED` (no fresh evidence either way), `GATED` (intentionally not active).
 
-**Reference state (updated 2026-07-07, Fable Run 3):**
-- Decision `tgYmY97CG4Bm8snI` versionId `84b941a4-bc6d-4f48-be27-36dad1510c8d` (active, unchanged in Run 3)
-- HumanApproval `9aPrt92jFhoYFxbs` versionId `99b4c092-d78e-4580-a3c8-46dc65ab00cf` (active; Run 3 UI-visibility fix, was `0054f20b`)
-- Sender `ePS5uBBxKxhFCYgU` versionId `dfb310f4-901a-4d76-81dc-8f5d4ad13552` (active; read-only audited Run 3, NOT modified; export captured to `workflows/production_sender_current.json`)
-- Shadow Evaluator `aHzLtQiv6G8h1bqD` inactive; Gate 2 unapproved; autonomous disabled
-- Harness `scripts/SL-PHASE-5Q-self-improvement-behavioural-closure.py`: 463/463 PASS (P21 added Run 3)
+**Reference state (updated 2026-07-07, Fable Run 4):**
+- Decision `tgYmY97CG4Bm8snI` versionId `84b941a4-bc6d-4f48-be27-36dad1510c8d` (active, unchanged in Run 3/4)
+- HumanApproval `9aPrt92jFhoYFxbs` versionId `99b4c092-d78e-4580-a3c8-46dc65ab00cf` (active; unchanged in Run 4)
+- Sender `ePS5uBBxKxhFCYgU` versionId `00b52f03-1ae7-4252-a164-ce08f0c7a77e` (active; **Run 4 blank-body defense-in-depth gates in nodes B + O and truthful sticky notes**; was `dfb310f4`; backup `workflows/sender_backup_dfb310f4_pre_run4_blank_body_gate.json`)
+- Shadow Evaluator `aHzLtQiv6G8h1bqD` inactive (API-confirmed post-deploy Run 4); Gate 2 unapproved; autonomous disabled
+- Harness `scripts/SL-PHASE-5Q-self-improvement-behavioural-closure.py`: 483/483 PASS (P22 added Run 4)
 
 ---
 
@@ -142,7 +142,7 @@
 | Faults | Token-refresh retry gap; proxy write repair; C2 connection bug (all SL-PHASE-4I) |
 | Status | FIXED historically; **read-only code audit completed Run 3 (2026-07-07)** against fresh production export `dfb310f4` — no critical defect found; live replay drill still outstanding |
 | Evidence | Run 3 audit: eaccount from `nes.eaccount` with connected-sender allowlist gate; recipient = `nes.lead_email`; post-send `isValidSentEmailObject` verifies eaccount/recipient/subject and rejects unexpected cc/bcc (mismatch → SEND_UNCERTAIN, never silent); threading via `reply_to_uuid` + `Re:` subject preservation; `hmz-send-key` marker in HTML; atomic acquire via hmz-send-state + `no_prior_terminal_send_state` gate blocks duplicate/rerun; SEND_UNCERTAIN is terminal (no blind retry) with reconciliation poll requiring 2 consecutive single matches, zero/multiple → human review; 400→PERMANENT_FAILURE, 401/402/403→AUTH_OR_PLAN_FAILURE, 404→INVALID_REPLY_TARGET, 429/5xx→retry (max 3, retry-after capped 5s, backoff capped 2s); 14 live-send gates incl. workspace/campaign/sender/reviewer allowlists |
-| Known accepted gap | Sender's own 14 gates do not re-check non-empty body; blank-body prevention lives in HumanApproval Node N (`draft_text_required`) + form validation. Defense-in-depth only — not a proven exploitable defect; do not patch Sender without a live case |
+| Known accepted gap | **CLOSED (Fable Run 4, 2026-07-07, explicitly commissioned by the owner after the Codex Run 3 review):** Sender now independently rejects a missing/blank/whitespace-only/marker-only body — node B `draft_body_gate_passed` blocks BEFORE lock acquisition (fix-and-reapprove path stays clean) and node O 15th gate `draft_body_non_empty` blocks immediately BEFORE the POST, both mirroring node Q's exact effective-body precedence (`draft.draft_text \|\| body.edited_reply_text`) with marker/HTML/whitespace normalization. Failure reasons: `draft_body_missing_or_blank` (C2 details) / `DRAFT_BODY_MISSING_OR_BLANK` (P2 failed_gate_ids) + fix instruction; HumanApproval R0 treats it as form-retryable (same review link). HumanApproval Node N upstream prevention retained. Sender `dfb310f4 → aad8301e (gates) → 00b52f03 (truthful sticky notes)`. Proof: Node.js behavioural test 77/77 on the REAL patched node code (`scripts/FABLE-RUN4-sender-body-gate-node-test.js`), harness P22 (20 checks), node --check both nodes, no Instantly POST in any test |
 | Regression coverage | Read-only audit notes (this ledger + RUNTIME_PROOF_CHECKLIST B1-B7); retry harness (4H/4I era) |
 | Remaining risk | Medium at scale — code-proven, but duplicate-replay and reconciliation drills never run live |
 | Acceptance proof needed | Before scale: duplicate-webhook replay test + uncertain-send reconciliation drill (RUNTIME_PROOF_CHECKLIST B5/B6) |
@@ -182,10 +182,10 @@
 
 | Item | Detail |
 |---|---|
-| Faults | Not built; no faults to record |
-| Status | OPEN (not started; plan-only) |
-| Remaining risk | None operational; absence of console means review flow depends on Google Chat links + n8n UI |
-| Acceptance proof needed | N/A until Stage 1 is commissioned |
+| Faults | None recorded yet |
+| Status | **Stage 1 BUILT (Fable Run 4, 2026-07-07)** — `ops/responder-ops-console.html` + `ops/README.md`. Local-only single HTML file: no backend, no network calls (grep-verified: no fetch/XHR/WebSocket/external resources), no secrets requested, no workflow controls, no case approval, no sending, no autonomous controls; statuses limited to BLOCKED / READY FOR CONTROLLED TEST / READY FOR SUPERVISED USE + permanent NOT APPROVED FOR AUTONOMOUS SENDING banner ("READY FOR AUTONOMOUS SENDING" string absent, verified) |
+| Remaining risk | Low — console is guidance/record-generation only and can never contradict production; its checklists are honesty-dependent (it cannot verify what the operator confirms). Stage 2/3 NOT built, NOT authorised |
+| Acceptance proof needed | Owner opens the file locally and walks the verification checklist in `ops/README.md` |
 
 ## 16. UI / reporting visibility (not-now mismatch — Fable Run 3)
 
@@ -209,9 +209,18 @@
 5. **(session 16, FIXED)** Classification-learning false positive: correction rules promoting to PROOF_REQUEST fired on replies with no trust/proof signal (case-5afa61d3 — a setup question). Fixed by the PROOF_REQUEST promotion content gate (`84b941a4`).
 6. **(session 16, FIXED)** Reporting false positives/negatives: every case row claimed `reply_mode=HUMAN_ONLY` even for AI-supervised drafts; `reply_draft_status` claimed NO_DRAFT_HUMAN_ONLY next to a real AI draft; single-rule AI injection reported an EMPTY impact summary making real learning invisible. All fixed (`84b941a4`); fallback drafts are still never labelled AI.
 
+## 17. Stale embedded workflow documentation (new fault class, Fable Run 4)
+
+| Item | Detail |
+|---|---|
+| Faults | Sender sticky notes still described the Phase 4A state (DRY_RUN=true hardcoded, "No external HTTP call to Instantly is ever made", "must remain inactive") while the executable config was live-capable (`DRY_RUN=false`, allowlisted campaign, active). A future agent or operator trusting the note over the code could have made unsafe assumptions in either direction (flagged by the Codex Run 3 review) |
+| Status | FIXED (Run 4) — Overview + DRY_RUN-gate sticky notes rewritten truthfully (Sender `aad8301e → 00b52f03`); notes now state live-capability, the 15 gates, the Run 4 blank-body defense, and the change discipline |
+| Regression coverage | Process rule: any deploy that changes a workflow's operating posture (DRY_RUN, allowlists, active state, gate count) MUST update that workflow's sticky notes in the same deploy. Anti-regression ledger item 13 (OPERATION_HANDOFF) |
+| Remaining risk | Low — recurrence is discipline-dependent |
+
 ## Highest-risk open faults (ranked)
 
 1. **10(c)** — validator negation-window false-negative surface (safety-relevant but human-review-mitigated).
-2. **11/12** — Sender idempotency + threading code-audited (Run 3) but live-unproven above single-campaign supervised volume; replay + reconciliation drills outstanding (RUNTIME_PROOF_CHECKLIST B5/B6).
+2. **11/12** — Sender idempotency + threading code-audited (Run 3; blank-body gap closed Run 4) but live-unproven above single-campaign supervised volume; replay + reconciliation drills outstanding (RUNTIME_PROOF_CHECKLIST B5/B6); all send-path live evidence must now be re-proven against Sender `00b52f03`.
 3. **5** — unseen phrasings fall to AI classification, which has misclassified before.
 4. **1/3** — config drift and stale-export process risks (discipline-dependent, not code-fixed).

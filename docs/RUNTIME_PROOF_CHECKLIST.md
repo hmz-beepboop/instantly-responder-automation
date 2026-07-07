@@ -20,6 +20,10 @@ Each item needs: date, execution/case ID, and who observed it. Anything unchecke
 
 ## B. Send path (Gate S3 — only during an owner-approved controlled send)
 
+**Note (Fable Run 4, 2026-07-07):** Sender changed `dfb310f4 → 00b52f03` (blank-body defense-in-depth
++ truthful sticky notes). All B-items must be proven against the CURRENT Sender version; pre-Run-4
+Sender evidence cannot be carried forward.
+
 | # | Proof | Last evidence | Status |
 |---|-------|---------------|--------|
 | B1 | Reply sent from the same eaccount that received the inbound | 4H matrix, 2026-06-23 | STALE — re-prove on next send |
@@ -29,6 +33,7 @@ Each item needs: date, execution/case ID, and who observed it. Anything unchecke
 | B5 | Duplicate approval/webhook replay produces zero extra sends | send-state lock code-verified; live replay drill never run | NOT PROVEN |
 | B6 | SEND_UNCERTAIN produces reconciliation poll + human case, never blind retry | R/W nodes code-verified 2026-07-07 | CODE-PROVEN, no live occurrence |
 | B7 | Reopened-case "send another reply" stays manual (FOLLOWUP_SEND_PENDING_MANUAL) | 5P, 2026-06-26 | PROVEN |
+| B8 | Sender independently blocks blank/whitespace/marker-only body (Run 4 gates: node B pre-lock + node O pre-POST) | Node.js behavioural proof 77/77 + harness P22, 2026-07-07 (real node code, no POST) | CODE-PROVEN — no live blank-body case should ever occur; if one does, treat as critical (see Ops Console "Email sent blank") |
 
 ## C. Learning loop (Gate S2)
 

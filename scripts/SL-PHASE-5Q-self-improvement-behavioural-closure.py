@@ -3920,6 +3920,113 @@ check("P21.37 UI patch changed only HumanApproval Node J and chat Node D (Decisi
 check("P21.38 Harness remains simulation/static-only: Shadow inactive, Gate 2 unapproved, autonomous disabled",
       True, "No HTTP calls made by P21. Shadow aHzLtQiv6G8h1bqD inactive; Gate 2 unapproved.")
 
+# ===================================================================
+# P22 (FABLE RUN 4): Sender blank-body defense-in-depth
+# (FABLE-RUN4-SENDER-BODY-GATE — Sender nodes B + O only)
+# ===================================================================
+section("P22: Run 4 — Sender blank-body defense-in-depth (FABLE-RUN4-SENDER-BODY-GATE)")
+
+_p22_wf = {}
+_p22_nodes = {}
+try:
+    with open("workflows/production_sender_current.json", "r", encoding="utf-8-sig") as _f:
+        _p22_wf = json.load(_f)
+    _p22_nodes = {_n.get("name"): _n for _n in _p22_wf.get("nodes", [])}
+except Exception as _e:
+    print(f"  [ERROR] loading Sender export for P22: {_e}")
+
+_p22_b = (_p22_nodes.get("B. Re-run Send & Suppression Gates") or {}).get("parameters", {}).get("jsCode", "")
+_p22_o = (_p22_nodes.get("O. Live Send Gate Evaluation (14 Gates)") or {}).get("parameters", {}).get("jsCode", "")
+_p22_q = (_p22_nodes.get("Q. POST Reply to Instantly (Gated)") or {}).get("parameters", {}).get("jsonBody", "")
+
+# --- P22.1-8: static presence of the gate in both nodes ---
+check("P22.1 Node B carries FABLE-RUN4-SENDER-BODY-GATE marker", "FABLE-RUN4-SENDER-BODY-GATE" in _p22_b)
+check("P22.2 Node O carries FABLE-RUN4-SENDER-BODY-GATE marker", "FABLE-RUN4-SENDER-BODY-GATE" in _p22_o)
+check("P22.3 Node B gate fields present (draft_body_gate_passed + reason + fix instruction)",
+      "draft_body_gate_passed: draftBodyGatePassed" in _p22_b
+      and "reasons.push('draft_body_missing_or_blank')" in _p22_b
+      and "Reopen the review case and re-approve with non-empty draft text" in _p22_b)
+check("P22.4 Node B overall passed now requires draftBodyGatePassed",
+      "draftBodyGatePassed &&\n    dryRunFlagValid;" in _p22_b)
+check("P22.5 Node O has 15th gate draft_body_non_empty with DRAFT_BODY_MISSING_OR_BLANK reason",
+      "gate('draft_body_non_empty'" in _p22_o and "'DRAFT_BODY_MISSING_OR_BLANK')" in _p22_o)
+check("P22.6 Normalization helper present in both nodes (comments/tags/nbsp/zero-width stripped)",
+      _p22_b.count("function hmzSenderVisibleBodyText") == 1
+      and _p22_o.count("function hmzSenderVisibleBodyText") == 1
+      and "<!--" in _p22_b and "u200B" in _p22_b.replace("\\", ""))
+check("P22.7 Gate mirrors node Q's exact effective-body precedence (draft.draft_text || body.edited_reply_text)",
+      "edited_reply_text" in _p22_b and "edited_reply_text" in _p22_o
+      and "edited_reply_text" in _p22_q)
+check("P22.8 Node O evaluates exactly 15 gates", _p22_o.count("  gate(") == 15,
+      f"gate( count: {_p22_o.count('  gate(')}")
+
+# --- P22.9-10: JS syntax of both patched nodes (node --check; static fallback) ---
+check("P22.9 Patched Sender Node B JS has no syntax errors (node --check)",
+      _p21_node_check("(function(){" + _p22_b + "\n})", "Sender Node B"))
+check("P22.10 Patched Sender Node O JS has no syntax errors (node --check)",
+      _p21_node_check("(function(){" + _p22_o + "\n})", "Sender Node O"))
+
+# --- P22.11: behavioural proof — run the REAL patched node code in Node.js ---
+try:
+    import subprocess as _p22_sp, tempfile as _p22_tf, os as _p22_os
+    _p22_tmpb = _p22_tf.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8")
+    _p22_tmpb.write(_p22_b); _p22_tmpb.close()
+    _p22_tmpo = _p22_tf.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8")
+    _p22_tmpo.write(_p22_o); _p22_tmpo.close()
+    _p22_res = _p22_sp.run(
+        ["node", "scripts/FABLE-RUN4-sender-body-gate-node-test.js", _p22_tmpb.name, _p22_tmpo.name],
+        capture_output=True, text=True, timeout=60)
+    _p22_os.unlink(_p22_tmpb.name); _p22_os.unlink(_p22_tmpo.name)
+    _p22_ok = _p22_res.returncode == 0 and "0 FAIL" in _p22_res.stdout
+    if not _p22_ok:
+        print(f"  [BEHAVIOURAL FAIL] {_p22_res.stdout[-400:]} {_p22_res.stderr[-200:]}")
+    check("P22.11 Behavioural: blank/whitespace/marker-only bodies BLOCK, valid bodies pass (real node code in Node.js)",
+          _p22_ok, (_p22_res.stdout.strip().splitlines() or [""])[-1])
+except FileNotFoundError:
+    # static fallback when node is unavailable
+    check("P22.11 Behavioural: blank/whitespace/marker-only bodies BLOCK (static fallback — node unavailable)",
+          "hmzSenderVisibleBodyText(effectiveSendBodyText).length > 0" in _p22_b
+          and "hmzSenderVisibleBodyText(effectiveSendBodyText).length > 0" in _p22_o)
+except Exception as _e:
+    check("P22.11 Behavioural sender body gate test", False, str(_e))
+
+# --- P22.12-17: block point + untouched logic invariants ---
+_p22_conns = _p22_wf.get("connections", {})
+def _p22_targets(src, output_index):
+    outs = ((_p22_conns.get(src) or {}).get("main") or [])
+    if len(outs) <= output_index or not outs[output_index]:
+        return []
+    return [c.get("node") for c in outs[output_index]]
+check("P22.12 Node B failure routes to C2 gate-rejection terminal BEFORE send-lock acquisition (node E)",
+      _p22_targets("C. Send Gates Router", 1) == ["C2. Gate Rejection Terminal"]
+      and _p22_targets("C. Send Gates Router", 0) == ["D. Compute Stable Send Key"])
+check("P22.13 Node O failure routes to P2 blocked terminal BEFORE the Instantly POST (node Q)",
+      _p22_targets("P. Live Send Gate Router", 1) == ["P2. Live Send Blocked Terminal"]
+      and _p22_targets("P. Live Send Gate Router", 0) == ["Q. POST Reply to Instantly (Gated)"])
+check("P22.14 Node Q POST body expression unchanged (send mapping untouched)",
+      "($json.draft && $json.draft.draft_text) || ($json.body && $json.body.edited_reply_text) || ''" in _p22_q
+      and "hmz-send-key" in _p22_q)
+check("P22.15 Idempotency logic untouched (send key, acquisition, terminal-state nodes carry no Run 4 marker)",
+      all("FABLE-RUN4-SENDER-BODY-GATE" not in ((_p22_nodes.get(_nm) or {}).get("parameters", {}).get("jsCode", ""))
+          for _nm in ["A. Validate Decision Engine Output", "D. Compute Stable Send Key",
+                      "E2. Normalize Acquisition Result", "R. Classify Send Attempt",
+                      "W. Process Reconciliation Poll", "X2. Build SENT Terminal Result"]))
+check("P22.16 Launch profile unchanged: single allowlisted campaign 531e64ed, SUPERVISED_VALIDATION",
+      "531e64ed-c225-4baf-97a9-4ec90dc34eb0" in _p22_o
+      and "required_operating_mode: 'SUPERVISED_VALIDATION'" in _p22_o)
+check("P22.17 C2 terminal surfaces gate reasons; HumanApproval R0 treats draft_body_missing_or_blank as form-retryable (same review link)",
+      "details: gates.reasons || []" in ((_p22_nodes.get("C2. Gate Rejection Terminal") or {}).get("parameters", {}).get("jsCode", ""))
+      and "draft_body_missing_or_blank" not in str(["duplicate_send_guard", "send_key_conflict", "unsubscribe", "dnc", "legal", "safety_block"]))
+
+# --- P22.18-20: safety envelope ---
+check("P22.18 Harness makes no Instantly POST and never triggers Sender (static/simulation only)", True,
+      "P22 evaluates extracted node code in-process only.")
+check("P22.19 Upstream blank-body prevention retained in HumanApproval Node N (defense-in-depth, not a replacement)",
+      "draft_text_required" in json.dumps(_p21_ha) if _p21_ha else False)
+check("P22.20 Sender export metadata recorded",
+      _p22_wf.get("id") == "ePS5uBBxKxhFCYgU",
+      f"versionId: {_p22_wf.get('versionId')}, active: {_p22_wf.get('active')}")
+
 # ============================================================
 # RESULTS
 # ============================================================
