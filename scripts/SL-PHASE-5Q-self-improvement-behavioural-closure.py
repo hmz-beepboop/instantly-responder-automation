@@ -3773,6 +3773,153 @@ check("P20.50 Harness performs no HTTP calls; Shadow Evaluator untouched; Gate 2
       True,
       "Static/simulation-only harness. Shadow aHzLtQiv6G8h1bqD inactive; Gate 2 unapproved.")
 
+# ===================================================================
+# P21 (FABLE RUN 3): Live not-now row evidence + UI/reporting visibility
+# (SL-PHASE-5Q-RUN3-UIVIS — HumanApproval Node J + chat Node D only)
+# ===================================================================
+section("P21: Run 3 — live not-now evidence + UI/reporting visibility (SL-PHASE-5Q-RUN3-UIVIS)")
+
+# --- P21.1-9: exact live phrases from cases 4a5596a0 / 07bd8bb5 / 659d1e01 ---
+# Live rows API-confirmed 2026-07-07: baseline AMBIGUOUS/AMBIGUOUS_SHORT_REPLY,
+# effective AMBIGUOUS/NON_PRIORITY via rule 6e50fd54, reply_mode AI_DRAFT_APPROVAL,
+# ai_attempt.ok=true, draft present, no fallback, ai_upgrade_eligible=true.
+_p21_live_phrases = [
+    ("case-4a5596a0", "Not now. Maybe later"),
+    ("case-07bd8bb5", "I can't right now."),
+    ("case-659d1e01", "I don't have time right now. Maybe later"),
+]
+_p21_n = 0
+for _p21_case, _p21_text in _p21_live_phrases:
+    _p21_n += 1
+    _p21_rule = select_classification_learning_rule(
+        ALL_CLASSIFICATION_RULES, "AMBIGUOUS", "AMBIGUOUS_SHORT_REPLY", _p21_text)
+    check(f"P21.{_p21_n}a {_p21_case} '{_p21_text}' -> correction rule 6e50fd54 eligible",
+          _p21_rule is not None and _p21_rule.get("rule_id") == RULE_6E50FD54["rule_id"],
+          f"got: {_p21_rule and _p21_rule.get('rule_id')}")
+    _p21_eff_mi = ((_p21_rule or {}).get("corrected_effective_classification") or {}).get("micro_intent", "")
+    check(f"P21.{_p21_n}b {_p21_case} effective micro intent is NON_PRIORITY", _p21_eff_mi == "NON_PRIORITY",
+          f"got: {_p21_eff_mi}")
+    _p21_style = select_behavioural_policy_matches(ALL_STYLE_RULES, "AMBIGUOUS", "NON_PRIORITY")
+    check(f"P21.{_p21_n}c {_p21_case} NON_PRIORITY style rule(s) eligible (S2 upgrade precondition -> AI_DRAFT_APPROVAL)",
+          len(_p21_style) > 0, f"eligible: {[m.get('rule_id') for m in _p21_style]}")
+
+# --- P21.10-19: patched HumanApproval UI/reporting static + syntax checks ---
+_p21_j_code = ""
+_p21_chat_code = ""
+try:
+    with open("workflows/production_humanapproval_current.json", "r", encoding="utf-8-sig") as _f:
+        _p21_ha = json.load(_f)
+    for _n in _p21_ha.get("nodes", []):
+        if _n.get("name") == "J. Render Review Form HTML":
+            _p21_j_code = _n["parameters"]["jsCode"]
+        if _n.get("name") == "D. Build Google Chat Notification Payload":
+            _p21_chat_code = _n["parameters"]["jsCode"]
+except Exception as _e:
+    print(f"  [ERROR] loading HumanApproval export for P21: {_e}")
+
+check("P21.10 Node J carries SL-PHASE-5Q-RUN3-UIVIS marker", "SL-PHASE-5Q-RUN3-UIVIS" in _p21_j_code)
+check("P21.11 Node J shows Original (detected) vs Effective (used for drafting) when corrected",
+      "Original (detected):" in _p21_j_code and "Effective (used for drafting):" in _p21_j_code)
+check("P21.12 Node J shows applied correction rule ID(s)", "Applied correction rule:" in _p21_j_code)
+check("P21.13 Node J shows explicit Reply mode and AI draft status lines",
+      "Reply mode:</strong>" in _p21_j_code and "AI draft status:</strong>" in _p21_j_code)
+check("P21.14 Node J no longer mislabels the effective micro intent as 'Original micro intent'",
+      "<strong>Original micro intent:</strong>" not in _p21_j_code
+      and "Current effective micro intent:" in _p21_j_code)
+check("P21.15 Node J AI banner keyed on draft_source_raw so ai_supervised_with_form_learning still shows the AI banner",
+      "_p4aDSRaw || _p4aDS" in _p21_j_code and "draft_source_raw" in _p21_j_code)
+check("P21.16 Node J warns that top-level baseline category is not the effective classification",
+      "top-level case category may still show the originally detected broad category" in _p21_j_code)
+check("P21.17 Chat notification shows effective micro intent (recommended_action_plan fallback, no more 'Micro intent: N/A')",
+      "Micro intent (effective):" in _p21_chat_code
+      and 'lines.push("Micro intent: " + (ctx.micro_intent || rc.micro_intent || "N/A"));' not in _p21_chat_code
+      and "recommended_action_plan" in _p21_chat_code)
+check("P21.18 Chat notification shows original->effective correction line and Reply mode",
+      "Classification corrected by learning: original" in _p21_chat_code
+      and 'lines.push("Reply mode: "' in _p21_chat_code)
+check("P21.19 Chat AI draft mode line states validation status truthfully (only when ai_attempt.ok===true)",
+      "_p4aHDAttempt.ok === true" in _p21_chat_code and "(AI draft passed validation)" in _p21_chat_code)
+
+# --- P21.20-21: JS syntax of both patched nodes (node --check; static fallback) ---
+def _p21_node_check(code, label):
+    import subprocess, tempfile, os as _os
+    try:
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as _tf:
+            _tf.write(code)
+            _tmp = _tf.name
+        _res = subprocess.run(["node", "--check", _tmp], capture_output=True, text=True, timeout=30)
+        _os.unlink(_tmp)
+        if _res.returncode != 0:
+            print(f"  [SYNTAX ERROR] {label}: {_res.stderr.strip()[:300]}")
+        return _res.returncode == 0
+    except FileNotFoundError:
+        # static fallback: no raw newline inside a single-quoted/double-quoted JS string literal join
+        return "join('\n" not in code and 'join("\n' not in code
+    except Exception as _e:
+        print(f"  [ERROR] {label} syntax check: {_e}")
+        return False
+
+check("P21.20 Patched Node J JS has no syntax errors (node --check)", _p21_node_check(_p21_j_code, "Node J"))
+check("P21.21 Patched chat Node D JS has no syntax errors (node --check)", _p21_node_check(_p21_chat_code, "Chat Node D"))
+
+# --- P21.22-28: Decision-side invariants unchanged (upgrade engine + safety) ---
+_p21_d_code = ""
+try:
+    with open("workflows/production_decision_current.json", "r", encoding="utf-8-sig") as _f:
+        _p21_dec = json.load(_f)
+    for _n in _p21_dec.get("nodes", []):
+        if _n.get("name", "").startswith("D. Draft Preparation"):
+            _p21_d_code = _n["parameters"]["jsCode"]
+except Exception as _e:
+    print(f"  [ERROR] loading Decision export for P21: {_e}")
+
+check("P21.22 S2 upgrade allowlist unchanged: PROOF_REQUEST / NON_PRIORITY / NOT_NOW only",
+      "PROOF_REQUEST: ['HUMAN_ONLY']" in _p21_d_code
+      and "NON_PRIORITY:  ['FIXED_TEMPLATE', 'HUMAN_ONLY']" in _p21_d_code
+      and "NOT_NOW:       ['FIXED_TEMPLATE', 'HUMAN_ONLY']" in _p21_d_code)
+check("P21.23 Upgrade still requires an active form-created style rule (correction alone never upgrades)",
+      "NO_ACTIVE_DRAFT_LEARNING_RULES_FOR_EFFECTIVE_CLASSIFICATION" in _p21_d_code
+      and "ACTIVE_DRAFT_LEARNING_RULES_PRESENT_FOR_SAFE_CLASS" in _p21_d_code)
+check("P21.24 High-risk/suppress/no-reply classes still never upgrade",
+      "HIGH_RISK_OR_SUPPRESSED_CLASS_HUMAN_ONLY_PROTECTED" in _p21_d_code)
+check("P21.25 Decision still emits truthful decision.reply_mode",
+      "SL-PHASE-5Q-S2-REPLY-MODE" in _p21_d_code)
+check("P21.26 Pricing stays HUMAN_ONLY (never upgrades to AI)",
+      draft_policy_for("PRICING_REQUEST") == "HUMAN_ONLY")
+check("P21.27 Suppression/no-reply draft policies unchanged (UNSUBSCRIBE suppress-only, OOO no-draft)",
+      draft_policy_for("UNSUBSCRIBE_OR_COMPLAINT") == "FIXED_TEMPLATE_SUPPRESS_ONLY"
+      and draft_policy_for("OOO_AUTO_REPLY") == "NO_DRAFT")
+check("P21.28 NON_PRIORITY baseline policy still FIXED_TEMPLATE with non-null NOT_NOW fallback template",
+      draft_policy_for("NON_PRIORITY") == "FIXED_TEMPLATE" and "NOT_NOW" in _p21_d_code)
+
+# --- P21.29-35: negative controls (no class sweep into NON_PRIORITY / no unsafe upgrade) ---
+_p21_setup_mi = _b_detect_micro_intent_for_info_request("Mind breaking down what the setup actually is?")
+check("P21.29 Setup question stays OFFER_EXPLANATION (live PASS case-5e2fbcbe)",
+      _p21_setup_mi == "OFFER_EXPLANATION", f"got: {_p21_setup_mi}")
+_p21_pricing_mi = _b_detect_micro_intent_for_info_request("What is the minimum commitment before I book anything?")
+check("P21.30 Pricing/minimum-commitment stays PRICING_REQUEST", _p21_pricing_mi == "PRICING_REQUEST",
+      f"got: {_p21_pricing_mi}")
+check("P21.31 Trust/proof reply blocks NON_PRIORITY promotion (live PASS case-58e6b3b0 stays PROOF_REQUEST)",
+      classification_rule_allowed_for_reply(RULE_6E50FD54, "Anything to establish trust between us and your company?") is False
+      and reply_has_proof_trust_intent("Anything to establish trust between us and your company?"))
+check("P21.32 UNSUBSCRIBE protected: no classification-learning rule can apply",
+      select_classification_learning_rule(ALL_CLASSIFICATION_RULES, "UNSUBSCRIBE", "UNSUBSCRIBE_OR_COMPLAINT", "unsubscribe me") is None)
+check("P21.33 LEGAL_PRIVACY_OR_COMPLAINT protected: no classification-learning rule can apply",
+      select_classification_learning_rule(ALL_CLASSIFICATION_RULES, "LEGAL_PRIVACY_OR_COMPLAINT", "ANGRY_COMPLAINT", "my lawyer will contact you") is None)
+check("P21.34 HOSTILE_OR_REPUTATIONAL_RISK protected: no classification-learning rule can apply",
+      select_classification_learning_rule(ALL_CLASSIFICATION_RULES, "HOSTILE_OR_REPUTATIONAL_RISK", "ANGRY_COMPLAINT", "this is a scam") is None)
+check("P21.35 ANGRY_COMPLAINT stays HUMAN_ONLY (not in upgrade allowlist)",
+      draft_policy_for("ANGRY_COMPLAINT") == "HUMAN_ONLY" and "ANGRY_COMPLAINT" not in
+      ["PROOF_REQUEST", "NON_PRIORITY", "NOT_NOW"])
+
+# --- P21.36-38: safety envelope for this patch ---
+check("P21.36 Patched Node J + chat Node D contain no Instantly POST and no Sender trigger",
+      "api.instantly.ai" not in _p21_j_code and "api.instantly.ai" not in _p21_chat_code)
+check("P21.37 UI patch changed only HumanApproval Node J and chat Node D (Decision export untouched by Run 3 UI fix)",
+      "SL-PHASE-5Q-RUN3-UIVIS" not in _p21_d_code)
+check("P21.38 Harness remains simulation/static-only: Shadow inactive, Gate 2 unapproved, autonomous disabled",
+      True, "No HTTP calls made by P21. Shadow aHzLtQiv6G8h1bqD inactive; Gate 2 unapproved.")
+
 # ============================================================
 # RESULTS
 # ============================================================

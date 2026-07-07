@@ -5,11 +5,12 @@
 
 **Status vocabulary:** `FIXED` (deployed + regression-covered), `PARTIALLY FIXED`, `OPEN`, `UNVERIFIED` (no fresh evidence either way), `GATED` (intentionally not active).
 
-**Reference state (updated 2026-07-07, session 16):**
-- Decision `tgYmY97CG4Bm8snI` versionId `84b941a4-bc6d-4f48-be27-36dad1510c8d` (active)
-- HumanApproval `9aPrt92jFhoYFxbs` versionId `0054f20b-2090-41e4-be76-95e8b71921de` (active)
-- Shadow Evaluator `aHzLtQiv6G8h1bqD` inactive; Gate 2 unapproved; autonomous disabled; Sender untouched
-- Harness `scripts/SL-PHASE-5Q-self-improvement-behavioural-closure.py`: 425/425 PASS
+**Reference state (updated 2026-07-07, Fable Run 3):**
+- Decision `tgYmY97CG4Bm8snI` versionId `84b941a4-bc6d-4f48-be27-36dad1510c8d` (active, unchanged in Run 3)
+- HumanApproval `9aPrt92jFhoYFxbs` versionId `99b4c092-d78e-4580-a3c8-46dc65ab00cf` (active; Run 3 UI-visibility fix, was `0054f20b`)
+- Sender `ePS5uBBxKxhFCYgU` versionId `dfb310f4-901a-4d76-81dc-8f5d4ad13552` (active; read-only audited Run 3, NOT modified; export captured to `workflows/production_sender_current.json`)
+- Shadow Evaluator `aHzLtQiv6G8h1bqD` inactive; Gate 2 unapproved; autonomous disabled
+- Harness `scripts/SL-PHASE-5Q-self-improvement-behavioural-closure.py`: 463/463 PASS (P21 added Run 3)
 
 ---
 
@@ -139,11 +140,12 @@
 | Item | Detail |
 |---|---|
 | Faults | Token-refresh retry gap; proxy write repair; C2 connection bug (all SL-PHASE-4I) |
-| Status | FIXED historically; UNVERIFIED recently (Sender intentionally untouched since; correct per standing rules) |
-| Evidence | HumanApproval `27ef843a`, Proxy `47dbb8bd` (2026-06-23); retry harness 8/8; cases c0dd8298/7434572c/c9b32e56 SENT correctly (4H) |
-| Regression coverage | Retry harness (4H/4I era); not re-run this session |
-| Remaining risk | Medium at scale — idempotency proven at single-campaign, low-volume supervised use only |
-| Acceptance proof needed | Before scale: duplicate-webhook replay test + uncertain-send reconciliation drill |
+| Status | FIXED historically; **read-only code audit completed Run 3 (2026-07-07)** against fresh production export `dfb310f4` — no critical defect found; live replay drill still outstanding |
+| Evidence | Run 3 audit: eaccount from `nes.eaccount` with connected-sender allowlist gate; recipient = `nes.lead_email`; post-send `isValidSentEmailObject` verifies eaccount/recipient/subject and rejects unexpected cc/bcc (mismatch → SEND_UNCERTAIN, never silent); threading via `reply_to_uuid` + `Re:` subject preservation; `hmz-send-key` marker in HTML; atomic acquire via hmz-send-state + `no_prior_terminal_send_state` gate blocks duplicate/rerun; SEND_UNCERTAIN is terminal (no blind retry) with reconciliation poll requiring 2 consecutive single matches, zero/multiple → human review; 400→PERMANENT_FAILURE, 401/402/403→AUTH_OR_PLAN_FAILURE, 404→INVALID_REPLY_TARGET, 429/5xx→retry (max 3, retry-after capped 5s, backoff capped 2s); 14 live-send gates incl. workspace/campaign/sender/reviewer allowlists |
+| Known accepted gap | Sender's own 14 gates do not re-check non-empty body; blank-body prevention lives in HumanApproval Node N (`draft_text_required`) + form validation. Defense-in-depth only — not a proven exploitable defect; do not patch Sender without a live case |
+| Regression coverage | Read-only audit notes (this ledger + RUNTIME_PROOF_CHECKLIST B1-B7); retry harness (4H/4I era) |
+| Remaining risk | Medium at scale — code-proven, but duplicate-replay and reconciliation drills never run live |
+| Acceptance proof needed | Before scale: duplicate-webhook replay test + uncertain-send reconciliation drill (RUNTIME_PROOF_CHECKLIST B5/B6) |
 
 ## 12. Threading / wrong sender / blank body
 
@@ -185,6 +187,17 @@
 | Remaining risk | None operational; absence of console means review flow depends on Google Chat links + n8n UI |
 | Acceptance proof needed | N/A until Stage 1 is commissioned |
 
+## 16. UI / reporting visibility (not-now mismatch — Fable Run 3)
+
+| Item | Detail |
+|---|---|
+| Faults | Owner reported cases `4a5596a0`/`07bd8bb5`/`659d1e01` as "not classified NOT_NOW, no AI draft". Live rows proved the backend SUCCEEDED (effective `AMBIGUOUS/NON_PRIORITY` via rule `6e50fd54`, `reply_mode=AI_DRAFT_APPROVAL`, `ai_attempt.ok=true`, draft present, upgrade eligible). The real faults were reporting: (a) Google Chat printed "Micro intent: N/A" (fallback chain missed `recommended_action_plan.micro_intent`); (b) review form never showed Original vs Effective classification, so top-level baseline `AMBIGUOUS` read as the final result; (c) Node J's correction section labelled the EFFECTIVE micro intent "Original micro intent" (untruthful); (d) no explicit reply_mode / AI-draft-status line on either surface |
+| Status | FIXED (HumanApproval `0054f20b → 99b4c092`, nodes J + chat D only; Decision untouched) |
+| Evidence | Live rows re-fetched via REST 2026-07-07; patched Node J executed offline against the REAL case-4a5596a0 row (11/11 render assertions PASS); chat node 6/6; P21.10-21 |
+| Regression coverage | P21 (38 tests): exact live phrases, UI markers, truthful labels, syntax, no-Instantly-POST |
+| Remaining risk | Low — owner should confirm the live form/chat on the next real case |
+| Acceptance proof needed | Owner opens the next review case + chat message and confirms Original vs Effective, Reply mode, and AI draft status are visible |
+
 ---
 
 ## False-positive risks found in this audit
@@ -199,6 +212,6 @@
 ## Highest-risk open faults (ranked)
 
 1. **10(c)** — validator negation-window false-negative surface (safety-relevant but human-review-mitigated).
-2. **11/12** — Sender idempotency + threading unverified at anything above single-campaign supervised volume.
+2. **11/12** — Sender idempotency + threading code-audited (Run 3) but live-unproven above single-campaign supervised volume; replay + reconciliation drills outstanding (RUNTIME_PROOF_CHECKLIST B5/B6).
 3. **5** — unseen phrasings fall to AI classification, which has misclassified before.
 4. **1/3** — config drift and stale-export process risks (discipline-dependent, not code-fixed).

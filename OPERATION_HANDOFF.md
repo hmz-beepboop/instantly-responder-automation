@@ -4,6 +4,48 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ---
 
+## 2026-07-07 — Fable Run 3: UI/Reporting Visibility Fix + S1/S-SEND/S5 Scale Gates + Sender Audit (DEPLOYED)
+
+**Agent:** Claude Code (Fable 5)
+**Objective:** Absorb the Codex live-row evidence (five cases), fix the proven UI/reporting mismatch, audit S1 supervised gate + Sender/send-path/idempotency (read-only), scaffold S5 multi-campaign gates, and write the permanent anti-regression ledger below.
+
+**Live row confirmation (read-only REST, table `WMTmI6UNjZZgSU3h`, guard passed):** all five rows re-verified. `case-58e6b3b0` (trust → PROOF_REQUEST AI draft, rule ea15095a injected, non-empty summary) PASS. `case-5e2fbcbe` (setup → OFFER_EXPLANATION AI draft, no PROOF hijack) PASS. The three "not-now failures" (`4a5596a0`/`07bd8bb5`/`659d1e01`) are **backend successes**: baseline `AMBIGUOUS/AMBIGUOUS_SHORT_REPLY` → effective `AMBIGUOUS/NON_PRIORITY` via rule `6e50fd54`, `reply_mode=AI_DRAFT_APPROVAL`, `ai_attempt.ok=true`, drafts present, `ai_upgrade_eligible=true`. **No classifier/upgrade/style patch was made for these rows — none was needed.** Session 16 S2 work is live-proven.
+
+**Proven UI/reporting defect (fixed — SL-PHASE-5Q-RUN3-UIVIS, HumanApproval nodes J + chat D only):** (a) Google Chat printed "Micro intent: N/A" (fallback chain missed `recommended_action_plan.micro_intent`); (b) review form had no Original-vs-Effective classification display, so top-level baseline `AMBIGUOUS` read as final; (c) correction section labelled the EFFECTIVE micro intent "Original micro intent" (untruthful); (d) no explicit reply-mode / AI-draft-status line. New form/chat content: "Classification corrected by approved learning" block (Original (detected) vs Effective (used for drafting) + applied correction rule ID + warning that top-level category may show baseline), "Reply mode: ... | AI draft status: ..." line (status derived from `draft_source_raw` + `ai_attempt.ok` — fallback can never display as AI success), truthful "Current effective ..." labels, chat "Micro intent (effective)" + correction line + reply mode + "(AI draft passed validation)". Offline proof: patched Node J executed against the REAL case-4a5596a0 row — 11/11 assertions PASS; chat node 6/6.
+
+| Workflow | ID | Old versionId | New versionId | Change |
+|----------|----|---------------|---------------|--------|
+| HumanApproval | `9aPrt92jFhoYFxbs` | `0054f20b` | `99b4c092` | Run 3 UI/reporting visibility fix (nodes J + chat D) |
+
+Decision unchanged (`84b941a4`). Backup: `workflows/humanapproval_backup_0054f20b_pre_run3_ui_visibility.json`. Local export refreshed from production post-deploy (versionId verified). Patch script: `scripts/SL-PHASE-5Q-RUN3-apply-ui-visibility-fix.py`.
+
+**Sender read-only audit (S-SEND gate, NOT modified, NOT triggered):** fresh production export captured to `workflows/production_sender_current.json` (Sender `ePS5uBBxKxhFCYgU`, versionId `dfb310f4`, active; the old `03_reply_sender_validation.json` is stale — do not use it as Sender truth). Findings: correct-sender/recipient/thread enforced pre-send (14 gates: workspace/campaign/sender/reviewer allowlists, DRY_RUN flag, lock, suppression, no-prior-terminal-state) AND post-send (`isValidSentEmailObject` verifies eaccount/recipient/subject, rejects unexpected cc/bcc → SEND_UNCERTAIN); `hmz-send-key` marker embedded; duplicates blocked by atomic hmz-send-state acquire + prior-terminal-state gate; SEND_UNCERTAIN terminal (never blindly retried) with reconciliation needing 2 consecutive single matches (zero/multiple → human review); 400/401/402/403/404 terminal, 429/5xx retry max 3 with retry-after cap 5s. **No critical defect → no Sender patch.** Accepted gap (ledger item 11): Sender gates don't re-check non-empty body (enforced upstream in HumanApproval Node N `draft_text_required`).
+
+**Harness:** 463/463 PASS (was 425/425; P21 added 38 tests: the three exact live not-now phrases → NON_PRIORITY + upgrade preconditions; UI-visibility markers + truthful labels; node --check on both patched nodes; Decision invariants unchanged; negative controls booking/pricing/proof/unsubscribe/legal/hostile; never-upgrade protections; no-Instantly-POST). Re-run green against production-refreshed exports.
+
+**New docs/scripts:** `docs/RUNTIME_PROOF_CHECKLIST.md` (runtime source of truth, S1/S-SEND/S2 proof matrix), `docs/CAMPAIGN_READINESS_RECORD.md` (S5 per-campaign launch blocker template), `scripts/scan-workflow-exports-for-secrets.py` (credential-leak scan — PASS 2026-07-07). `docs/SCALE_READY_ACCEPTANCE_GATES.md` updated (S1.4 now PASS on live evidence; new S1.7, S-SEND, S5.7-S5.9). Fault ledger updated (item 11 audit evidence, new item 16).
+
+**Safety envelope:** production guard passed before every API call; Sender untouched/not triggered; no Instantly POST; no live email tests; Shadow `aHzLtQiv6G8h1bqD` inactive (API-confirmed post-deploy); Gate 2 unapproved; autonomous disabled; Ops Console not built.
+
+**Owner actions:** (1) open the next review case + Google Chat message and confirm the new Original-vs-Effective / Reply mode / AI draft status fields render; (2) live rollback drill (S2.6): flip one Q12 rule to `deactivated`, send a probe, restore; (3) on the next approved send, re-prove RUNTIME_PROOF_CHECKLIST B1-B4.
+
+### PERMANENT ANTI-REGRESSION LEDGER (do not regress — details in `docs/INSTANTLY_RESPONDER_FAULT_LEDGER_AND_SCALE_READINESS.md`)
+
+1. **Stale sources:** Never execute from README, old dry-run docs, old prompt packs, old fix packages, archived notes, or stale local exports. `OPERATION_HANDOFF.md` + production-refreshed exports are truth. `03_reply_sender_validation.json` is stale; Sender truth is `production_sender_current.json`. Refresh + commit exports after every deploy (ledger 3).
+2. **Wrong target:** Production is `https://n8n.hmzaiautomation.com/api/v1` only. Run `scripts/assert-hmz-production-target.ps1` first. No localhost/Docker unless owner says "local dev" (CLAUDE.md hard rule).
+3. **Credentials:** No secrets in files/exports/logs/chat. Run `scripts/scan-workflow-exports-for-secrets.py` in any session touching exports (PASS 2026-07-07). Missing `OPENAI_API_KEY` must stay a truthful `AI_PROVIDER_CONFIG_MISSING` fallback (ledger 2).
+4. **Code-node string patches:** Node J syntax crash (session 7) and Node D join literal-newline crash (case-68110963) both shipped from string patching. `node --check` + literal-newline guard are mandatory before any Code-node deploy (ledger 4, 13; P11/P17/P19/P21).
+5. **Review render/link invariants:** newest review link only; stale link after SENT blocked (already-sent banner); blocked submits keep the same link + exact reason; valid HUMAN_ONLY/`ai_failed_fallback` cases are REAL reviews, never diagnostic fallback (P13/P14); diagnostic fallback only for genuinely missing context; Google Chat payload must remain well-formed text (ledger 7).
+6. **Classification protections:** trust/proof variants (trust/trustworthy/credible/believe/evidence) stay PROOF_REQUEST; NON_PRIORITY promotion blocked on proof/trust replies; PROOF_REQUEST promotion requires trust/proof signal (no hijack of setup questions); booking stays deterministic (no hyper-literal instruction pasting — GAP-1); pricing stays PRICING_REQUEST/HUMAN_ONLY with guidance consumed (GAP-2); not-now dense coverage per P7/P18/P20/P21 (ledger 5, 6).
+7. **Upgrade rules:** deterministic/human→AI upgrades ONLY from allowlist {PROOF_REQUEST, NON_PRIORITY, NOT_NOW}, ONLY with ≥1 active form-created style rule for the EFFECTIVE classification; classification correction alone never upgrades; unsubscribe/legal/hostile/suppress/no-reply/pricing/booking never upgrade; NOT_NOW/PROOF fallbacks are non-null (textarea never empty) (ledger 8; P20/P21).
+8. **Truthful metadata:** `reply_mode`/`reply_draft_status` must match the real draft; fallback drafts are never labelled AI; "passed validation" requires `ai_attempt.ok===true`; multi-rule injection never claims per-rule impact (attribution stays conservative); active-learning counters must not over- or under-credit (ledger 9, 16).
+9. **UI truthfulness (Run 3):** baseline row category must never present as the effective classification; Original-vs-Effective + applied rule + reply mode + AI draft status must stay visible (P21.10-19). The not-now "failure" report was a visibility artifact — check reporting before patching classifiers.
+10. **Validator honesty:** style-only rejections (dense paragraph) are reflowed whitespace-only and re-validated, never presented as safety failures; banner names exact failed checks; FORBIDDEN_AI negation-window gaps (10c) stay UNPATCHED until a live case exists (ledger 10).
+11. **Send safety:** same sender as inbound, original lead recipient, same thread, non-empty body (enforced at approval), `hmz-send-key` marker, duplicate prevention via send-state lock + terminal-state gate, SEND_UNCERTAIN never blindly retried, reopened-case repeat sends stay manual (S-SEND gate; ledger 11, 12).
+12. **Process:** rollback = flip Q12 rule `status` (documented + offline-drilled; live drill pending); old acceptance harness is never sole runtime evidence — `docs/RUNTIME_PROOF_CHECKLIST.md` is; Shadow stays inactive, Gate 2 stays unapproved, autonomous stays disabled without explicit owner sign-off; Ops Console, when commissioned, starts as a local no-API wizard.
+
+---
+
 ## 2026-07-07 - Codex Evidence Pass: Live Row Collection Before Fable Run 3 (COMPLETE)
 
 **Agent:** Codex
