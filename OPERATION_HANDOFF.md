@@ -4,6 +4,33 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ---
 
+## 2026-07-07 07:27 BST — Codex Review: Fable Run 3 Scale Hardening (PASS)
+
+**Agent:** Codex
+**Objective:** Review Fable Run 3 cheaply before any Fable Run 4 work. Review-only: no workflow deploy, no production writes, no live email tests, no Sender trigger, no autonomous/Gate 2/Shadow/Ops Console work.
+
+**Baseline used:** branch `codex/5q-context-token-forensic-20260705`; latest Run 3 commit `c558263` (`hardening: close Run 3 scale safety gates`). `git show --stat --oneline c558263` matched the reported Run 3 surface: docs/reports/scripts, HumanApproval export/backup, fresh Sender export; no Decision export change. Initial worktree was already very dirty with many unrelated modified backup/output/archive-style files; nothing was staged. Review treated those as pre-existing and ignored them.
+
+**Checks run:** required git pre-flight; env-var presence check without values; required file reads; `python3 scripts/SL-PHASE-5Q-self-improvement-behavioural-closure.py` -> `463/463 PASS`; `python3 scripts/scan-workflow-exports-for-secrets.py` -> no credential-shaped values found; local workflow metadata parsed from exports; production guard passed; read-only production workflow metadata checked; read-only Review Cases rows checked for `case-e97b60ea` and `case-ea98043d`. No production writes.
+
+**Changed files reviewed:** `OPERATION_HANDOFF.md`; `docs/INSTANTLY_RESPONDER_FAULT_LEDGER_AND_SCALE_READINESS.md`; `docs/SCALE_READY_ACCEPTANCE_GATES.md`; `docs/RUNTIME_PROOF_CHECKLIST.md`; `docs/CAMPAIGN_READINESS_RECORD.md`; the three listed reports; `scripts/SL-PHASE-5Q-self-improvement-behavioural-closure.py`; `scripts/SL-PHASE-5Q-RUN3-apply-ui-visibility-fix.py`; `scripts/scan-workflow-exports-for-secrets.py`; `workflows/production_humanapproval_current.json`; `workflows/production_sender_current.json`; `workflows/production_decision_current.json`. Protected workflow result: Decision unchanged (`84b941a4`), Sender unchanged logically (`dfb310f4`, new export only), Shadow inactive, no autonomous/Gate 2/Ops Console changes found.
+
+**Production read-only verification:** Decision `84b941a4-bc6d-4f48-be27-36dad1510c8d` active and matches local; HumanApproval `99b4c092-d78e-4580-a3c8-46dc65ab00cf` active and matches local; Sender `dfb310f4-901a-4d76-81dc-8f5d4ad13552` active and matches local; Shadow `aHzLtQiv6G8h1bqD` active=false. Production target guard passed before the API reads.
+
+**UI confirmation cases:** owner-confirmed UI evidence was independently row-checked read-only. `case-e97b60ea`: token/review path derivable, non-empty draft, baseline/effective `INFORMATION_REQUEST/PROOF_REQUEST`, `reply_mode=AI_DRAFT_APPROVAL`, `draft_source_raw=ai_supervised`, `ai_attempt.ok=true`, rule `ea15095a`, no fallback mislabel. `case-ea98043d`: token/review path derivable, non-empty draft, baseline `AMBIGUOUS/AMBIGUOUS_SHORT_REPLY` -> effective `AMBIGUOUS/NON_PRIORITY`, `reply_mode=AI_DRAFT_APPROVAL`, `draft_source_raw=ai_supervised`, `ai_attempt.ok=true`, rule `6e50fd54`, no fallback mislabel. This closes the Run 3 pending UI confirmation item for Original-vs-Effective / reply mode / AI status visibility.
+
+**Sender/send-path review:** Sender is live-capable for the allowlisted campaign (`DRY_RUN=false`, live campaign allowlist present), unchanged by Run 3, and has pre/post sender/recipient/thread checks, `hmz-send-key`, sidecar acquire/terminal-state idempotency, SEND_UNCERTAIN reconciliation without blind second POST, retry handling for 429/5xx, and terminal handling for 400/401/402/403/404. Known gap is accurately documented: Sender's own live gates do not independently reject blank `draft.draft_text`; blank-body prevention is upstream in HumanApproval Node N (`draft_text_required`). This is acceptable for remaining owner-only controlled live proof, but blocks scale until runtime checklist B1-B5 and duplicate/reconciliation proof are completed or a targeted Sender defense-in-depth patch is explicitly commissioned.
+
+**Risks / uncertainties:** large pre-existing dirty worktree remains; Sender export contains a stale sticky note saying DRY_RUN-only/inactive while executable config is live-capable; live Sender evidence from 2026-06-23 is stale; duplicate replay and SEND_UNCERTAIN reconciliation are code-proven but not live-drilled; S2 rollback drill remains owner-live pending; CRR template has no completed signed campaign record.
+
+**Required owner actions:** complete/backfill Campaign Readiness Record for campaign `531e64ed-c225-4baf-97a9-4ec90dc34eb0`; perform owner-approved runtime proof on next send using `docs/RUNTIME_PROOF_CHECKLIST.md` B1-B5; run S2 live rollback/deactivation drill; keep Shadow/Gate 2/autonomous/Ops Console untouched until explicitly commissioned.
+
+**Next recommended step:** Human/Fable owner-only live proof actions first. After those are recorded, Fable Run 4 may proceed with autonomous shadow readiness + Stage 1 Ops Console scaffold, still with no Gate 2 approval or autonomous activation unless owner explicitly approves.
+
+**Regression Safety Check:** no Sender trigger, no Instantly POST from this review, no workflow deploy, no production write, no Shadow activation, no Gate 2 approval, no autonomous work, no Ops Console build, no broad archive scan.
+
+---
+
 ## 2026-07-07 — Fable Run 3: UI/Reporting Visibility Fix + S1/S-SEND/S5 Scale Gates + Sender Audit (DEPLOYED)
 
 **Agent:** Claude Code (Fable 5)
