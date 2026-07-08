@@ -4,6 +4,33 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ---
 
+## 2026-07-08 01:08 BST — Codex Final Review: Fable Run 4 (PASS)
+
+**Agent:** Codex
+**Objective:** Final skeptical review of Fable Run 4 before owner-live proof actions. Review-only: no workflow deploy, no production writes, no live email tests, no Sender trigger, no Shadow activation, no Gate 2 approval, no autonomous enablement, no Ops Console edits.
+
+**Baseline used:** branch `codex/5q-context-token-forensic-20260705`; latest Run 4 commit `dadf534` (`final: prepare shadow readiness and local ops console`). Worktree remained very dirty with many pre-existing modified backup/output/workflow files; nothing was staged before this handoff update. Required process check found only the current `pwsh` shell, no orphaned Fable Run 4 node/python test process. Environment variables were presence-checked only; no secret values printed.
+
+**Checks run:** required git pre-flight; required file reads only; production target guard passed; read-only production metadata GETs for Decision/HumanApproval/Sender/Shadow; `node scripts/FABLE-RUN4-sender-body-gate-node-test.js` attempted but `node` is unavailable in this shell; `python` shim unavailable, so the same scripts were run with `python3`; `python3 scripts/SL-PHASE-5Q-self-improvement-behavioural-closure.py` -> **483/483 PASS** with P22 static fallback for node absence; `python3 scripts/scan-workflow-exports-for-secrets.py` -> no credential-shaped values; Ops Console network/API grep via PowerShell -> no matches; scoped JSON comparison of Sender current vs backup.
+
+**Protected workflow verdict:** Decision unchanged locally and in production at `84b941a4-bc6d-4f48-be27-36dad1510c8d`; HumanApproval unchanged locally and in production at `99b4c092-d78e-4580-a3c8-46dc65ab00cf`; Sender changed from backup `dfb310f4-901a-4d76-81dc-8f5d4ad13552` to local/production `00b52f03-1ae7-4252-a164-ce08f0c7a77e`; Shadow production active=false (`ae13bf4e-ee04-438f-9657-3c57183b90a2`). No production writes were made.
+
+**Sender body-gate verdict:** PASS. Structured diff showed only Sender nodes `B. Re-run Send & Suppression Gates`, `O. Live Send Gate Evaluation (14 Gates)`, and two sticky notes changed; workflow connections/settings/active state unchanged. Node B blocks blank body before ownership acquisition via C false -> C2. Node O adds the 15th `draft_body_non_empty` gate immediately before P/Q; P false -> P2, so POST and SENT terminal are unreachable on body failure. Node Q POST body expression, send ownership, SENT terminal, retry classification, and reconciliation nodes were byte-for-byte unchanged from backup. Body normalization covers comments/marker, HTML tags, nbsp, zero-width chars, and whitespace. HumanApproval R0 still treats recoverable Sender blocks as same-review-link retryable. Limitation: the 77/77 standalone Node.js behavioural test could not be re-run here because `node` is not installed; Fable's reported 77/77 result is supported by the real-node test script, P22 static checks, and direct export inspection.
+
+**Ops Console verdict:** PASS. `ops/responder-ops-console.html` is a single local HTML file with 8 modules, no backend, no fetch/XHR/WebSocket/EventSource/sendBeacon/API references, no secret inputs, no workflow activation/case approval/sending/autonomous controls, and no `READY FOR AUTONOMOUS SENDING` status. It includes New Campaign Setup with approved sender list, Product/Offer setup, Draft Style tuning, start/stop guidance-only modules, Diagnose Issue with 11 issue types, Runtime Proof, SOP reference, readiness statuses `BLOCKED` / `READY FOR CONTROLLED TEST` / `READY FOR SUPERVISED USE` plus permanent `NOT APPROVED FOR AUTONOMOUS SENDING`, and all 7 Blob-download outputs.
+
+**Autonomous-shadow verdict:** PASS for disabled readiness only. `docs/AUTONOMOUS_SHADOW_READINESS.md` states default disabled, Shadow not activated, Gate 2 NOT APPROVED/unsigned, 14-day plan with thresholds, disallowed categories, escalation rules, rollback/kill switch, owner signoff, and no executable autonomous activation without explicit owner approval.
+
+**Campaign/S2 proof verdict:** PASS for documentation, owner-live pending. `docs/S2_ROLLBACK_LIVE_DRILL.md` is an owner runbook and does not claim completion. CRR docs mark unknowns pending, document the `bcda01f7` vs `531e64ed` campaign-ID conflict, keep launch blockers explicit, and leave the `531e64ed` record incomplete/unsigned.
+
+**Remaining owner-live actions:** next approved send runtime proof B1-B5 against Sender `00b52f03`; duplicate replay and SEND_UNCERTAIN drills before volume increase; S2.6 rollback live drill; complete/sign `docs/campaign-readiness/CRR-531e64ed.md` including campaign-ID confirmation; confirm Run 3 UI/chat fields on the next live case; owner walk-through of `ops/README.md`.
+
+**Final readiness percentages:** supervised responder 98%; self-improvement 98%; sender / scale safety 92%; autonomous shadow readiness 70%; ops console stage 1 100%; full scale-ready system 80%.
+
+**Regression Safety Check:** no Sender trigger, no Instantly POST from this review, no workflow deploy, no production write, no Shadow activation, no Gate 2 approval, no autonomous enablement, no Ops Console edit, no broad repo/archive scan, no secrets printed.
+
+---
+
 ## 2026-07-07 — Fable Run 4: Sender Blank-Body Defense-in-Depth + Shadow Readiness (disabled) + Ops Console Stage 1 (DEPLOYED)
 
 **Agent:** Claude Code (Fable 5)
