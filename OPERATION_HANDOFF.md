@@ -4,6 +4,39 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ---
 
+## 2026-07-08 01:55 BST — Codex Final Proof-Gate Closure Attempt (BLOCKED — owner-live evidence pending)
+
+**Agent:** Codex
+**Objective:** Final owner-guided live-proof evidence collection for CRR / supervised scale gates. Scope was evidence collection only: no workflow deploys, no workflow edits, no Sender trigger, no review approval, no Instantly POST, no Shadow activation, no Gate 2 approval, no autonomous enablement.
+
+**Baseline used:** branch `codex/5q-context-token-forensic-20260705`; latest commits `cd5d15f` (`review: final verify Fable Run 4`) and `dadf534` (`final: prepare shadow readiness and local ops console`). Initial worktree was already very dirty with many pre-existing modified files; this session treated them as owner/generated state and changed only this handoff file. Environment variables were presence-checked only; no secret values printed.
+
+**Local checks:** `node --version` -> `v22.22.1`. The exact requested no-arg command `node scripts/FABLE-RUN4-sender-body-gate-node-test.js` failed because the script requires `<extracted_b.js> <extracted_o.js>` arguments. To collect the intended proof without editing the repo, Sender nodes B and O were extracted from `workflows/production_sender_current.json` into `/tmp`, then `node scripts/FABLE-RUN4-sender-body-gate-node-test.js /tmp/hmz_sender_node_b.js /tmp/hmz_sender_node_o.js` returned **77 PASS / 0 FAIL**. `python3 scripts/SL-PHASE-5Q-self-improvement-behavioural-closure.py` returned **483/483 PASS**. `python3 scripts/scan-workflow-exports-for-secrets.py` returned `RESULT: no credential-shaped values found in workflow exports.`
+
+**Production read-only metadata:** production target guard passed (`https://n8n.hmzaiautomation.com/api/v1`). The first metadata GET failed under sandbox DNS; rerun with approved network escalation was read-only only. Production workflow metadata matched required versions: Decision `tgYmY97CG4Bm8snI` versionId `84b941a4-bc6d-4f48-be27-36dad1510c8d` active=true; HumanApproval `9aPrt92jFhoYFxbs` versionId `99b4c092-d78e-4580-a3c8-46dc65ab00cf` active=true; Sender `ePS5uBBxKxhFCYgU` versionId `00b52f03-1ae7-4252-a164-ce08f0c7a77e` active=true; Shadow `aHzLtQiv6G8h1bqD` versionId `ae13bf4e-ee04-438f-9657-3c57183b90a2` active=false. No production writes were made.
+
+**UI / live review confirmation:** BLOCKED / pending owner evidence. No fresh live review case ID, incoming reply text, Google Chat screenshot/confirmation, or review-form confirmation was supplied in this session. Required fields remain: effective classification; original vs effective if corrected; reply mode; AI draft status; draft source; non-empty draft where expected.
+
+**Runtime proof B1-B5 against Sender `00b52f03`:** BLOCKED / pending owner-approved send. No owner approval/send evidence was supplied in this session. B1 Sender node Q `statusCode=200`, B2 terminal `SENT`, B3 correct sender/eaccount, B4 correct recipient/thread/body/marker, and B5 no duplicate/idempotency proof remain unproven live for the current Sender.
+
+**Duplicate replay drill:** LIVE DRILL PENDING. Local/code evidence remains positive: Sender has prior-terminal-state blocking and `no_prior_terminal_send_state` gate before node Q, and duplicate terminal nodes exist. No safe replay case/send key was provided, so no second-attempt proof was collected and no claim of live B5 PASS is made.
+
+**SEND_UNCERTAIN reconciliation:** CODE-PROVEN ONLY / live drill pending. Local Sender export still contains terminal `SEND_UNCERTAIN`, reconciliation poll nodes V/W/W4, and code paths for consecutive single-match vs zero/multiple human review. No safe simulated/live SEND_UNCERTAIN event was available; no duplicate POST was attempted; no live B6 PASS is claimed.
+
+**S2.6 rollback live drill:** PENDING OWNER ACTION. Runbook `docs/S2_ROLLBACK_LIVE_DRILL.md` identifies candidate rule `6e50fd54-ff2a-4d5a-b220-c0c7374edea4` with stop conditions, but no owner confirmation of the exact row capture/deactivate/probe/restore/verify sequence was supplied. No DataTable row was modified by Codex.
+
+**CRR `docs/campaign-readiness/CRR-531e64ed.md`:** BLOCKED / incomplete. Campaign ID `531e64ed-c225-4baf-97a9-4ec90dc34eb0` is the current documented Sender allowlist campaign, but owner confirmations remain pending for approved sender(s), subject/thread pattern, CTA, test lead enrollment, and campaign-ID reconciliation. Rows 10-14 remain pending current-Sender live proof. Owner signature/date is still absent. Launch remains blocked; scale-ready is not claimed.
+
+**Ops Console Stage 1 checklist:** PARTIAL PASS from static/local inspection. `ops/responder-ops-console.html` is a local single HTML file with eight modules, Blob downloads, readiness statuses, diagnosis module, runtime proof module, and no `fetch(` / `XMLHttpRequest` / `WebSocket` / `EventSource` / `sendBeacon` / `api-key` / `apikey` matches. No standalone `READY FOR AUTONOMOUS SENDING` status exists; the permanent banner is `NOT APPROVED FOR AUTONOMOUS SENDING`. A real browser double-click/open and owner walkthrough were not confirmed in this session, so opened-locally/navigation/download UX remains owner-confirm pending.
+
+**Autonomous status:** Shadow inactive; Gate 2 not approved; autonomous disabled; 14-day shadow review not started. High-risk categories remain no-autonomous-send: unsubscribe/suppression/legal/compliance/hostile/no-reply/pricing/booking/proof/trust/ambiguous remain human review, draft-only, or no-send according to policy and future owner allowlists.
+
+**Final readiness percentages:** supervised responder 98%; self-improvement 98%; sender / scale safety 92%; autonomous shadow readiness 70%; ops console stage 1 90% (static/local verified, owner browser walkthrough pending); full scale-ready system 80%. System is **not** supervised scale-ready because current-Sender live send proof, duplicate replay proof, S2.6 live rollback, and signed CRR remain missing. No consolidated repair run is needed from this evidence; the blocker is owner-live proof/action, plus one minor test-run usability defect: the body-gate script's no-arg command fails despite docs/owner instructions expecting standalone execution.
+
+**Regression Safety Check:** no Sender trigger by Codex; no Instantly POST by Codex; no production write; no workflow deploy; no Shadow/Gate2/autonomous change; no stale README evidence used; no unrelated files staged.
+
+---
+
 ## 2026-07-08 01:08 BST — Codex Final Review: Fable Run 4 (PASS)
 
 **Agent:** Codex
