@@ -1,0 +1,310 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-21T04:30:50.905Z",
+  "sanitized": true,
+  "verdict": "CONDITIONAL PASS",
+  "claims": {
+    "literalPerfectionClaimed": false,
+    "externalProviderAvailabilityGuaranteed": false,
+    "visualExactlyOnceChatClaimed": false,
+    "internalContract": "Every Instantly-exposed received record is durably registered with one logical outbox record and retried until a definite Google Chat acknowledgement.",
+    "verdictConditions": [
+      "The exact alleged fifteenth outbound attempt lacks sender/MX/mailbox trace correlation.",
+      "A new controlled live mixed-category fixture burst was not authorised during this run."
+    ]
+  },
+  "repository": {
+    "path": "/mnt/c/Users/Hamzah Zahid/Downloads/Claude/Instantly_Responder_Automation",
+    "branch": "codex/5q-context-token-forensic-20260705",
+    "head": "ed94d57c647cd33f346277c6b331b8002d0f90fe",
+    "stagingEmpty": true,
+    "dirtyWorktreePreserved": true,
+    "gitPushPerformed": false
+  },
+  "safety": {
+    "globalSendBefore": {
+      "enabled": true,
+      "note": "GLOBAL supervised sending — owner re-enabled 2026-07-20 during edit-flow repair",
+      "at": "2026-07-20T02:39:57.377Z",
+      "armedContextId": null,
+      "armedRevision": null,
+      "faultInject": null
+    },
+    "globalSendAfter": {
+      "enabled": true,
+      "note": "GLOBAL supervised sending — owner re-enabled 2026-07-20 during edit-flow repair",
+      "at": "2026-07-20T02:39:57.377Z",
+      "armedContextId": null,
+      "armedRevision": null,
+      "faultInject": null
+    },
+    "canonicalSha256Before": "611f5d6e14b5f860432ae4a4d913e680898bbfef565dcaefe051bf2582754522",
+    "canonicalSha256After": "611f5d6e14b5f860432ae4a4d913e680898bbfef565dcaefe051bf2582754522",
+    "unchanged": true,
+    "prospectReplyPosts": 0,
+    "shadowActivated": false,
+    "gate2Activated": false,
+    "autonomousSendingActivated": false
+  },
+  "production": {
+    "n8nApiBase": "https://n8n.hmzaiautomation.com/api/v1",
+    "n8nVersion": "2.25.7",
+    "sidecarImage": "sha256:94dd2dcb55fc4472ed5cc7ef361159a6f0a010119e0926ab8241aebfbd24ea43",
+    "sidecarTag": "hmz-reply-console:codex-inbound-closure-20260721-r7",
+    "sourceArchiveSha256": "1d11b548fc0676c9cca0fab4494cfaab59a070350098e46ace850d57bd099470",
+    "sourceSha256": {
+      "inbound-service.mjs": "5555d845d06c8f885ce9105a6aed8debe0462c265c494d3b997c7d4d2fa0cf8c",
+      "inbound-store.mjs": "7d6692017b0c9aae9b64f68f4e140250fac8d49f7a6b5ce15013361feeb18c5e",
+      "test-inbound-v2.mjs": "987e7c40a894b211f67b539104a06ece16b6a6650ca4f995d04a082a8402556a",
+      "test-inbound-structural.mjs": "23cb6f2eba3aca3eae04a6524d2222781e99a28dcdd7c3ef8efc6508a9a06841",
+      "docker-compose.hostinger-traefik.yml": "4beb7b5ebdf7f1061898dd0047bd9a21224d74be73d0a00f42864c914dd4502a"
+    },
+    "health": {
+      "http": 200,
+      "status": "ok",
+      "inboundSchemaVersion": 2,
+      "inboundStoreIntegrity": true
+    }
+  },
+  "drift": {
+    "unexplainedPreChangeProtectedWorkflowDrift": false,
+    "unexplainedPreChangeSidecarSourceDrift": false,
+    "expectedRepositoryPackagingDrift": "Deploy-safe workflow payloads omit live IDs/version timestamps and retain active=false; authenticated production instances are active and their executable graphs match the reviewed semantics.",
+    "designGapsPresentInRepositoryAndProduction": true,
+    "authorizedProductionChanges": [
+      "inbound-v2 sidecar image",
+      "durable v2 reply notification workflow",
+      "independent completeness auditor workflow",
+      "reply_received subscription target"
+    ],
+    "unrelatedWorkflowChanged": false
+  },
+  "workflows": [
+    {"id":"JojqjTVw3KQRtYEN","name":"HMZ — Instantly Reply → Google Chat Notification","active":true,"versionId":"079fa1d2-c7e2-419f-8435-1a273bc2d76f","semanticSha256":"7943bf68b955553a7bc94fd6de61aa8f546ee6fbf837262424a4986399022bd9"},
+    {"id":"G7GIQGt9JOXxITH4","name":"HMZ — Google Chat Supervised Reply Console","active":true,"versionId":"127be2da-c0d1-4535-a01c-1e4e22fdd574","semanticSha256":"f753cf714791bd669a2044d7b5c963d1cecc129dc4364178b0d5861b95b045ca"},
+    {"id":"0QqQh78lrgOmvByZ","name":"HMZ — Instantly email_sent Reconciliation","active":true,"versionId":"df51ed2a-4a72-45fd-9227-4a4383bb6f15","semanticSha256":"363582154db555168f0ef6985e42d4ff54f4cc411df736bf7699ec6c096d3120"},
+    {"id":"7LNeDYVaEbuZ4fpO","name":"HMZ — Inbound Recovery Poll","active":true,"versionId":"93125fc5-a0d0-45f1-ba03-cab8be296b51","semanticSha256":"3e7595326d5198a449d7eae1c033367c169fd9666467f507f54c69d7fe1d3d33"},
+    {"id":"5nSbIHky9dQaJvd9","name":"HMZ — Reliability Watchdog","active":true,"versionId":"08abfa95-d23b-423d-9b03-4f4634bc7293","semanticSha256":"4106416eda5995749cb288ae81138d80b789c0cdba6455c70c245f374f4983d1"},
+    {"id":"x6vPPurIk8MBBcA8","name":"HMZ — Instantly Reply → Google Chat Notification v2 (Durable)","active":true,"versionId":"13b1984b-741c-432b-8dd0-8016b226224b","semanticSha256":"6f4fd756aedcbe41aabe44aa34c95e25f63242c76862b7ff372da770226bba93"},
+    {"id":"gN9rgLJw9xC4ZnxT","name":"HMZ — Inbound Completeness Auditor","active":true,"versionId":"1b2556a0-d430-435c-aa5a-96b21031e1a0","semanticSha256":"da9a79baebad8a4ddf5ccbe692f7f75589ae4b59c594099ef9c2e26893a7a0fd"}
+  ],
+  "subscriptions": {
+    "replyReceived": {
+      "id": "019f75ce-f9d4-7a85-9bd9-14059c8c9baf",
+      "status": 1,
+      "target": "https://n8n.hmzaiautomation.com/webhook/hmz-instantly-reply-google-chat-v2",
+      "nonUrlFieldsUnchanged": true,
+      "headersSha256": "7a7adc50f27faaad163b1450ca34defb492c72b0d5e8d1699155a398030b2d38"
+    },
+    "emailSent": {
+      "id": "019f7b2f-a48a-705f-b4b1-120d6808a499",
+      "status": 1,
+      "target": "https://n8n.hmzaiautomation.com/webhook/hmz-instantly-email-sent-reconcile-v1",
+      "headersSha256": "7a7adc50f27faaad163b1450ca34defb492c72b0d5e8d1699155a398030b2d38",
+      "unchanged": true
+    }
+  },
+  "backups": [
+    {"checkpoint":"baseline","path":"/root/backups/codex-inbound-closure-20260721T005100Z","manifestSha256Prefix":"3876af"},
+    {"checkpoint":"pre-r5","path":"/root/backups/codex-inbound-r5-predeploy-20260721T030537Z","manifestSha256":"4280be6c…113a"},
+    {"checkpoint":"pre-r6","path":"/root/backups/codex-inbound-r6-predeploy-20260721T033000Z","manifestSha256":"f8cb9df9…c548"},
+    {"checkpoint":"pre-n8n","path":"/root/backups/codex-inbound-r6-pre-n8n-20260721T033600Z","manifestSha256":"faf7c289…39977"},
+    {"checkpoint":"pre-subscription","path":"/root/backups/codex-inbound-r6-pre-subscription-20260721T033800Z","manifestSha256":"3590f415…8f0cb"},
+    {"checkpoint":"pre-r7","path":"/root/backups/codex-inbound-r7-predeploy-20260721T040100Z","manifestSha256":"a5acbb8c…8a26a"},
+    {"checkpoint":"pre-historical-mirror","path":"/root/backups/codex-inbound-r7-pre-historical-mirror-20260721T040700Z","manifestSha256":"d7885da8…131c9"}
+  ],
+  "findings": {
+    "high": [
+      {"id":"H1","finding":"category filtering could suppress received records","status":"REPAIRED"},
+      {"id":"H2","finding":"no transactional outbox or independent reconciliation denominator","status":"REPAIRED"},
+      {"id":"H3","finding":"100 KiB Instantly page cap rejected a real 132987-byte page","status":"REPAIRED_AFTER_PROVEN_ROLLBACK"},
+      {"id":"H4","finding":"r6 legacy acknowledgement migration re-posted seven existing Chat messages","status":"REPAIRED_IN_R7","probableDuplicateChatPosts":7,"evidenceSha256":"d7dbc8b16b9efc39471c8303a66a641a3f70cfc9a8af7cd0723f9c8f532b12ee"}
+    ],
+    "medium": [
+      {"id":"M1","finding":"auditor could steal an active post lease","status":"REPAIRED"},
+      {"id":"M2","finding":"surrogate matching and history preservation insufficiently strict","status":"REPAIRED"},
+      {"id":"M3","finding":"telemetry denominator could be internally blind","status":"REPAIRED"},
+      {"id":"M4","finding":"historical holds could trigger false watchdog facts","status":"REPAIRED"},
+      {"id":"M5","finding":"synthetic self-test distorted current state","status":"QUARANTINED_RECOVERABLY"},
+      {"id":"M6","finding":"dependency audit required update","status":"REPAIRED","npmAuditVulnerabilities":0}
+    ],
+    "allInScopeHighAndMediumRepaired": true
+  },
+  "burst15": {
+    "window": {"since":"2026-07-20T22:10:00.000Z","until":"2026-07-20T22:20:00.000Z"},
+    "artifactSha256": "df761338928da272e6b5f94e7a3181092fc9d2fe851b7c8f1df944306c5632b8",
+    "inboundIdentityRule": "instantly:<instantlyEmailId>",
+    "allItemsDiscoverySources": ["COMPLETENESS_AUDIT", "DISCOVERED_WEBHOOK", "NORMAL_POLL"],
+    "allItemsAttemptCount": 0,
+    "allItemsAmbiguityCount": 0,
+    "allItemsProbableDuplicateCount": 0,
+    "summary": {"instantlyReceived":15,"durableInbound":15,"logicalOutbox":15,"definiteChatAcknowledgements":15,"uniqueInstantlyIds":15,"uniqueChatAcknowledgements":15,"retrying":0,"ambiguous":0,"probableDuplicatePosts":0,"latencyMinMs":2303,"latencyMaxMs":13924},
+    "items": [
+      {"instantlyEmailId":"019f8196-a36a-7472-8718-be23fd7fa084","receivedAt":"2026-07-20T22:12:41.000Z","timestampEmail":"2026-07-20T22:12:26.000Z","messageIdSha256":"a5d5ca377cad3b433b7b73446984ef11a85995ca08c68f709dad2168b77e20cb","threadIdSha256":"079344870af1a9289d5a064cdfb65e812d6da40f098c91702d7b7146aa603e07","prospectSha256":"0dd495c55d1ef9e3c35fac0d180c20235d0f5f9ec29d78f445a51e23f97ee104","receivingAccountSha256":"058801ece05a532bfce768ad16e56bcb2e3ce5fbe1e5f99a4088c4fa24de0671","campaignSha256":"0f10e81f4a75381515953ce449be97fd36851aac7c1fce23feae6871b46bfd85","classification":"ordinary","discoverySources":["COMPLETENESS_AUDIT","DISCOVERED_WEBHOOK","NORMAL_POLL"],"notificationId":"notify:9a324a1ffdf6666c2fee2464767e8eaf4d90fa4eb5fca4b8b3f074636cce54d3","chatAckSha256":"b30078060472923846485174ff9dadb0addc2bfa121324aacff644ba8ab6c3ec","chatAcknowledgedAt":"2026-07-20T22:12:45.803Z","finalState":"CHAT_NOTIFIED","latencyMs":4120},
+      {"instantlyEmailId":"019f8196-d37b-7314-a696-642b18b79007","receivedAt":"2026-07-20T22:12:53.000Z","timestampEmail":"2026-07-20T22:12:31.000Z","messageIdSha256":"2314fac82fa11e61bc1d64ca8bc96d8c1a834a135a01d6afc117cbf6b0965979","threadIdSha256":"1d547268b354303a2590ec55ce5fd9bb02e3ddac8540cafc58051bdcceb3bd7c","prospectSha256":"74a291fc1b8a1f8cf8e2a529934648055f51d5d5ff9f8ee83312132115c23974","receivingAccountSha256":"afebf060d572d5c52ed2404e14308e135f59e46a0a12cc2b91937baf5acfd00a","campaignSha256":"0f10e81f4a75381515953ce449be97fd36851aac7c1fce23feae6871b46bfd85","classification":"ordinary","discoverySources":["COMPLETENESS_AUDIT","DISCOVERED_WEBHOOK","NORMAL_POLL"],"notificationId":"notify:604e6764b1d81362a10410f6ddb020313ccf11e031bd612ce8ca069c630c2429","chatAckSha256":"bd91aa2cee6c74ae0474452326864202bbbde8e6c26d5cc2ff3e74db40747b81","chatAcknowledgedAt":"2026-07-20T22:12:56.343Z","finalState":"CHAT_NOTIFIED","latencyMs":2303},
+      {"instantlyEmailId":"019f8196-eda8-7b47-a843-06ca8da20198","receivedAt":"2026-07-20T22:13:00.000Z","timestampEmail":"2026-07-20T22:12:37.000Z","messageIdSha256":"fa30482ae1cec7b6bdb578a2aa8f94156a4c08c0a2cc2a2c31c2d457bb4818e9","threadIdSha256":"214313f4f591b9dcf254dc6c73547e0293ab8dc9b3293cc15a6efd97e562e897","prospectSha256":"a8883a6ace4a1d4e7afd35039e98ddd6a6cb3fe6c61d13cdf92bdd71702911ad","receivingAccountSha256":"5e2cbfd10dfd9a9cbf9b85f1cd6f7e37f380405b64ef1333d59564e35d0a623b","campaignSha256":"0f10e81f4a75381515953ce449be97fd36851aac7c1fce23feae6871b46bfd85","classification":"ordinary","notificationId":"notify:bc57e12bf7bb7f8634fd0b991255952cedfad82688a43d2ca22cb620ebcb7697","chatAckSha256":"b55d5249e152842c23fd103fce93cae53ec4f02e1cb322afca88e7260cdc5991","chatAcknowledgedAt":"2026-07-20T22:13:07.365Z","finalState":"CHAT_NOTIFIED","latencyMs":6471},
+      {"instantlyEmailId":"019f8197-0136-7ac3-b22a-da3b14b6caf0","receivedAt":"2026-07-20T22:13:05.000Z","timestampEmail":"2026-07-20T22:12:43.000Z","messageIdSha256":"fe8b3c50e8f101aaaf1160da9b86cd2bf23a89d186e1f8a2fb63da0331438ecf","threadIdSha256":"099707b66d88ea4850a517a2334815716aeca025386db471224e4674840ab8ee","prospectSha256":"d7e5b1a52ebdc5dd4933af243d68a3d053f5e3a86e43d1dcff3c0318704493e2","receivingAccountSha256":"c6d245f010b8e6b3f735b5057bef17bf06cc7e863246b6a2f92fdcc930e30960","campaignSha256":"0f10e81f4a75381515953ce449be97fd36851aac7c1fce23feae6871b46bfd85","classification":"ordinary","notificationId":"notify:de6e16616b09c23647b16f04618f1a453064316603bf3a2181144a356bc4caed","chatAckSha256":"68cb960803f878000413e964d0f152391e1ecd49e202d61981d9367cc4b0f506","chatAcknowledgedAt":"2026-07-20T22:13:13.027Z","finalState":"CHAT_NOTIFIED","latencyMs":7309},
+      {"instantlyEmailId":"019f8197-2268-7972-b5c9-a668c6cafce9","receivedAt":"2026-07-20T22:13:14.000Z","timestampEmail":"2026-07-20T22:12:49.000Z","messageIdSha256":"73b21a09e4a63ee365a4da792e6ecc8dd3f1c8fa0db69a7cf03567b7ceb41e28","threadIdSha256":"41e1d624137762ad2a1c1df700ff2c30b878b316f8295ff1ad37cc7ec8c6ea5f","prospectSha256":"77abc150b9bd7cbe92584d1f0bd3fa9d48123ea2afd0481862587dcca6ffa981","receivingAccountSha256":"f33465d8a8dae52b06df27ab93ebe163426e256c798041ba2325f26c148cfa79","campaignSha256":"0f10e81f4a75381515953ce449be97fd36851aac7c1fce23feae6871b46bfd85","classification":"ordinary","notificationId":"notify:5dc29306026992e9d7a94ccbaf22cd79778244bf018e94b79ec5f7c42cb66a3c","chatAckSha256":"b25e54bb0559701e9e5654bab94ed2359a47255c1fde2b9d46c687fd216058a2","chatAcknowledgedAt":"2026-07-20T22:13:18.989Z","finalState":"CHAT_NOTIFIED","latencyMs":3877},
+      {"instantlyEmailId":"019f8197-3028-74a7-a9cb-9a3f477670b0","receivedAt":"2026-07-20T22:13:17.000Z","timestampEmail":"2026-07-20T22:12:57.000Z","messageIdSha256":"5ad3ef7998d95b8e38746f548f6d33ef07ae19909f0d71c3f2ed8ec951156428","threadIdSha256":"c67a3432d527fead6b2db9f0ef8da7161f2687dece7f1ce72941c8968f69a6ad","prospectSha256":"9a0f672db24ebf30be47ea5a132dd7d489d9e624a547f5a8653cc0e7d6b8b6d9","receivingAccountSha256":"bfb91ce36b3d9f9dc09ead04f9fe6f21dbaf8fef71a23950eba7385210b22d16","campaignSha256":"0f10e81f4a75381515953ce449be97fd36851aac7c1fce23feae6871b46bfd85","classification":"ordinary","notificationId":"notify:9ae85192edc718e1dcec5984dce67dd0c03daa069d11dc3184e7be5fda4069a5","chatAckSha256":"39234c9c1cd9c69dccc351aadc691bc863d7c691aeb96c61ada4dbbaa062d0bb","chatAcknowledgedAt":"2026-07-20T22:13:24.390Z","finalState":"CHAT_NOTIFIED","latencyMs":6463},
+      {"instantlyEmailId":"019f8197-8139-7ea7-ac3e-7b80893fe3b3","receivedAt":"2026-07-20T22:13:38.000Z","timestampEmail":"2026-07-20T22:13:16.000Z","messageIdSha256":"a09531438b4d644a45bb5740e1fa3b0c07f39e8996448bd96855b9cc3e5811c1","threadIdSha256":"de0e619eccfe3113d2928e086dce3197ec0601f887ac7eaf0da2f80898b990e6","prospectSha256":"f9e2a8ce5effcc59a7440347d56fcd35d353690c87d1fbd665ee13c5b0726a71","receivingAccountSha256":"837807f894b940bf1ae798953e6b1cd548feddb0ea1312b33ddd82113c834bc0","campaignSha256":"0f10e81f4a75381515953ce449be97fd36851aac7c1fce23feae6871b46bfd85","classification":"ordinary","notificationId":"notify:9e83e63f9e1cd42d53f05a6907bc7ffa9419b309133830e8b010750e7dd812cf","chatAckSha256":"acce197aab323a80d15b4d9a1d0e9b916db48f60d724cb860a1daa2c4911b51d","chatAcknowledgedAt":"2026-07-20T22:13:46.037Z","finalState":"CHAT_NOTIFIED","latencyMs":7436},
+      {"instantlyEmailId":"019f8197-8efe-710a-addf-ad948ad034fb","receivedAt":"2026-07-20T22:13:42.000Z","timestampEmail":"2026-07-20T22:13:22.000Z","messageIdSha256":"59e6e996ee392b68d4d1f2ce8a60f095e038b41ce3da20eaf2b3a73488d8e270","threadIdSha256":"f9f6f3bdbf8dfa15316a9617eba368333c8d3c91a84b1d7682d83caad56ec676","prospectSha256":"da7da4eb8ace58337c1f3b6b653d69ff49cb65c476d75b14fe4018936dbe0580","receivingAccountSha256":"58785ceb5204305a373e6d216014fe5fb0596d7d01713de80914542429124553","campaignSha256":"0f10e81f4a75381515953ce449be97fd36851aac7c1fce23feae6871b46bfd85","classification":"ordinary","notificationId":"notify:abfc402127de4aa802ce7a93e3ba3301cf06850ce8d886d4a650e19151a9a984","chatAckSha256":"db16e524d80af43a5e5bb0d15a587ba08d27fc2e3947e89818c996121eb33a20","chatAcknowledgedAt":"2026-07-20T22:13:46.089Z","finalState":"CHAT_NOTIFIED","latencyMs":3865},
+      {"instantlyEmailId":"019f8197-9968-79d9-b654-2a9c4e9c6477","receivedAt":"2026-07-20T22:13:44.000Z","timestampEmail":"2026-07-20T22:13:29.000Z","messageIdSha256":"474e99d088ab360d38e09bd29771fc395e93c0235e00d59805b53e498ee774fb","threadIdSha256":"ce1138bd15f30d25004d464b2002b439223bc2d77c6d22b6f50c329010a1a1b8","prospectSha256":"0c0994440d0b1352b6de5f772f695b9d4960d4dd75154167f74d4489da7aa6bd","receivingAccountSha256":"afebf060d572d5c52ed2404e14308e135f59e46a0a12cc2b91937baf5acfd00a","campaignSha256":"0f10e81f4a75381515953ce449be97fd36851aac7c1fce23feae6871b46bfd85","classification":"ordinary","notificationId":"notify:af37be1d5636bb543ef9a15db0b0425b9f594fc0b839673e3a240a7962d52f84","chatAckSha256":"39478232efbc9452a24c5b2b8b68daad48beca46cb183a392fc20f80f2c0279a","chatAcknowledgedAt":"2026-07-20T22:13:51.346Z","finalState":"CHAT_NOTIFIED","latencyMs":6511},
+      {"instantlyEmailId":"019f8197-baeb-7d39-a9e0-d38eccc59aed","receivedAt":"2026-07-20T22:13:53.000Z","timestampEmail":"2026-07-20T22:13:35.000Z","messageIdSha256":"e8a45aa20abe70806c8c27b4f576b5faff5363f3fd14d62e7131e47ba22f5d1f","threadIdSha256":"5b69eeb767ba40ea03073176fec492f3ac33932834b6eb1ab48e752bbc353d89","prospectSha256":"44a20e957df60eb2ceddd2c0a06c1d9281b30310092790111f924975da82bc58","receivingAccountSha256":"058801ece05a532bfce768ad16e56bcb2e3ce5fbe1e5f99a4088c4fa24de0671","campaignSha256":"0f10e81f4a75381515953ce449be97fd36851aac7c1fce23feae6871b46bfd85","classification":"ordinary","notificationId":"notify:a1ffbe39170c0bf376809600e8525e8e5134aed5c13435966cde098046ba2d69","chatAckSha256":"dc590cf4e44be19d0256e9433ce8a92ff83e45d1b5318f85e5cb5c52adc13f12","chatAcknowledgedAt":"2026-07-20T22:13:56.909Z","finalState":"CHAT_NOTIFIED","latencyMs":3521},
+      {"instantlyEmailId":"019f8197-d782-7de8-8568-dab49d947806","receivedAt":"2026-07-20T22:14:00.000Z","timestampEmail":"2026-07-20T22:13:41.000Z","messageIdSha256":"63e5d3294ba850f90277c75bce403440e88db651a10913002fe2d9b52b7f05eb","threadIdSha256":"e85a697d723411f13b7553b7cc2c629a1d0a2c117dbb64031648bb2ec24b7fe5","prospectSha256":"4fe5f18248cb5d020fc8cbcc6826a34e79d500ead202416a1b13e38d0426b0e0","receivingAccountSha256":"d2f7876f068a0d57e93275dcc4c5c988ad435147efdf926ff15315c3702557cd","campaignSha256":"0f10e81f4a75381515953ce449be97fd36851aac7c1fce23feae6871b46bfd85","classification":"ordinary","notificationId":"notify:a3e71453a7034e13bba6a283d1ca809c24c262cde0c4a1bba2ee9c83b03cf912","chatAckSha256":"e29573b2b1118798a2d0601f0af76468420ff027a75b0324378c23e3d8a81ab6","chatAcknowledgedAt":"2026-07-20T22:14:08.422Z","finalState":"CHAT_NOTIFIED","latencyMs":7297},
+      {"instantlyEmailId":"019f8198-0f9d-77bd-9fc6-9b86cab21b0c","receivedAt":"2026-07-20T22:14:14.000Z","timestampEmail":"2026-07-20T22:13:52.000Z","messageIdSha256":"28d5c98a4a7d2e8331b062f32c1c2d1f7636c317e84858898fe306cbe17897b1","threadIdSha256":"13c21dbde2c454d03337d7d031150d7b7210eb413e66f8addd599cf3de5b2474","prospectSha256":"b00362f586d072fbac0aca64ffc83284bcbe5eaf4ae0bb240c05700cb68a6ea9","receivingAccountSha256":"100e4a23276400ffe3d994f992738cb54b4498d2fdfb2c5864d4d45c6f503951","campaignSha256":"0f10e81f4a75381515953ce449be97fd36851aac7c1fce23feae6871b46bfd85","classification":"ordinary","notificationId":"notify:d723e8561ee47d5a079be67db8677245deea1c86b6767203c09f9114e0f701ae","chatAckSha256":"ebd40d723cbe86ab85bd50025cc3bcb6f97f55341e7acb2ca22e7ab399114b92","chatAcknowledgedAt":"2026-07-20T22:14:19.062Z","finalState":"CHAT_NOTIFIED","latencyMs":3917},
+      {"instantlyEmailId":"019f8198-419a-7149-8cf7-28c02ed84c08","receivedAt":"2026-07-20T22:14:27.000Z","timestampEmail":"2026-07-20T22:14:15.000Z","messageIdSha256":"c0ed5b8d281aff41f62fd9ecf8b5934b74aa2b54f6bc1bf4a7f468c1f7c38e27","threadIdSha256":"0f46e7c8cc90032b7a83ce9f46593ddbd18fe6a94930806be12f898483611e8b","prospectSha256":"cd6641f9404c98a3cf872cf84f5f2352ccfe71d8983c638c6d3a0f82d5d1e5a1","receivingAccountSha256":"011313fcf3c8c374cd85bf8c7733813dbb3ca6764c68d92b011068b8e2b46583","campaignSha256":"0f10e81f4a75381515953ce449be97fd36851aac7c1fce23feae6871b46bfd85","classification":"ordinary","notificationId":"notify:ba0f02445230e3306f31cbc7017379cf93ee6c186d61c706f567483c27d86965","chatAckSha256":"68db5d89cf44c1b6e46d97fa64db6194d59e4af2c5d0b3bb9704cf09745b824a","chatAcknowledgedAt":"2026-07-20T22:14:42.002Z","finalState":"CHAT_NOTIFIED","latencyMs":13924},
+      {"instantlyEmailId":"019f8198-c96f-7c52-a01b-78a73f3fcb7b","receivedAt":"2026-07-20T22:15:02.000Z","timestampEmail":"2026-07-20T22:14:46.000Z","messageIdSha256":"a86563e712b0a4c7b7801c02bca9d2f917ff67ffa172447e3ebcc56af19ceb19","threadIdSha256":"fc4fc3e0dea44f9f168b7b63f01d544a9341f0c55ea71e0077021296656c92ab","prospectSha256":"8c72e5df9f777402c78e78297d1a2becd2acab5e9ba9f1c5bbb5dbb4a0fcd179","receivingAccountSha256":"d2f7876f068a0d57e93275dcc4c5c988ad435147efdf926ff15315c3702557cd","campaignSha256":"0f10e81f4a75381515953ce449be97fd36851aac7c1fce23feae6871b46bfd85","classification":"ordinary","notificationId":"notify:0343545c8172533768c08678518fab204ff3d6b6919b86da5489c56b60a9f110","chatAckSha256":"6d4fed091cedf254b8064a655a5c813754cc9722b3d57575f8114f8955ba5fe9","chatAcknowledgedAt":"2026-07-20T22:15:09.145Z","finalState":"CHAT_NOTIFIED","latencyMs":6399},
+      {"instantlyEmailId":"019f8199-5051-7bbe-8962-fd505e8d77e6","receivedAt":"2026-07-20T22:15:37.000Z","timestampEmail":"2026-07-20T22:15:23.000Z","messageIdSha256":"f381ced946102f9346a62f4fe4048bd6d547032b5e4521e81c880243fe87bfad","threadIdSha256":"1683a1bdb3065aecc89027c2c96a119a7f71ee093d3864cc7feb3c27efcd1bce","prospectSha256":"48479d63d1df5765aaf84c906478147958f41d72065c0ac9957a9d478d25fb20","receivingAccountSha256":"100e4a23276400ffe3d994f992738cb54b4498d2fdfb2c5864d4d45c6f503951","campaignSha256":"0f10e81f4a75381515953ce449be97fd36851aac7c1fce23feae6871b46bfd85","classification":"ordinary","notificationId":"notify:70d755c5560d866b0d45990edc58137b2d6ca4255596acbcb74a8a7efb9c0e1c","chatAckSha256":"64aa2c9add6a0f3a5b3af8c012810ba426ec3d7ff7dd69b4d64852747022ab2c","chatAcknowledgedAt":"2026-07-20T22:15:48.032Z","finalState":"CHAT_NOTIFIED","latencyMs":10652}
+    ]
+  },
+  "fifteenthEmail": {
+    "classification": "INSUFFICIENT_PROVIDER_EVIDENCE",
+    "currentBurstInventoryCount": 15,
+    "currentBurstChatAcknowledgementCount": 15,
+    "missingEvidence": ["sender acceptance log","recipient MX acceptance","Microsoft/GoDaddy mailbox and junk","quarantine","mailbox rules","tenant message trace","preserved earlier authenticated Instantly 14-record snapshot"],
+    "instantlyToChatGapInCurrentInventory": false
+  },
+  "tests": {
+    "exactImageSuite": {"passed":156,"total":156,"logSha256":"f99dcfd0b1efead61b0ceceeebae0b375da64a81862ccc2cfbf11e5b096c9d7f"},
+    "npmAudit": {"vulnerabilities":0,"logSha256":"c48cab54a55eae558669deb3192db3b64c14b0a3f1cc52402883f1132b437a83"},
+    "legacyMigrationSimulation": {"scanned":42,"importedAcknowledged":40,"unacknowledged":0,"synthetic":2,"inbound":40,"outbox":40,"chatNotified":40,"queueDepth":0,"integrity":true}
+  },
+  "scale100k": {
+    "fullRequiredRun": true,
+    "assertionsPassed": 45,
+    "assertionsTotal": 45,
+    "resultLogSha256": "ada09575138402a7e27d834543a3e2ed2adad79af3cd8ed0f5d8373a15ae3238",
+    "startedAt": "2026-07-21T03:49:06.985Z",
+    "finishedAt": "2026-07-21T03:59:22.065Z",
+    "wallSeconds": 615.080,
+    "volume": {"unique":100000,"duplicates":100000,"logicalRaces":100000,"raceDeliveries":300000,"concurrent":1000,"autoOoo":10000,"bounceSystem":10000,"degraded":15000,"attachmentEmpty":5000,"surrogate":1000,"pages":102,"pageTransitions":101,"soakSeconds":300},
+    "final": {"durableInbound":100000,"logicalOutbox":100000,"chatNotified":100000,"missing":0,"nonterminal":0,"openAttempts":0,"duplicateLogical":0,"duplicateOutbox":0,"prospectEmailPosts":0},
+    "outage": {"maximumBacklog":100000,"explicitFailures":99000,"ambiguous":1000,"falseAcknowledgements":0,"drained":100000,"drainRatePerSecond":1638.92,"drainSeconds":61.016,"finalQueue":0},
+    "performance": {"uniquePerSecond":6229.31,"duplicatePerSecond":14633.99,"raceDeliveryPerSecond":8210.87,"averageCpuPercent":67.72,"maxRssBytes":496271360,"maxHeapBytes":198511200,"finalRssBytes":160288768,"databaseBytes":229695488,"walBytes":0,"fdBefore":22,"fdAfter":22,"restartSeconds":0.552}
+  },
+  "productionReconciliationGeneratedAt": "2026-07-21T04:26:28.511Z",
+  "productionReconciliationRepairApplied": false,
+  "productionReconciliation": [
+    {"window":"burst15","received":15,"inbound":15,"outbox":15,"chatNotified":15,"historicalHold":0,"activeMissing":0,"probableDuplicate":0},
+    {"window":"campaign_resumption_wide","received":7,"inbound":7,"outbox":7,"chatNotified":7,"historicalHold":0,"activeMissing":0,"probableDuplicate":0},
+    {"window":"incident_inventory","received":21,"inbound":21,"outbox":21,"chatNotified":21,"historicalHold":0,"activeMissing":0,"probableDuplicate":6},
+    {"window":"since_incident_repair","received":15,"inbound":15,"outbox":15,"chatNotified":15,"historicalHold":0,"activeMissing":0,"probableDuplicate":0},
+    {"window":"post_console_epoch","received":37,"inbound":37,"outbox":37,"chatNotified":37,"historicalHold":0,"activeMissing":0,"probableDuplicate":7},
+    {"window":"last_24_hours_at_0403","received":22,"inbound":22,"outbox":22,"chatNotified":22,"historicalHold":0,"activeMissing":0,"probableDuplicate":0},
+    {"window":"last_7_days_at_0403","received":48,"inbound":48,"outbox":48,"chatNotified":40,"historicalHold":8,"activeMissing":0,"probableDuplicate":7},
+    {"window":"pre_console_owner_decision","received":41,"inbound":41,"outbox":41,"chatNotified":3,"historicalHold":38,"activeMissing":0,"probableDuplicate":0}
+  ],
+  "finalOperations": {
+    "generatedAt": "2026-07-21T04:30:50.905Z",
+    "durableInbound": 78,
+    "outbox": 78,
+    "chatNotified": 40,
+    "historicalOwnerHold": 38,
+    "queued": 0,
+    "posting": 0,
+    "retrying": 0,
+    "ambiguous": 0,
+    "missingOutbox": 0,
+    "probableDuplicateChatPosts": 7,
+    "queueDepth": 0,
+    "watchdogAlertCount": 0,
+    "sqliteQuickCheck": "ok",
+    "foreignKeyViolations": 0,
+    "orphanOutbox": 0
+  },
+  "genuineScheduledExecutions": {
+    "r7DeployedAt": "2026-07-21T04:02:21.732Z",
+    "poll": [
+      {"id":12588,"mode":"trigger","startedAt":"2026-07-21T04:02:35.008Z","status":"success"},
+      {"id":12589,"mode":"trigger","startedAt":"2026-07-21T04:03:35.010Z","status":"success"},
+      {"id":12590,"mode":"trigger","startedAt":"2026-07-21T04:04:35.010Z","status":"success"},
+      {"id":12592,"mode":"trigger","startedAt":"2026-07-21T04:05:35.013Z","status":"success"},
+      {"id":12595,"mode":"trigger","startedAt":"2026-07-21T04:06:35.010Z","status":"success"}
+    ],
+    "shortAudit": [
+      {"id":12593,"mode":"trigger","startedAt":"2026-07-21T04:05:56.014Z","status":"success"},
+      {"id":12602,"mode":"trigger","startedAt":"2026-07-21T04:10:56.016Z","status":"success"}
+    ],
+    "deepAudit": [
+      {"id":12616,"mode":"trigger","startedAt":"2026-07-21T04:20:35.011Z","stoppedAt":"2026-07-21T04:20:35.408Z","status":"success","recordsObserved":22,"recordsMissing":0,"recordsRecovered":0,"backlogCount":0}
+    ],
+    "dailyAudit": [
+      {"id":12624,"mode":"trigger","startedAt":"2026-07-21T04:25:01.017Z","stoppedAt":"2026-07-21T04:25:01.661Z","status":"success","recordsObserved":48,"recordsMissing":0,"recordsRecovered":0,"backlogCount":0}
+    ],
+    "watchdog": [
+      {"id":12594,"mode":"trigger","startedAt":"2026-07-21T04:05:56.017Z","status":"success"},
+      {"id":12601,"mode":"trigger","startedAt":"2026-07-21T04:10:56.014Z","status":"success"}
+    ]
+  },
+  "syntheticArtifact": {
+    "provenSynthetic": true,
+    "quarantinedRecoverably": true,
+    "realContextReferences": 0,
+    "activeTokenReferences": 0,
+    "sendAttemptReferences": 0,
+    "manifestSha256Prefix": "2666638",
+    "liveArtifactPathsRemaining": 0
+  },
+  "historicalOwnerDecision": {
+    "observed": 41,
+    "chatNotified": 3,
+    "registeredOwnerHold": 38,
+    "chatAttemptsAddedDuringRegistration": 0,
+    "defaultDecision": "DO_NOT_POST",
+    "inventorySha256": "dbae693fbd93ae39f9d557fb40ce8471e0adad685cfe7543d30296f788ec28fd"
+  },
+  "rollback": {
+    "actuallyExercised": true,
+    "trigger": "r5 rejected a real 132987-byte Instantly page",
+    "oldImageRestoredHealthy": true,
+    "durableVolumePreserved": true,
+    "globalSendUnchanged": true,
+    "r7RollbackPrepared": true,
+    "dataRestoreRequiresOwnerAuthorization": true
+  },
+  "secretScans": {
+    "status": "CLEAN",
+    "repository": {"ok":true,"filesScanned":1320,"bytesScanned":110460915,"skippedLarge":0,"findingCount":0},
+    "workflowExports": {"ok":true,"findingCount":0},
+    "vpsReleaseBackupsAndEvidence": {"ok":true,"roots":10,"filesScanned":969,"bytesScanned":8748530,"binarySkipped":6,"largeSkipped":0,"protectedSkipped":23,"findingCount":0},
+    "credentialBearingEnvironmentFiles": {"count":14,"allMode0600":true,"valuesEmitted":false},
+    "nonSecretEnvironmentNamedFiles": {"count":6,"mode0644Expected":true,"kinds":["examples","compose history","variable-name inventories"]},
+    "protectedEnvironmentCopiedToRepository": false
+  },
+  "externalLimitations": [
+    "Instantly availability, mailbox synchronization and indexing are external.",
+    "The system cannot create authoritative Instantly routing for a message absent from Instantly.",
+    "Google Chat incoming-webhook response loss prevents proof of visual exactly-once delivery.",
+    "The five-minute soak does not prove absence of every long-horizon leak."
+  ],
+  "remainingOwnerDecisions": [
+    "Authorize a controlled live mixed-category inbound acceptance burst if required.",
+    "Provide narrow read-only sender/Microsoft/GoDaddy trace access if exact fifteenth-attempt attribution or a mailbox comparator is desired.",
+    "Decide whether to post the 38 pre-console historical notifications; default remains do not post."
+  ],
+  "supersedingAllTimeCheckpoint": {
+    "generatedAt": "2026-07-21T05:20:00.000Z",
+    "verdictForAllTimeContract": "NO-GO",
+    "priorBoundedEvidencePreserved": true,
+    "allTimeRange": {
+      "since": "2000-01-01T00:00:00.000Z",
+      "until": "2026-07-21T05:20:00.000Z",
+      "pages": 11,
+      "uniqueInstantlyReceived": 973,
+      "identitySetSha256": "38d9530da608f7d51cdf5bb3eca6d66fdb3f3564e2b0c49b1b36e5a111cf536a"
+    },
+    "durableInbound": 78,
+    "outbox": 78,
+    "chatNotified": 40,
+    "historicalOwnerHold": 38,
+    "missingInboundAndOutbox": 895,
+    "missingRange": {
+      "first": "2026-01-15T14:45:41.000Z",
+      "last": "2026-07-05T06:20:05.000Z"
+    },
+    "historical38Released": 0,
+    "productionWritesApplied": false,
+    "globalSendSha256": "611f5d6e14b5f860432ae4a4d913e680898bbfef565dcaefe051bf2582754522",
+    "requiredOwnerDecision": "Authorize the additional 895-identity historical scope plus the verified 38, or provide authoritative covered-workspace exclusion evidence."
+  }
+}

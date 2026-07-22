@@ -1,0 +1,289 @@
+{
+  "report": "Google Chat Supervised Reply Console — implementation evidence",
+  "verdict": "RELIABILITY PROGRAMME BUILT (Phases 0-10) — dual-path inbound + notification state machine + watchdog + prospect/sender name enrichment + telemetry, all deployed and tested (101 tests). System PARTIAL / NOT PRODUCTION-ACCEPTED: global send gate OFF; 99.99% is a TARGET not demonstrated (sample < 10,000); production-enable requires a separate explicit owner decision after controlled acceptance.",
+  "timestamps": {
+    "utc": "2026-07-20T00:36:32.426926+00:00",
+    "europe_london": "2026-07-20 BST"
+  },
+  "git": {
+    "branch": "codex/5q-context-token-forensic-20260705",
+    "head": "ed94d57c647cd33f346277c6b331b8002d0f90fe"
+  },
+  "original_notification_workflow": {
+    "id": "JojqjTVw3KQRtYEN",
+    "active_before": true,
+    "active_after": true,
+    "versionId_before": "8528824e-c989-4cf3-b5da-0d441a8d9f9c",
+    "versionId_after": "bef39526-239f-4a2b-bacd-3bad92a5012b"
+  },
+  "backups": {
+    "A_repo_export": {
+      "path": "backups/n8n/instantly-google-chat-notification-pre-interactive-2026-07-18.json",
+      "sha256": "bb3175c7de28dde7e0e4f674b4480b233c7a864107d5e4edeaec658e69e4a47d",
+      "json_valid": true
+    },
+    "B_inactive_n8n_duplicate": {
+      "id": "xxOjHdtQFgEcXHMI",
+      "active": false,
+      "name": "BACKUP — HMZ — Instantly Reply → Google Chat Notification — PRE-INTERACTIVE — 2026-07-18"
+    },
+    "structural_comparison": {
+      "original_hash": "013024ca58c0b1b3e46febf5c8d8a5dd3b55578be3a6b27b6bfdb0ac344c5382",
+      "duplicate_hash": "013024ca58c0b1b3e46febf5c8d8a5dd3b55578be3a6b27b6bfdb0ac344c5382",
+      "match": true,
+      "intentional_differences": [
+        "new workflow id",
+        "inert webhook path",
+        "backup-labelled sticky note",
+        "regenerated webhookId",
+        "new timestamps"
+      ]
+    },
+    "live_untouched_until_backups_verified": true
+  },
+  "interaction_workflow": {
+    "id": "G7GIQGt9JOXxITH4",
+    "active": true,
+    "route": "hmz-google-chat-reply-console-v1",
+    "endpoint": "https://n8n.hmzaiautomation.com/webhook/hmz-google-chat-reply-console-v1 (== $GOOGLE_CHAT_INTERACTION_URL)",
+    "nodes": 34
+  },
+  "instantly_webhook": {
+    "id": "019f75ce-f9d4-7a85-9bd9-14059c8c9baf",
+    "event_type": "reply_received",
+    "status": "active",
+    "campaign_scope": "org-wide / all campaigns (no per-campaign field)",
+    "all_fields_unchanged": true
+  },
+  "storage_strategy": {
+    "type": "dedicated isolated file-backed sidecar",
+    "service": "hmz-reply-console-business-live",
+    "internal_url": "http://hmz-reply-console:5691 (no host port, not via Traefik)",
+    "volume": "hmz_reply_console_business_live_data",
+    "atomic": "open('wx') lock + write-tmp-then-rename",
+    "expiry": "contexts 7d, draft tokens 6h, audit 30d",
+    "holds_plaintext_api_keys": false
+  },
+  "google_oidc_verification": {
+    "library": "google-auth-library OAuth2Client.verifyIdToken",
+    "audience": "$GOOGLE_CHAT_INTERACTION_URL (exact)",
+    "issuer_accepted": [
+      "accounts.google.com",
+      "https://accounts.google.com"
+    ],
+    "chat_service_identity": "chat@system.gserviceaccount.com (+ email_verified)",
+    "tokeninfo_used": false,
+    "helper": "reply-console sidecar; least-privilege; audience fixed via compose env; tokens never logged; /health; 401 on failure with no state change"
+  },
+  "allowed_user_binding": {
+    "status": "BOUND",
+    "allowed_email_domain": "hmzaiautomation.com",
+    "stable_user_resource_name": "users/1138*** (bound after explicit owner confirmation)",
+    "authorises_on": "stable Event.user.name (HUMAN only); allowed email = bootstrap evidence, normalised trim+lowercase",
+    "impostor_same_email_diff_username": "DENIED (user_not_bound_owner)"
+  },
+  "space_thread_binding": {
+    "status": "BOUND",
+    "space": "spaces/AAQ*** (group space; owner-confirmed)",
+    "dm_space_ignored": "spaces/_5*** (DM, ADDED_TO_SPACE) not used"
+  },
+  "test_matrix": {
+    "backup": {
+      "repo_export_exists": true,
+      "json_validates": true,
+      "inactive_duplicate_exists": true,
+      "duplicate_inactive": true,
+      "structural_match": true,
+      "live_untouched": true
+    },
+    "authentication": {
+      "missing_bearer_401": "PASS (live endpoint)",
+      "malformed_bearer_401": "PASS (live + sidecar)",
+      "wrong_audience_401": "enforced by verifyIdToken aud check — full proof at gate",
+      "unauthorized_user_blocked": "enforced in Parse & Authorize — full proof at gate",
+      "authorized_owner_accepted": "PENDING gate (needs genuine Google token)"
+    },
+    "context": {
+      "unknown_thread_blocked": "PASS",
+      "expired_context_blocked": "PASS",
+      "malformed_context_id_blocked": "PASS",
+      "prospect_hidden_params_ignored": "PASS",
+      "non_reply_event_no_context": "PASS",
+      "duplicate_event_no_duplicate_context": "PASS"
+    },
+    "review": {
+      "empty_reply_rejected": "PASS",
+      "exact_body_visible": "PASS (card renders exact body)",
+      "edit_new_revision": "PASS",
+      "old_token_fails_after_edit": "PASS",
+      "cancel_sends_nothing": "PASS",
+      "body_tamper_fails": "PASS",
+      "expired_token_fails": "PASS"
+    },
+    "send": {
+      "correct_account": "PASS",
+      "correct_reply_uuid": "PASS",
+      "correct_subject": "PASS",
+      "correct_exact_body": "PASS",
+      "one_post_maximum": "PASS",
+      "duplicate_click_zero_extra_posts": "PASS",
+      "timeout_becomes_uncertain": "PASS",
+      "no_auto_retry": "PASS",
+      "go_live_gate_default_off": "PASS"
+    },
+    "store_unit_tests": "23/23",
+    "http_integration_tests": "20/20"
+  },
+  "controlled_send": {
+    "performed": true,
+    "outcome": "SENT",
+    "http_status": 200,
+    "context_id": "07b1ec10*** (fresh; failed 401 attempts preserved on a different context, never reused)",
+    "sending_account": "zah***@hmzautomations.com",
+    "recipient": "hum***@gmail.com (owner-controlled test inbox)",
+    "instantly_thread": "53-DdSVxV0*** (existing)",
+    "sent_email_id": "019f7821***",
+    "ue_type": 3,
+    "instantly_reply_post_count": 1,
+    "duplicate_send": "BLOCKED (ALREADY_SENT, 0 additional POSTs)",
+    "multiline_preserved": true,
+    "final_gate": "OFF (disabled + unarmed)"
+  },
+  "instantly_post_count": 0,
+  "duplicate_block_result": "PASS",
+  "send_uncertain_test": "PASS",
+  "existing_system_non_regression": {
+    "responder_workflows_unchanged": [
+      "Intake",
+      "Decision",
+      "HumanApproval",
+      "Sender",
+      "SLAWatchdog",
+      "ErrorHandler"
+    ],
+    "shadow_evaluator": "still disabled",
+    "n8n_container_recreated": false,
+    "send_state_sidecar_recreated": false
+  },
+  "secret_scan": "CLEAN",
+  "rollback": {
+    "notification_workflow": "PUT backups/n8n/...pre-interactive-2026-07-18.json back to JojqjTVw3KQRtYEN, or import/activate duplicate xxOjHdtQFgEcXHMI",
+    "interaction_workflow": "deactivate + delete G7GIQGt9JOXxITH4",
+    "sidecar": "docker compose stop hmz-reply-console; restore compose/.env from .before-reply-console-20260718T163257Z",
+    "instantly_webhook": "no change made"
+  },
+  "v2_delivery_and_authz_diagnosis": {
+    "v1_project_symptom": "Google logged immediate errors (code 13 INTERNAL / code 3 'didn't respond or invalid'); multi-layer proof (proven-working tcpdump on :443, n8n executions, sidecar logs) showed the request never reached the VPS. Endpoint healthy (valid TLS, reachable, valid Chat responses). Root cause was Google-side app dispatch config (resolved by owner creating a clean standalone V2 app).",
+    "v2_reaches_endpoint": true,
+    "v2_verification": "verified:true, mode=endpoint_url, chat@system.gserviceaccount.com, aud=exact endpoint URL, iss=accounts.google.com",
+    "authz_bug_root_cause": "n8n container lacked GOOGLE_CHAT_ALLOWED_EMAIL in its environment, so $env.GOOGLE_CHAT_ALLOWED_EMAIL was empty and every owner-email comparison failed -> 'restricted' denial. Token SA email was never compared to owner email.",
+    "fix": "Owner authorisation moved into the isolated sidecar (durable binding + bootstrap capture), OWNER_ALLOWED_EMAIL wired into the sidecar only (no n8n recreate). Interaction workflow Verify node forwards sanitised event identity; Parse uses the sidecar's binding/bootstrap decision.",
+    "dual_mode_verifier": "retained; endpoint-URL ID token (V2, aud=endpoint URL) and project-number Chat-SA JWT both independently strict; arbitrary audiences rejected."
+  },
+  "store_unit_tests": "27/27",
+  "http_401_root_cause": {
+    "symptom": "3x HTTP 401 'Invalid authorization header' (exec 9602/9608/9615)",
+    "cause": "Authorization header was not a valid Bearer: first via missing $env.INSTANTLY_API_KEY in n8n; then an n8n-API-imported httpHeaderAuth credential that did not execute. Key permission was never the issue (all 3 workspace keys are all:all).",
+    "repair": "Moved the Instantly send into the isolated sidecar (performSend), which forms 'Authorization: Bearer <key>' itself from a root-owned INSTANTLY_API_KEY env; fingerprint eb31b16145df matches intended; live read-only auth probe returned HTTP 200.",
+    "failed_attempt_handling": "FAILED_AUTH_401 recorded immutably in context.sendAttempts[]; context -> RETRYABLE; a retry requires a FRESH draft + fresh one-use token; the failed context is never silently reset to PENDING."
+  },
+  "whitespace_collapse_root_cause": {
+    "symptom": "multiline reply collapsed to one line in Review card + Edit dialog",
+    "cause": "extraction used .replace(/@[^\\s]+/g,' ').replace(/\\s+/g,' ').trim() which collapsed all internal whitespace",
+    "repair": "extraction now normalises CRLF/CR->LF, strips only the mention token, trims OUTER boundary only; card renders each \\n as <br>; email body.text is byte-for-byte, body.html via toHtml(); proven by 13/13 formatting tests + server-side raw-event check (blank-line nuances are Google's own delivery, preserved faithfully)."
+  },
+  "send_architecture": "Single atomic sidecar POST /v1/context/:id/send — validate(side-effect-free) -> scoped go-live gate -> atomic APPROVED->SENDING lock -> ONE Instantly POST (Bearer formed once) -> classify SENT/FAILED_AUTH_401/FAILED_SAFE/SEND_UNCERTAIN -> finalize. Duplicate clicks and stale tokens blocked before any POST.",
+  "tests": {
+    "store_fault_injection": "46/46",
+    "http": "20/20",
+    "formatting": "13/13",
+    "enrichment": "15/15",
+    "recovery": "7/7",
+    "total": 101,
+    "inbound_fault_coverage": "webhook normal; webhook-missing->readback recovers; webhook-after-readback dedup; duplicate webhook; non-received ignored; auto-reply/bounce skipped; list-error safe; high-water-mark advance; name has first-only/last-only/none/ambiguous; account both/absent/missing/inactive.",
+    "send_fault_coverage": "one POST under 2xx/timeout/reset/parse/5xx/response-loss; email_sent-first; readback-later; duplicate click; multiple candidates; no candidate; 429/5xx readback; restart durability."
+  },
+  "credential_storage": "sidecar env INSTANTLY_API_KEY from root-owned .env (chmod 600) on VPS; fingerprint eb31b16145df (len 68); never in repo/Git/workflow JSON/logs; key value confirmed absent from repo.",
+  "production_readiness": "PARTIAL / NOT PRODUCTION-ACCEPTED. Global send gate OFF. 99.99% is a target, not statistically demonstrated (sample < 10,000). Remaining: live controlled acceptance (webhook-path + poll-recovery + name-correctness on owner-controlled fixtures), then a SEPARATE explicit owner production-enable decision.",
+  "false_send_uncertain_incident": {
+    "root_cause": "AbortSignal.timeout(15000) fired; Instantly response exceeded 15s; client aborted (TimeoutError) AFTER Instantly accepted+sent; response lost -> http_0 -> false SEND_UNCERTAIN.",
+    "readback_confirmation": "thread 53-DdSVxV0***, sent email 019f782d*** @02:21:08 (attempt started 02:21:01); exactly one POST.",
+    "incident_record": "reports/false-uncertain-incident-2026-07-19.json (attempt preserved immutably; NOT reset)."
+  },
+  "reconciliation_system": {
+    "state_machine": "SENDING -> {SENT_API_CONFIRMED | FAILED_DEFINITIVE(->RETRYABLE) | RECONCILING}; RECONCILING -> {SENT_RECONCILED_WEBHOOK | SENT_RECONCILED_READBACK | MANUAL_RECONCILIATION_REQUIRED}; RECONCILING holds lock, NEVER re-POSTs.",
+    "authoritative_thread": "stored on context; reconciliation requires thread_id == stored authoritative thread; card params never trusted.",
+    "transport_faults": "ETIMEDOUT/ECONNRESET/RESPONSE_PARSE_FAILURE/UPSTREAM_5XX/UNKNOWN (audit only).",
+    "readback": "GET /emails thread+account+sent+timestamp filter; candidate requires thread+sent+account+recipient+normalised-subject+timestamp-window+exact body hash (text or html-derived). one->READBACK; many->MANUAL; none->stay.",
+    "email_sent": "isolated subscription 019f7b2f*** (active; reuses existing secret; reply_received UNCHANGED) -> workflow 0QqQh78lrgOmvByZ (no send/notify) -> sidecar; matches only open RECONCILING; dup/unrelated ignored.",
+    "rate_limiter": "shared 20/min token bucket; sync readback in Chat window + 30s durable background sweep (survives restart); MANUAL after 6-min window.",
+    "ux": "Sent / Sent-confirmed-in-Instantly / 'Confirming delivery' + Check-status (no 2nd Send) / 'could not confirm, do not resend'."
+  },
+  "reconciliation_body_matching_fix": {
+    "problem": "Instantly wraps the sent html in a full document (<!DOCTYPE html>…<title>…</title>…<body>…</body>) with no text field; exact body-hash match never matched -> stuck RECONCILING -> MANUAL (false).",
+    "fix": "structural equivalence: htmlToText strips head/title/style/script/tags; normalizeForMatch collapses whitespace; match requires the reviewed body text to be present in the sent body, plus thread+account+recipient+subject+timestamp. exact-hash fast path retained.",
+    "proven": "live readback matched the real stuck send (email 019f7b47) and the re-test send (019f7b94); wrapped-html unit test passes."
+  },
+  "auto_notify": {
+    "requirement": "owner must be informed automatically, without clicking Check status.",
+    "implementation": "sidecar posts a threaded status message via the one-way incoming webhook (no app auth). Async paths only (email_sent webhook + 30s background sweep) fire notify; the synchronous Send/Check-status card shows the result itself, so no duplicate.",
+    "double_message_bug": "observed once (sync card + sync-reconcile notify both posted); fixed by removing notify from the synchronous reconcile paths; async paths only act while RECONCILING so at most one async post."
+  },
+  "phase10b_forced_response_loss": {
+    "context": "6112f6fb*** (fresh)",
+    "recipient": "jun***@gmail.com (owner-confirmed)",
+    "sending_account": "ham***@onehmzautomations.com",
+    "thread": "53-2n2k64r*** (existing)",
+    "injected_fault": "drop_response (genuine POST completes; response discarded)",
+    "attempts": [
+      "RECONCILING(RESPONSE_PARSE_FAILURE)",
+      "SENT_RECONCILED_READBACK(019f7b94)"
+    ],
+    "instantly_post_count": 1,
+    "reconciled_email": "019f7b94***",
+    "auto_confirmed": true,
+    "manual_check_required": false,
+    "duplicate_send": "blocked (NO_ACTIVE_DRAFT, 0 extra POSTs)",
+    "final_gate": "OFF"
+  },
+  "reliability_contract": {
+    "inbound_notification_slo": "99.99% of applicable prospect replies reach CHAT_NOTIFIED (99% <2min, 99.9% <5min). No reply may silently disappear.",
+    "supervised_send_outcome_slo": ">=99.99% of POST attempts reach a clear success (SENT_API_CONFIRMED/RECONCILED_WEBHOOK/RECONCILED_READBACK) or FAILED_DEFINITIVE without manual investigation; MANUAL_RECONCILIATION_REQUIRED <=0.01%; no auto second POST.",
+    "distinction": "Console proves Instantly acceptance + thread presence; it does NOT guarantee external mailbox inbox delivery."
+  },
+  "dual_path_inbound": {
+    "fast_path": "reply_received webhook (unchanged all-campaign subscription 019f75ce…).",
+    "recovery_path": "HMZ — Inbound Recovery Poll (7LNeDYVaEbuZ4fpO, active, every 1 min) -> sidecar /v1/poll-recover: lists recent Instantly received emails with a rolling high-water-mark + overlap, dedups by Instantly email id (primary key), recovers+notifies any missing genuine reply tagged DISCOVERED_READBACK. Auto-replies/bounces skipped. First live run: scanned 1, recovered 0, alreadyPresent 1 (correct dedup, no flood).",
+    "dedup": "exactly one context + one normal notification per reply; webhook and poll race safely on the Instantly email id."
+  },
+  "notification_state_machine": "DISCOVERED_WEBHOOK|DISCOVERED_READBACK -> (post) -> CHAT_NOTIFIED | CHAT_POST_AMBIGUOUS | CHAT_POST_FAILED_DEFINITIVE. 2xx+message-name => CHAT_NOTIFIED; 2xx without name => ambiguous (never silently 'notified'). Honest limitation: incoming-webhook architecture cannot read Chat message history, so a response lost after Google accepted the post can create a rare unavoidable delivery ambiguity — documented, not hidden.",
+  "watchdog": {
+    "workflow": "HMZ — Reliability Watchdog (5nSbIHky9dQaJvd9, active, every 5 min) -> sidecar /v1/watchdog.",
+    "checks": "unresolved notifications (CHAT_NOTIFIED not reached), stalled/never-run poll (heartbeat age), Instantly API 401/429/5xx health.",
+    "alerting": "sanitised alert (severity/count/oldest/component/action; no bodies, no credentials, no raw IDs) posted to an ops thread via the incoming webhook AND persisted+queryable at /v1/watchdog. LIMITATION: alert transport reuses the incoming webhook (no separate channel exists); documented.",
+    "must_not_send": true
+  },
+  "name_enrichment": {
+    "prospect": "strict order: reply_received merged First_name/Last_name (WEBHOOK); else exact lead lookup by email+campaign (EMAIL_CAMPAIGN_LOOKUP); multiple matches => AMBIGUOUS (no arbitrary pick); never inferred from local part/display/company/body/signature. Unicode-safe, diacritics/case preserved. Fallback display 'Name unavailable <email>'.",
+    "sender": "Instantly Account for the exact eaccount (first_name/last_name), durable cache (6h TTL, refresh on miss/stale, status), fails CLOSED for sending eligibility but never suppresses the inbound notification. Fallback 'Sender name not configured <mailbox>'. Never operator/local-part name.",
+    "surfaced_in": "notification + review card (From (sender)/To (prospect)) + edit review + success receipt (Prospect/Sender/Subject/Confirmation/Time London+UTC).",
+    "verified": "live sender-name for a real connected account returned found+eligible+resolved name; notification dry-run shows both named lines."
+  },
+  "telemetry": {
+    "module": "append-only per-UTC-day JSONL (concurrency-safe; no bodies/names/emails/credentials). /v1/report gives numerator/denominator/percentage/sample + latency p50/p95/p99/max for inbound + outbound + data-quality.",
+    "truthfulness": "never prints '99.99% achieved' below 10,000 applicable events; below that reports '0 unresolved out of N'. Current counters start at this deployment (prior traffic pre-dates telemetry) so N is small and 99.99% is a TARGET only."
+  },
+  "backups_pre_reliability": {
+    "repo": [
+      "backups/n8n/notification-pre-reliability-2026-07-20.json (sha 1904a411208b)",
+      "backups/n8n/supervised-reply-pre-reliability-2026-07-20.json (sha 9c68a8905a92)",
+      "backups/n8n/email-sent-reconcile-pre-reliability-2026-07-20.json (sha 0647c0e2191e)"
+    ],
+    "inactive_n8n_duplicates": [
+      "notification qWgBDwfjtfvSRcdM",
+      "supervised-reply lxsVZHNNQCYUvj6N",
+      "email-sent AcZzig5JJkKcIVEt (all inactive, structural hashes matched)"
+    ],
+    "sidecar": "backups/reply-console/sidecar-config-snapshot-pre-reliability-2026-07-20.txt; VPS compose/.env *.before-reliability-*"
+  }
+}

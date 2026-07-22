@@ -1,0 +1,103 @@
+{
+  "dateRange": {
+    "days": 30,
+    "generatedAt": "2026-07-20T18:30:57.422Z"
+  },
+  "inbound": {
+    "applicable": 17,
+    "discoveredWebhook": 13,
+    "discoveredReadback": 4,
+    "duplicatesSuppressed": 3,
+    "chatNotified": 15,
+    "failedNotifications": 0,
+    "ambiguousChatPosts": 2,
+    "latencyMs": {
+      "n": 15,
+      "p50": 1096,
+      "p95": 1388,
+      "p99": 1388,
+      "max": 1388
+    },
+    "notified_numerator": 15,
+    "notified_denominator": 17,
+    "notified_pct": 88.2353,
+    "target_99_99_demonstrated": false
+  },
+  "outbound": {
+    "reviewedDrafts": 21,
+    "sendClicks": 0,
+    "instantlyPosts": 5,
+    "sentApiConfirmed": 5,
+    "sentReconciledWebhook": 0,
+    "sentReconciledReadback": 0,
+    "failedDefinitive": 0,
+    "manualReconciliationRequired": 0,
+    "duplicateClicksBlocked": 0,
+    "staleTokensBlocked": 7,
+    "confirmationLatencyMs": {
+      "n": 5,
+      "p50": 0,
+      "p95": 0,
+      "p99": 0,
+      "max": 0
+    },
+    "clearOutcome_numerator": 5,
+    "clearOutcome_denominator": 5,
+    "clearOutcome_pct": 100,
+    "manual_pct": 0,
+    "target_99_99_demonstrated": false
+  },
+  "dataQuality": {
+    "prospectNameWebhook": 0,
+    "prospectNameLookup": 0,
+    "prospectNameMissing": 0,
+    "senderNameMissing": 1,
+    "accountLookupFailures": 0,
+    "ambiguousLeadMatches": 0
+  },
+  "truthfulness": "Sample below 10,000. Report as \"0 unresolved out of N applicable events\" — 99.99% is a TARGET, not demonstrated. inbound N=17, outbound N=5.",
+  "_note_2026_07_20_incident": "This raw telemetry snapshot shows chatNotified=15/17 (88.2%) because the append-only 'inbound_notified' counter records once per successful attachChatPost call, and 2 contexts earlier in the day needed a retry before succeeding (each recorded once as ambiguous, once as notified on retry) - both kept, by design. The authoritative CURRENT-state check (GET /v1/unnotified) at this same moment showed only the pre-existing, already-identified self-test debris item as unresolved - zero genuine gaps. See reports/LIVE_MISSED_NOTIFICATION_INCIDENT_2026-07-20.md for the full incident this snapshot was taken alongside.",
+  "_codex_2026_07_21": {
+    "generatedAt": "2026-07-21T04:30:50.905Z",
+    "schemaVersion": 2,
+    "measurementType": "direct_current_state_reconciliation",
+    "warning": "This additive snapshot does not rewrite the preserved July 20 historical counters and does not claim statistically proven 100% reliability.",
+    "production": {
+      "durableInboundPresent": 78,
+      "outboxPresent": 78,
+      "outboxMissing": 0,
+      "chatNotified": 40,
+      "historicalOwnerHold": 38,
+      "queued": 0,
+      "posting": 0,
+      "retrying": 0,
+      "ambiguous": 0,
+      "probableDuplicateChatPosts": 7,
+      "queueDepth": 0,
+      "watchdogAlertCount": 0,
+      "sqliteQuickCheck": "ok",
+      "foreignKeyViolations": 0
+    },
+    "directWindows": {
+      "burst15": {"instantlyReceivedObserved": 15, "durableInboundPresent": 15, "outboxPresent": 15, "chatNotified": 15, "historicalOwnerHold": 0, "activeMissing": 0},
+      "postConsoleEpoch": {"instantlyReceivedObserved": 37, "durableInboundPresent": 37, "outboxPresent": 37, "chatNotified": 37, "historicalOwnerHold": 0, "activeMissing": 0},
+      "last24Hours": {"instantlyReceivedObserved": 22, "durableInboundPresent": 22, "outboxPresent": 22, "chatNotified": 22, "historicalOwnerHold": 0, "activeMissing": 0},
+      "last7Days": {"instantlyReceivedObserved": 48, "durableInboundPresent": 48, "outboxPresent": 48, "chatNotified": 40, "historicalOwnerHold": 8, "activeMissing": 0},
+      "preConsoleOwnerDecision": {"instantlyReceivedObserved": 41, "durableInboundPresent": 41, "outboxPresent": 41, "chatNotified": 3, "historicalOwnerHold": 38, "activeMissing": 0}
+    },
+    "scale": {
+      "uniqueReceived": 100000,
+      "durableInbound": 100000,
+      "logicalOutbox": 100000,
+      "chatNotified": 100000,
+      "permanentlyUnnotified": 0,
+      "prospectReplyPosts": 0,
+      "assertions": "45/45 PASS"
+    },
+    "globalSendStateSha256": "611f5d6e14b5f860432ae4a4d913e680898bbfef565dcaefe051bf2582754522",
+    "globalSendUnchanged": true,
+    "verdict": "CONDITIONAL PASS",
+    "upstreamFifteenthClassification": "INSUFFICIENT_PROVIDER_EVIDENCE",
+    "evidence": "reports/codex-inbound-completeness-scale-evidence.json"
+  }
+}

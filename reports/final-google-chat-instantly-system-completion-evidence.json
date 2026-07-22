@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-22T01:47:00.000Z",
+  "verdict": "SYSTEM COMPLETION PASS",
+  "run_date": "2026-07-22",
+  "production_epoch": "2026-07-18T18:33:00Z",
+  "readback_time": "2026-07-22T01:46:55Z",
+  "image": {
+    "tag": "hmz-reply-console:codex-cardstate-20260722-r11",
+    "healthy": true,
+    "deployed_source_sha256": {
+      "inbound-contract.mjs": "a1561d00cdf507da8e2cee5a7a864bfb4b2656e51dc2e31eea6ebd22e7059ad8",
+      "inbound-service.mjs": "e3f7d88e49878f7508089d517bdde10bf8e1c5ede44e9b19cd704d8f0f15d770",
+      "store.mjs": "c55490cb5a7a7d3f72504602f0d70b9e57555a306221a53a2a2307e8d88c571b",
+      "inbound-store.mjs": "82ba0caed9fbe90d477213a5a7e73812c23dfd756a8cfcf9dc34235ef54b2868"
+    }
+  },
+  "global_send": {
+    "enabled": true,
+    "armedContextId": null,
+    "armedRevision": null,
+    "faultInject": null,
+    "canonical_sha256_before": "611f5d6e14b5f860432ae4a4d913e680898bbfef565dcaefe051bf2582754522",
+    "canonical_sha256_after": "611f5d6e14b5f860432ae4a4d913e680898bbfef565dcaefe051bf2582754522",
+    "unchanged": true
+  },
+  "post_epoch_inbound_reconciliation": {
+    "window": ["2026-07-18T18:33:00.000Z", "2026-07-22T01:46:55.000Z"],
+    "instantly_received_observed": 51,
+    "missing_inbound": 0,
+    "missing_outbox": 0,
+    "durable_inbound_post_epoch": 54,
+    "durable_outbox_post_epoch": 54,
+    "chat_notified_post_epoch": 54,
+    "queued": 0,
+    "posting": 0,
+    "retrying": 0,
+    "ambiguous": 0,
+    "duplicate_logical_identities": 0,
+    "note": "durable is a superset of the instantaneous Instantly scan; every Instantly-visible post-epoch identity is CHAT_NOTIFIED; zero gaps"
+  },
+  "global_durable_state": {
+    "inbound": 987, "outbox": 987, "chat_notified": 682, "historical_owner_hold": 305,
+    "queued": 0, "posting": 0, "retrying": 0, "ambiguous": 0
+  },
+  "outbound": {
+    "total_instantly_posts": 2,
+    "duplicate_or_stale_extra_posts": 0,
+    "send_a": {
+      "fixture": "F1", "edited": false,
+      "recipient": "alinazahidkhan890@gmail.com",
+      "eaccount": "hamzah@hmzautomation.com",
+      "thread_id": "86-1-WxpS69xd1JM68kPWij0FP",
+      "reply_to_uuid": "019f86f7-bf57-7e73-b248-9822c12d9e77",
+      "revision": 1,
+      "body_sha256": "18735e408c85da06182520541d19c96c49aa90cde98a9fa90e16e1d88576c18c",
+      "instantly_post_count": 1,
+      "terminal_state": "SENT_API_CONFIRMED",
+      "stale_replay_result": "NO_ACTIVE_DRAFT / 0 extra POST",
+      "owner_inbox_confirmation": "PROVIDED — one reply in intended inbox; decoy inbox unaffected"
+    },
+    "send_b": {
+      "fixture": "F2", "edited": true,
+      "recipient": "humzaabbas1357@gmail.com",
+      "eaccount": "hamzah@gethmzautomation.com",
+      "thread_id": "86--eKozl7_zFmnRANH1W_NNdN",
+      "reply_to_uuid": "019f86f8-18ed-7b91-b27e-4a5b7b20149f",
+      "revision_initial": 1,
+      "revision_sent": 2,
+      "revision_1_sent": false,
+      "body_sha256": "c816afc4e619e29bb682688d9a406b3b703bc9af75f2920f9775f450abeb6772",
+      "instantly_post_count": 1,
+      "terminal_state": "SENT_API_CONFIRMED",
+      "stale_replay_result": "NO_ACTIVE_DRAFT (UI) + HTTP 409 (server replay) / 0 extra POST",
+      "owner_inbox_confirmation": "PROVIDED — edited body in intended inbox; decoy inbox unaffected"
+    }
+  },
+  "operations_health": {
+    "sqlite_quick_check": "ok", "foreign_key_violations": 0, "watchdog_alert_count": 0,
+    "recovery_poll_fresh": true, "audit_short_fresh": true, "audit_deep_fresh": true,
+    "audit_daily_fresh": true,
+    "subscriptions_active": {
+      "reply_received": "HMZ — Instantly Reply → Google Chat Notification v2 (Durable) [ACTIVE]",
+      "email_sent": "HMZ — Instantly email_sent Reconciliation [ACTIVE]"
+    },
+    "active_historical_release_or_drain": false,
+    "historical_backlog_competing_with_live": false
+  },
+  "historical_records": {
+    "held": 305,
+    "treatment": "PRE_EPOCH_HISTORICAL_HOLD — never released/posted; non-actionable via data quarantine + r9 code guard",
+    "accepted_incident_artifacts_628": "acks preserved, non-actionable, excluded from live reliability stats"
+  },
+  "fixture_waiver": { "F3": "cancelled/waived", "F4": "cancelled/waived", "F5": "cancelled/waived" },
+  "known_internal_defects": {
+    "high": [], "medium": [],
+    "low": ["auto/OOO classification precision depends on is_auto_reply flag or phrase set; completeness/safety unaffected"]
+  },
+  "remaining_owner_action": "NONE — continue supervised production operation and monitor"
+}

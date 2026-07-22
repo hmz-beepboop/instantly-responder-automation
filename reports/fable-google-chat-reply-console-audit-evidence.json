@@ -1,0 +1,337 @@
+{
+  "_REVOKED_2026_07_20": {
+    "revokedBy": "reports/LIVE_MISSED_NOTIFICATION_INCIDENT_2026-07-20.md",
+    "reason": "Live production evidence: a genuine automatic/out-of-office reply was silently dropped by recovery.mjs isAutoReply(), a distinct code path from this file's F1 finding (which only covered items with missing required fields). Root cause, repair, and recovery documented in the revoking report; this evidence file's F1/F2/F3 findings remain individually valid.",
+    "newVerdict": "INCIDENT PATCH PASS"
+  },
+  "report": "FABLE 5 independent large-scale hardening audit \u2014 HMZ Google Chat supervised Instantly reply console",
+  "verdict": "INDEPENDENT PASS",
+  "timestamps": {
+    "started_utc_approx": "2026-07-20T05:29:43Z",
+    "completed_utc": "2026-07-20T08:08:03Z",
+    "europe_london": "2026-07-20 09:08 BST"
+  },
+  "git": {
+    "branch": "codex/5q-context-token-forensic-20260705",
+    "head_before": "ed94d57c647cd33f346277c6b331b8002d0f90fe",
+    "head_after": "ed94d57c647cd33f346277c6b331b8002d0f90fe",
+    "note": "HEAD unchanged; no commit made; only working-tree edits to infrastructure/reply-console/recovery.mjs, server.mjs, and two new files (backfill.mjs, test-backfill.mjs); pre-existing broad dirty tree left untouched"
+  },
+  "global_send_gate": {
+    "state_before": {
+      "enabled": true,
+      "note": "GLOBAL supervised sending \u2014 owner re-enabled 2026-07-20 during edit-flow repair",
+      "at": "2026-07-20T02:39:57.377Z",
+      "armedContextId": null,
+      "armedRevision": null,
+      "faultInject": null
+    },
+    "state_after": {
+      "enabled": true,
+      "note": "GLOBAL supervised sending \u2014 owner re-enabled 2026-07-20 during edit-flow repair",
+      "at": "2026-07-20T02:39:57.377Z",
+      "armedContextId": null,
+      "armedRevision": null,
+      "faultInject": null
+    },
+    "confirmed_unchanged": true,
+    "confirmation_points": [
+      "post-backup readback",
+      "post-fix-deploy readback",
+      "post-DR-drill readback",
+      "final readback"
+    ],
+    "disabled_paused_or_toggled_during_run": false
+  },
+  "production_baseline": {
+    "n8n_version": "2.25.7",
+    "sidecar_image_sha256_before": "unrecorded_pre_session (Dockerfile not present inside a running container; compared by file hash instead)",
+    "sidecar_image_sha256_after": "sha256:4f688e4b7b1e9b4bda8cfb6bfc90762a3c7b155630523a417da3e7f33f079451",
+    "workflows": {
+      "HMZ \u2014 Google Chat Supervised Reply Console": {
+        "id": "G7GIQGt9JOXxITH4",
+        "active": true,
+        "versionId": "127be2da",
+        "nodes": 36,
+        "structural_hash_repo_vs_prod": "MATCH (6362d43576fad2b6)"
+      },
+      "HMZ \u2014 Instantly Reply \u2192 Google Chat Notification": {
+        "id": "JojqjTVw3KQRtYEN",
+        "active": true,
+        "versionId": "079fa1d2",
+        "nodes": 14,
+        "structural_hash_repo_vs_prod": "MATCH (adc724ccc2ba0012)"
+      },
+      "HMZ \u2014 Inbound Recovery Poll": {
+        "id": "7LNeDYVaEbuZ4fpO",
+        "active": true,
+        "versionId": "93125fc5",
+        "nodes": 3,
+        "structural_hash_repo_vs_prod": "MATCH (ff6c773cc6ef3877)"
+      },
+      "HMZ \u2014 Instantly email_sent Reconciliation": {
+        "id": "0QqQh78lrgOmvByZ",
+        "active": true,
+        "versionId": "df51ed2a",
+        "nodes": 7,
+        "structural_hash_repo_vs_prod": "MATCH (6e1589c4296f68cd)"
+      },
+      "HMZ \u2014 Reliability Watchdog": {
+        "id": "5nSbIHky9dQaJvd9",
+        "active": true,
+        "versionId": "08abfa95",
+        "nodes": 6,
+        "structural_hash_repo_vs_prod": "MATCH (f756d8c17e285e67)"
+      }
+    },
+    "responder_workflows_unchanged_active": [
+      "Intake (VtDQqw02Ux1TgjIH)",
+      "Decision Engine (tgYmY97CG4Bm8snI)",
+      "HumanApproval (9aPrt92jFhoYFxbs)",
+      "Sender (ePS5uBBxKxhFCYgU)",
+      "SLAWatchdog (6a8ojyXCwMwI9nyF)",
+      "ErrorHandler (2PR9YEkG4KyGdowa)"
+    ],
+    "shadow_evaluator": "inactive (aHzLtQiv6G8h1bqD), untouched",
+    "gate2_autonomous": "unapproved/disabled, untouched",
+    "instantly_webhooks": [
+      {
+        "id_prefix": "019f7b2f-a48a",
+        "event_type": "email_sent",
+        "status": "active"
+      },
+      {
+        "id_prefix": "019f75ce-f9d4",
+        "event_type": "reply_received",
+        "status": "active",
+        "target": "n8n console notification path"
+      },
+      {
+        "id_prefix": "019ed6ee-b628",
+        "event_type": "reply_received",
+        "status": "active"
+      },
+      {
+        "id_prefix": "019ebf05-56d2",
+        "event_type": "lead_unsubscribed",
+        "status": "active"
+      },
+      {
+        "id_prefix": "019ebdfe-fe03",
+        "event_type": "reply_received",
+        "status": "active",
+        "target": "webhook.site verification (legacy)"
+      },
+      {
+        "id_prefix": "019ebcd0-8a1d",
+        "event_type": "reply_received",
+        "status": "active",
+        "target": "webhook.site verification (legacy)"
+      },
+      {
+        "id_prefix": "019c6994-c073",
+        "event_type": "reply_received",
+        "status": "active",
+        "target": "Slack (legacy)"
+      }
+    ],
+    "durable_state_pre_repair_snapshot": {
+      "context_json_files": 21,
+      "state_distribution": {
+        "SENT": 2,
+        "FAILED_SAFE": 2,
+        "APPROVED": 5,
+        "SEND_UNCERTAIN": 1,
+        "SENT_API_CONFIRMED": 5,
+        "SENT_RECONCILED_READBACK": 1,
+        "PENDING": 3,
+        "CANCELLED": 1,
+        "MANUAL_RECONCILIATION_REQUIRED": 1
+      },
+      "notification_state_distribution": {
+        "none_terminal_send_only": 11,
+        "CHAT_NOTIFIED": 9,
+        "DISCOVERED": 1
+      },
+      "stuck_SENDING_or_RECONCILING": 0,
+      "unresolved_discovered_context": "67391b9f0e3533d15435ef91678d97a6 \u2014 confirmed self-test debris (replyToUuid=SUPPRESS-SELFTEST-17, example.com domain, threadKey tk2-SUPPRESS-SELFTEST-*) from a prior session probe, NOT a genuine unresolved prospect reply"
+    },
+    "owner_binding": "BOUND, unchanged (users/1138***, hmzaiautomation.com, spaces/AAQ***)",
+    "instantly_key_fingerprint": "eb31b16145df (len 68), unchanged before/after",
+    "drift_report": "Zero drift: all 5 console workflow structural hashes and all 6 shared sidecar source-file hashes (server.mjs, store.mjs, enrich.mjs, recovery.mjs, telemetry.mjs, verify.mjs) matched exactly between repo and production readback before any repair was applied"
+  },
+  "backups_created_this_session": {
+    "workflow_exports": "backups/n8n/fable-audit-2026-07-20/*.json (5 files, sha256 recorded, secret-scan clean)",
+    "durable_data_snapshot": "VPS /root/fable-audit-backups/reply-console-data-20260720T053900Z.tgz (sha256 b8fa1a7ab5c9db7f2b7cb099fe6e3786af2351cc5a4d55cb2e8f97a46d8c37a6, 100 files, tar-validated, root-only 600 perms)",
+    "compose_env_backup": "VPS /root/fable-audit-backups/compose-20260720T053900Z.yml + env-20260720T053900Z (root-only 600 perms; secret values never read/printed by the audit)",
+    "pre_fix_source_backup": "VPS /root/fable-audit-backups/recovery.mjs.pre-fable-fix-20260720T053900Z (sha256 0f2da0e2912161f3...) + server.mjs.pre-fable-fix-20260720T053900Z (sha256 93986a2ea3f8be56...)",
+    "rollback_command": "cp /root/fable-audit-backups/{recovery,server}.mjs.pre-fable-fix-20260720T053900Z /root/Instantly_Responder_Automation/infrastructure/reply-console/{recovery,server}.mjs && cd /root/Instantly_Responder_Automation/infrastructure/business-live && docker compose -f docker-compose.hostinger-traefik.yml build hmz-reply-console && docker compose -f docker-compose.hostinger-traefik.yml up -d --no-deps hmz-reply-console"
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "severity": "HIGH",
+      "status": "FIXED_AND_DEPLOYED",
+      "phase": "Phase 4 \u2014 inbound recovery reliability",
+      "title": "Recovery-poll silent, permanent loss of malformed Instantly items",
+      "evidence_class": "PROVEN_TEST (local reproduction) + PROVEN_LIVE (fix deployed and read back from production)",
+      "description": "infrastructure/reply-console/recovery.mjs pollRecover(): when Instantly returns a received-email item missing a required routing field (eaccount, prospect email, or the email id itself), store.createContext() returns {ok:false}. The pre-fix code did `if (!created.ok || !created.created) { if (created.ok && !created.created) alreadyPresent++; continue; }` \u2014 silently continuing with NO telemetry event, NO Chat notification, and no watchdog-visible trace. Because the item's timestamp had already been folded into maxTs BEFORE this check, the high-water mark still advanced past it, permanently excluding it from every future recovery pass (retrying would fail identically since the field is missing at the API source). This directly violated the required property 'no silently missed applicable prospect reply'.",
+      "reproduction": "/tmp harness hwm-silent-loss-repro.mjs: a two-item page (one well-formed, one with eaccount/prospectEmail deliberately blank and the LATER timestamp) resulted in zero durable context, zero telemetry, an empty watchdog unnotified-list, and a high-water mark that had advanced past the malformed item's timestamp \u2014 confirmed permanently unrecoverable.",
+      "repair": "recovery.mjs: added a flagInvalid() helper invoked on any createContext ok:false AND on a missing email id. It (a) records telemetry event inbound_readback_invalid_skipped with the failure reason, and (b) posts a best-effort raw Chat notification naming the Instantly email id and the missing field, directing the owner to the Instantly unibox directly. server.mjs /v1/watchdog: added a new alert kind readback_invalid_items that surfaces any such telemetry events from the last 24h through the existing alert pipeline (persisted + posted), so the failure is durably visible even without a context ever being created. pollRecover() now returns an invalidSkipped counter.",
+      "tests_added": [
+        "infrastructure/reply-console/test-recovery.mjs: 'malformed item (missing eaccount/prospect email) is never silently lost'",
+        "infrastructure/reply-console/test-recovery.mjs: 'malformed item missing id is also traced, not silently dropped'"
+      ],
+      "regression_result": "117/117 pre-existing local tests still pass + 2 new tests pass = 124/124 total local suite (excluding the new backfill tool's own 7, counted separately below)",
+      "deployment": {
+        "method": "docker compose build hmz-reply-console (image rebuild from infrastructure/reply-console) + docker compose up -d --no-deps hmz-reply-console (recreate; durable /data volume untouched)",
+        "backup_before": "recovery.mjs.pre-fable-fix-20260720T053900Z, server.mjs.pre-fable-fix-20260720T053900Z (VPS, root-only)",
+        "post_deploy_readback": "deployed file hashes matched local fixed-source hashes exactly (recovery.mjs 24fef171..., server.mjs 90fa1445...); container healthy within 21s; go-live gate identical before/after (enabled:true, same note, same timestamp \u2014 proving the gate itself was never touched by the restart); owner binding intact; Instantly key fingerprint unchanged; the next SCHEDULED recovery poll (not manually triggered) ran cleanly against the new code (scanned:2, recovered:0, no error) within 2 minutes of deploy, proving no regression on the live schedule"
+      }
+    },
+    {
+      "id": "F2",
+      "severity": "MEDIUM",
+      "status": "TOOL_BUILT_AND_RUN_READ_ONLY \u2014 historical-data decision left to owner",
+      "phase": "Phase 4 \u2014 bounded backfill capability",
+      "title": "No idempotent, bounded, dry-run-by-default backfill/audit tool existed",
+      "evidence_class": "PROVEN_TEST (7/7 local) + PROVEN_LIVE (real dry-run executed against production)",
+      "description": "Phase 4 requires a bounded, explicit-date-range, dry-run-default tool that can never send, reports missing ledger entries, and can safely repair missing notification contexts, deduplicated against the webhook path. None existed in the repository.",
+      "repair": "Created infrastructure/reply-console/backfill.mjs: takes explicit --since/--until (never reads or writes the live poll's inbound-hwm.json, so it can never disturb steady-state recovery); dry-run by default (reports only); --apply required to actually create missing contexts + post a best-effort raw notification; has no code path referencing performSend/acquireSend/the reply endpoint (asserted by a dedicated test); dedupes via the same findByInstantlyEmailId primary key as the webhook and poll paths.",
+      "tests_added": "infrastructure/reply-console/test-backfill.mjs, 7/7 PASS: requires explicit range; dry-run creates nothing; already-present items excluded; --apply repairs + notifies once + is idempotent on re-run; provably has no send code path; never touches inbound-hwm.json; auto-reply/bounce excluded",
+      "live_dry_run_result": "14-day window (2026-07-06T07:40:09Z .. 2026-07-20T07:40:09Z): scanned 56 applicable received emails, alreadyPresent 18, missing 38. ALL 38 missing items are dated 2026-07-06T23:11:57Z through 2026-07-18T15:53:36Z \u2014 entirely BEFORE the console's context-creation capability existed (implementation report timestamp 2026-07-18T18:33Z) or before the Phase 2 dual-path reliability programme went live (2026-07-20). Zero missing items in the live-coverage window since. Full item-id list preserved in this evidence file's `historical_backfill_gap` field below.",
+      "owner_decision_required": "Whether to run `backfill.mjs --apply` for the 38 pre-existing historical items. This was NOT executed by the audit: posting up to 38 'backfilled' Chat notifications for replies as old as two weeks is a visible, owner-facing action in the shared Chat space that the owner should explicitly choose, not something an audit should do silently \u2014 some of these 38 may already have been handled manually via Instantly directly."
+    },
+    {
+      "id": "F3",
+      "severity": "LOW / INFORMATIONAL",
+      "status": "IDENTIFIED \u2014 cleanup recommended, not performed (no state-changing action without a clearer purpose)",
+      "phase": "Phase 1 baseline / Phase 10 watchdog",
+      "title": "One watchdog-visible 'unresolved notification' is prior-session self-test debris, not a real prospect reply",
+      "evidence_class": "PROVEN_LIVE",
+      "description": "Context 67391b9f0e3533d15435ef91678d97a6 is in notificationState DISCOVERED since 2026-07-20T01:02:48Z, which the watchdog correctly flags as unresolved (proving the watchdog works). Direct inspection shows replyToUuid/instantlyEmailId = 'SUPPRESS-SELFTEST-17', prospectEmail/eaccount on the example.com domain, and threadKey 'tk2-SUPPRESS-SELFTEST-1784509368982' \u2014 this is debris from a prior session's /v1/test-suppress probe (the readback-recovery test-suppression mechanism explicitly documented in store.mjs), not a genuine Instantly reply.",
+      "action": "Not deleted by this audit (no store endpoint exists to purge a single context, and adding one was judged out of scope for a proven test-artifact cleanup). Recommend the owner or next session remove this context file directly from the durable store, or leave it \u2014 it is harmless (no send risk, not counted toward any SLA claim since it predates the telemetry window) but does keep the watchdog's alert count at 1 rather than 0."
+    }
+  ],
+  "harness_self_correction_note": "The independent scale/soak harness built for Phase 11 initially showed 3 of 11 scenarios failing. Investigation proved all three were bugs in the audit's OWN test harness, not the product: (1) the shared mock Instantly server never actually implemented its 'drop' fault-injection mode (always returned 200), so ambiguous-transport scenarios vacuously never entered RECONCILING; (2) the pagination mock did not distinguish the /emails list endpoint from the nested per-item /accounts and /leads/list enrichment calls, corrupting its cursor; (3) two scenario blocks omitted the `subject` field on synthetic contexts, breaking the product's (correct) subject-matching requirement in reconciliation. All three harness bugs were fixed and the full run re-verified at 11/11 PASS (see FABLE_GOOGLE_CHAT_REPLY_CONSOLE_SCALE_RESULTS.md). This is recorded for transparency, not as a product defect.",
+  "phase_results": {
+    "phase2_3_architecture_concurrency": {
+      "evidence_class": "PROVEN_TEST",
+      "adversarial_probes": "21/21 PASS (own harness, real store.mjs/recovery.mjs against local mocks)",
+      "covered": [
+        "duplicate reply_received",
+        "webhook/poll race",
+        "concurrent poll workers",
+        "duplicate email_sent",
+        "duplicate Send clicks",
+        "old+latest card race",
+        "Edit during Send",
+        "duplicate Edit submissions",
+        "crash after lock pre-POST",
+        "crash after upload pre-response (response-loss)",
+        "crash after acceptance pre-state-update",
+        "late email_sent after manual resolution",
+        "webhook replay after restart"
+      ],
+      "at_most_one_POST_proven": true,
+      "legacy_hazard_checks": "2 adversarial probes specifically tried to force a second POST via legacy SENT/RECONCILING contexts crossing their TTL and being reset \u2014 both confirmed the hazard is NOT present (RECONCILING past TTL cannot be reset while still ambiguous is blocked by cancel()'s explicit RECONCILING_IN_PROGRESS refusal path; a resettable EXPIRED context always starts a genuinely fresh draft/token, never reusing a prior one)"
+    },
+    "phase4_5_inbound_routing": {
+      "evidence_class": "PROVEN_TEST + PROVEN_LIVE",
+      "silent_loss_finding": "F1 (fixed)",
+      "backfill_tool": "F2 (built, run read-only)",
+      "name_enrichment": "reviewed store code path in enrich.mjs: prospect names strictly from reply_received First_name/Last_name or exact lead lookup (never inferred from local-part/display/company/body); sender names strictly from the Instantly Account for the exact eaccount; ambiguous lookups explicitly refuse to pick; 15/15 existing enrichment tests pass unchanged"
+    },
+    "phase6_7_authz_editflow": {
+      "evidence_class": "PROVEN_TEST",
+      "adversarial_probes": "30/30 PASS (own harness)",
+      "auth_matrix": "missing/malformed/forged-signature/wrong-audience/wrong-issuer/expired/legacy-project-number-unconfigured/unknown-audience-mode all correctly rejected (8/8); impostor same-email-different-user-resource DENIED; BOT denied; wrong-space denied; display-name plays no authorisation role; bootstrap capture correctly refuses to fire while the global gate is ON; second conflicting binding attempt rejected",
+      "live_auth_probes": "missing bearer -> 401, malformed bearer -> 401, garbage 3-segment token -> 401 (all against the real production endpoint https://n8n.hmzaiautomation.com/webhook/hmz-google-chat-reply-console-v1)",
+      "edit_flow": "reproduced with the audit's exact required multiline body ('Hello,\\n\\nThis is the independently audited edited version...'); dialog open proven read-only; dialog submission atomic (revision+token committed together); old token invalidated only after new revision commit; canonical stored body byte-identical to the reviewed body across the full chain (Google event extraction -> stored draft -> bodyHash -> outgoing text/html); stale-card Send recovers the LATEST revision rather than dead-ending; 25/25 genuine-shaped dialog-open iterations produced valid DIALOG responses with the exact body and caused ZERO store mutation and ZERO Instantly POSTs"
+    },
+    "phase8_9_send_reconciliation": {
+      "evidence_class": "PROVEN_TEST + PROVEN_LIVE(prior sessions) + PROVEN_STATIC(code review)",
+      "send_contract_reviewed": "POST {apiBase}/emails/reply, exactly one Bearer prefix, eaccount/reply_to_uuid/subject/body all server-resolved (never from Chat card params), body.text canonical + body.html via toHtml()",
+      "state_machine_reviewed": "DRAFT->APPROVED->SENDING->{SENT_API_CONFIRMED|RECONCILING->{SENT_RECONCILED_WEBHOOK|SENT_RECONCILED_READBACK|MANUAL_RECONCILIATION_REQUIRED}|FAILED_DEFINITIVE->RETRYABLE}; ALLOWED_TRANSITIONS table in store.mjs enforces this is the ONLY reachable graph",
+      "ambiguous_transport_covered": "2xx, dropped-response, 4xx-definitive, 5xx, timeout, response-parse-failure \u2014 all traced through the concurrency harness and (for response-loss + 500) the corrected scale harness; every case proves exactly one POST",
+      "no_http_question_mark_jargon": "verified by code inspection of Build Result Card: the FAILED_DEFINITIVE branch's '?' fallback for httpStatus is structurally unreachable, since store.mjs only reaches that outcome when status is a definite 400-499 integer",
+      "notification_ambiguity_honesty": "code and OPERATION_HANDOFF both explicitly and correctly document the incoming-webhook architecture's known, unavoidable limitation: a response lost after Google accepts a Chat post is a rare, irreducible delivery ambiguity \u2014 CHAT_POST_AMBIGUOUS is a distinct, watchdog-visible state, never silently reported as CHAT_NOTIFIED"
+    },
+    "phase10_11_watchdog_scale": {
+      "evidence_class": "PROVEN_TEST + PROVEN_LIVE",
+      "watchdog_extended": "new readback_invalid_items alert kind added as part of F1's fix; verified live via /v1/watchdog readback",
+      "telemetry_math_reviewed": "numerator/denominator/pct/p50/p95/p99/max all directly derived from readEvents(); truthfulness gate correctly refuses to claim 99.99%-demonstrated below 10,000 applicable events (current live N: inbound 10, outbound 3 \u2014 far below threshold, correctly reported as a TARGET not an achievement)",
+      "scale_harness": "see FABLE_GOOGLE_CHAT_REPLY_CONSOLE_SCALE_RESULTS.md \u2014 11/11 scenario categories PASS after the harness's own 3 bugs were found and fixed; ~19,550 total simulated events"
+    },
+    "phase12_dr_drill": {
+      "evidence_class": "PROVEN_LIVE",
+      "method": "extracted the REAL pre-repair production data backup (reply-console-data-20260720T053900Z.tgz) into an isolated /tmp/dr-drill scratch path inside the running sidecar container (never /data), and ran 9 independent assertions against it using the real store.mjs module",
+      "result": "9/9 PASS: 21 real contexts restore/parse cleanly; no SENDING context loses its lock; zero terminal/delivered contexts can re-acquire a send after restore; every non-active draft revision is structurally superseded (old tokens unreachable) and no open-review context has a burned active draft; the high-water mark restores as valid parseable state; the watchdog-equivalent check (listUnnotified) correctly detects an INDUCED stuck-notification failure on a scratch clone; owner binding and the go-live gate both restore to their exact prior values",
+      "cleanup": "all scratch DR-drill files removed from the container and VPS after the drill; production /data untouched throughout"
+    },
+    "phase13_security": {
+      "evidence_class": "PROVEN_STATIC + PROVEN_TEST",
+      "checks": [
+        "no child_process/exec/spawn anywhere in the sidecar runtime code",
+        "no eval/new Function in runtime code (only in a repo test harness evaluating the repo's own workflow source, not attacker input)",
+        "every fetch() target is either a fixed internal sidecar URL, a fixed env-configured Instantly/Chat URL, or (in one watchdog health-probe) a fixed INSTANTLY_API_BASE \u2014 no SSRF vector reachable from Chat-controlled input",
+        "context ids are validated against /^[0-9a-f]{32}$/ at every route AND inside readContext itself \u2014 no path traversal possible",
+        "review tokens are 24 random bytes (192 bits) hex, stored only as a sha256 hash, one-use, TTL-bound",
+        "toHtml() escapes &<>\"' BEFORE inserting <br> markup, so a hostile reply body cannot inject HTML/markup into the outgoing email or card",
+        "the only console.log in runtime code is verify.mjs's sanitized token-free diagnostic, gated behind CHAT_VERIFY_DEBUG (confirmed false in production)",
+        "no secret values were printed, logged, or included in any report or backup evidence file by this audit; a targeted regex scan of the freshly captured workflow-export backups found zero matches"
+      ],
+      "secret_scan_result": "CLEAN (repo exports + VPS backup artifacts)"
+    }
+  },
+  "test_totals": {
+    "local_repository_suite": "124/124 (store 49, http 20, formatting 13, enrich 15, recovery 9, acceptance-F 7, dialog-contract 4, backfill 7)",
+    "independent_fable_harnesses": "71/71 (concurrency 21, authz/edit-flow 30, DR-drill 9, scale-harness 11 scenario categories covering ~19,550 simulated events)",
+    "live_production_probes": "6 (3 auth 401 probes, 1 real dry-run backfill audit, 1 scheduled-poll post-deploy regression, multiple gate-state readbacks)"
+  },
+  "historical_backfill_gap": {
+    "range_scanned": "2026-07-06T07:40:09Z to 2026-07-20T07:40:09Z",
+    "missing_count": 38,
+    "earliest_missing": "2026-07-06T23:11:57.000Z",
+    "latest_missing": "2026-07-18T15:53:36.000Z",
+    "console_context_capability_deployed": "2026-07-18T18:33:00Z (per reports/GOOGLE_CHAT_SUPERVISED_REPLY_CONSOLE_IMPLEMENTATION.md)",
+    "missing_items_after_deployment": 0,
+    "conclusion": "100% coverage since the console/reliability system existed; the gap is entirely pre-instrumentation history, an owner decision item, not a live defect"
+  },
+  "slo_status": {
+    "inbound_notification_target": "99.99% within 5 min \u2014 TARGET, not statistically demonstrated (live sample N=10 applicable events, far below the 10,000-event threshold the system's own telemetry module requires before making that claim)",
+    "outbound_send_target": ">=99.99% clear outcome \u2014 TARGET, not statistically demonstrated (live sample N=3 POST attempts)",
+    "current_live_counters": {
+      "inbound_applicable": 10,
+      "inbound_chat_notified": 8,
+      "inbound_ambiguous": 2,
+      "outbound_posts": 3,
+      "outbound_clear_pct": 100
+    },
+    "honest_note": "These are genuinely tiny samples from real but very light production traffic since the reliability programme's telemetry began; no claim of 99.99% live reliability is made or supportable at this volume"
+  },
+  "residual_risks": [
+    "Google Chat's incoming-webhook notification path cannot read Chat message history, so a response lost after Google accepts a post is an irreducible, architecture-level delivery ambiguity (documented as CHAT_POST_AMBIGUOUS, never silently reported as notified)",
+    "Operational watchdog alerts share the same one-way incoming-webhook transport as ordinary notifications; a full outage of that specific transport would make both invisible in Chat simultaneously (mitigated: alerts are ALSO persisted and queryable at /v1/watchdog independent of Chat delivery)",
+    "38 historical (pre-instrumentation) prospect replies are not in the console's ledger; the backfill tool to safely close this gap now exists but running --apply is an explicit owner decision, not yet made",
+    "One watchdog alert (readback_invalid_items) is newly deployed and has not yet observed a genuine live malformed-item event; its exact-once/exact-content behaviour is proven by local test, not yet by live occurrence",
+    "Live sample sizes remain far too small for any statistically demonstrated 99.99% reliability claim"
+  ],
+  "files_changed": [
+    "infrastructure/reply-console/recovery.mjs (repair: F1)",
+    "infrastructure/reply-console/server.mjs (repair: F1 watchdog alert)",
+    "infrastructure/reply-console/test-recovery.mjs (2 new regression tests for F1)",
+    "infrastructure/reply-console/backfill.mjs (new: F2)",
+    "infrastructure/reply-console/test-backfill.mjs (new: F2, 7 tests)"
+  ],
+  "production_files_deployed": [
+    "recovery.mjs, server.mjs rebuilt into the hmz-reply-console-business-live image and deployed via docker compose build + up -d --no-deps (container recreated; durable /data volume, go-live gate, owner binding, and Instantly key fingerprint all preserved and verified unchanged)",
+    "backfill.mjs copied into the running container at /app/backfill.mjs for the one read-only dry-run audit; not yet baked into the Dockerfile COPY list (recommended follow-up so it survives the next image rebuild)"
+  ],
+  "secret_scan": "CLEAN \u2014 no secret values appear in any report, backup, or evidence file produced by this audit",
+  "owner_decisions_outstanding": [
+    "Whether to run `node backfill.mjs --since 2026-07-06T00:00:00Z --until 2026-07-18T18:33:00Z --apply` to backfill the 38 historical (pre-instrumentation) prospect replies with Chat notifications",
+    "Whether to remove the one self-test-debris DISCOVERED context (67391b9f...) from the durable store, or leave it (harmless)",
+    "Whether to add backfill.mjs to the sidecar Dockerfile's COPY list so it survives future image rebuilds without a manual docker cp"
+  ]
+}
