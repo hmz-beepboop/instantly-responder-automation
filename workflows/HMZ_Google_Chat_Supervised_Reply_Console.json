@@ -1,0 +1,1207 @@
+{
+  "name": "HMZ — Google Chat Supervised Reply Console",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hmz-google-chat-reply-console-v1",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "name": "Webhook - Google Chat",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1600,
+        400
+      ],
+      "webhookId": "hmz-gchat-reply-console"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://hmz-reply-console:5691/v1/verify",
+        "options": {
+          "timeout": 8000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ token: (($json.headers && ($json.headers.authorization || $json.headers.Authorization)) || '').replace(/^Bearer\\s+/i,''), event: { userName: ($json.body?.user?.name || $json.body?.message?.sender?.name || ''), userType: ($json.body?.user?.type || $json.body?.message?.sender?.type || ''), userEmail: ($json.body?.user?.email || $json.body?.message?.sender?.email || ''), displayName: ($json.body?.user?.displayName || ''), domainId: ($json.body?.user?.domainId || ''), space: ($json.body?.space?.name || $json.body?.message?.space?.name || ''), thread: ($json.body?.message?.thread?.name || '') } }) }}"
+      },
+      "name": "Verify Google Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1400,
+        400
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Parse the Google Chat interaction event and apply the sidecar's decision.\n// The sidecar (Verify node) both (a) cryptographically verified the bearer\n// token proves the caller is Google Chat, and (b) evaluated owner authorisation\n// from the EVENT identity (never the token), returning authorized/authzState.\nconst verify = $input.first().json || {};\nconst wh = $('Webhook - Google Chat').first().json || {};\nconst body = wh.body || {};\nconst out = (o) => [{ json: o }];\n\n// 1) Google request verification (fail => 401, no state change)\nif (verify.verified !== true) {\n  return out({ route: 'respond', httpCode: 401,\n    responseBody: JSON.stringify({ text: 'Unauthorized.' }) });\n}\n\nconst type = String(body.type || '');\nconst user = body.user || (body.message && body.message.sender) || {};\nconst user_email = String(user.email || '').toLowerCase();\nconst user_type = String(user.type || '');\nconst user_name = String(user.name || '');\nconst space = String((body.space && body.space.name)\n  || (body.message && body.message.space && body.message.space.name) || '');\n\n// 2) owner authorisation decision resolved server-side (binding / bootstrap)\nconst authorized = verify.authorized === true;\nconst authzState = String(verify.authzState || '');   // bound | bootstrap_captured | denied\nconst BOOTSTRAP_MSG = 'Owner identity captured. Awaiting confirmation in the implementation session.';\n\nconst priv = (obj) => { if (user_name) obj.privateMessageViewer = { name: user_name }; return obj; };\n\nif (type === 'ADDED_TO_SPACE') {\n  let msg;\n  if (authorized) msg = 'Ready. In a prospect notification thread, mention @Instantly followed by your reply to draft a response.';\n  else if (authzState === 'bootstrap_captured') msg = BOOTSTRAP_MSG;\n  else msg = 'This console is restricted to the account owner.';\n  return out({ route: 'respond', httpCode: 200, responseBody: JSON.stringify(priv({ text: msg })) });\n}\nif (type === 'REMOVED_FROM_SPACE') {\n  return out({ route: 'respond', httpCode: 200, responseBody: JSON.stringify({}) });\n}\nif (!authorized) {\n  const msg = (authzState === 'bootstrap_captured') ? BOOTSTRAP_MSG\n    : 'This console is restricted to the account owner.';\n  return out({ route: 'respond', httpCode: 200, responseBody: JSON.stringify(priv({ text: msg })) });\n}\n\nif (type === 'MESSAGE') {\n  const msg = body.message || {};\n  const threadName = String((msg.thread && msg.thread.name) || '');\n  const threadKey = String((msg.thread && msg.thread.threadKey) || '');\n  let text = String(msg.argumentText != null ? msg.argumentText : (msg.text || ''));\n  // Preserve the EXACT multiline body: normalise line endings only, remove only\n  // the app mention (argumentText already excludes it), trim OUTER boundary only.\n  // NEVER collapse internal whitespace / newlines / blank lines.\n  text = text.replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n');\n  if (msg.argumentText == null) { text = text.replace(/^[ \\t]*@[^\\s]+[ \\t]*/, ''); }\n  text = text.replace(/^\\s+/, '').replace(/\\s+$/, '');\n  return out({ route: 'message', httpCode: 200, user_email, user_name, space,\n    threadName, threadKey, replyBody: text,\n    lookupUrl: threadName ? ('http://hmz-reply-console:5691/v1/context/by-thread?threadKey=' + encodeURIComponent(threadName))\n                          : ('http://hmz-reply-console:5691/v1/context/by-thread?threadKey=' + encodeURIComponent(threadKey)) });\n}\n\nif (type === 'CARD_CLICKED') {\n  const method = String((body.action && body.action.actionMethodName) || '');\n  const params = {};\n  const arr = (body.action && body.action.parameters) || [];\n  for (const p of arr) params[p.key] = p.value;\n  const inputs = (body.common && body.common.formInputs) || {};\n  let editedBody = '';\n  if (inputs.reply_body) {\n    const v = inputs.reply_body;\n    editedBody = String((v.stringInputs && v.stringInputs.value && v.stringInputs.value[0]) || '');\n  }\n  const cid = String(params.cid || '');\n  return out({ route: 'card', httpCode: 200, user_email, user_name, space, method,\n    contextId: cid, cardToken: String(params.tok || ''), editedBody,\n    lookupUrl: 'http://hmz-reply-console:5691/v1/context/' + cid });\n}\n\nreturn out({ route: 'respond', httpCode: 200, responseBody: JSON.stringify({}) });\n"
+      },
+      "name": "Parse & Authorize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1200,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "outputKey": "respond",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "respond",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "message",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "message",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "card",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "card",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        }
+      },
+      "name": "Route",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -1000,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.responseBody }}",
+        "options": {
+          "responseCode": "={{ $json.httpCode || 200 }}"
+        }
+      },
+      "name": "Respond Immediate",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        -600,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.lookupUrl }}",
+        "options": {
+          "timeout": 8000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "Resolve Context (thread)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -800,
+        400
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Message path: validate the resolved context and prepare a draft request.\nconst p = $('Parse & Authorize').first().json;\nconst res = $input.first().json || {};\nconst ctx = res.ok && res.context ? res.context : null;\nconst priv = (o) => { if (p.user_name) o.privateMessageViewer = { name: p.user_name }; return o; };\nconst deny = (m) => [{ json: { decision:'deny', httpCode:200, responseBody: JSON.stringify(priv({ text: m })) } }];\n\n// \"refresh\" command: surface the latest saved draft (no new revision, no send).\nif (/^refresh(\\s+latest)?(\\s+review)?$/i.test(String(p.replyBody||'').trim())) {\n  return [{ json: { decision:'refresh', contextId: ctx ? ctx.notificationId : '',\n    refreshUrl: ctx ? ('http://hmz-reply-console:5691/v1/context/' + ctx.notificationId + '/refresh-card') : '' } }];\n}\nif (!p.replyBody) return deny('Your reply was empty. Reply in the thread and mention me with the text to send.');\nif (p.replyBody.length > 8000) return deny('Reply too long.');\nif (!ctx) return deny('No pending prospect reply is linked to this thread (it may have expired or already been answered).');\nif (['SENT','SENDING','CANCELLED','EXPIRED','SEND_UNCERTAIN'].includes(ctx.state))\n  return deny('This prospect reply is no longer open for a new draft (status: ' + ctx.state + ').');\n// RETRYABLE (a prior send failed without delivery) IS re-draftable.\n\nreturn [{ json: { decision:'draft', contextId: ctx.notificationId,\n  draftUrl: 'http://hmz-reply-console:5691/v1/context/' + ctx.notificationId + '/draft',\n  body: p.replyBody, author: p.user_email, user_name: p.user_name } }];\n"
+      },
+      "name": "Handle Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -600,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "outputKey": "draft",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.decision }}",
+                    "rightValue": "draft",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "refresh",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.decision }}",
+                    "rightValue": "refresh",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "deny",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.decision }}",
+                    "rightValue": "deny",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        }
+      },
+      "name": "Message Route",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -400,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Handle Message').item.json.refreshUrl }}",
+        "options": {
+          "timeout": 8000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ '{}' }}"
+      },
+      "name": "Refresh Card",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -200,
+        620
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Build the latest Review card from the refresh-card response (no send).\nconst rec = $input.first().json || {};\nconst p = $('Parse & Authorize').first().json;\nconst priv = (o) => { if (p.user_name) o.privateMessageViewer = { name: p.user_name }; return o; };\nif (!rec.ok || !rec.revision) return [{ json: { httpCode:200, responseBody: JSON.stringify(priv({ text: 'No draft to refresh yet. Reply with your message text to create one.' })) } }];\nconst CID = $('Handle Message').item.json.contextId;\nconst params = [{ key:'cid', value: CID }, { key:'tok', value: rec.reviewToken }];\nconst nl = (nm, addr) => (nm ? nm + ' ' : '') + '<' + (addr || '') + '>';\nconst esc = (t) => (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;').replace(/\\n/g,'<br>');\nconst card = { cardsV2:[{ cardId:'review-'+CID, card:{\n  header:{ title:'Latest saved draft — revision '+rec.revision, subtitle:'To: '+(rec.prospectEmail||'') },\n  sections:[\n    { widgets:[\n      { decoratedText:{ topLabel:'From (sender)', text: nl(rec.senderName, rec.eaccount) } },\n      { decoratedText:{ topLabel:'To (prospect)', text: nl(rec.prospectName, rec.prospectEmail) } },\n      { decoratedText:{ topLabel:'Subject', text: rec.subject || '(no subject)' } } ] },\n    { header:'Exact reply body (revision '+rec.revision+')', widgets:[ { textParagraph:{ text: esc(rec.body) } } ] },\n    { widgets:[ { buttonList:{ buttons:[\n      { text:'Send', onClick:{ action:{ function:'send', parameters: params } } },\n      { text:'Edit', onClick:{ action:{ function:'edit', interaction:'OPEN_DIALOG', parameters: params } } },\n      { text:'Cancel', onClick:{ action:{ function:'cancel', parameters: params } } } ] } } ] },\n    { widgets:[ { buttonList:{ buttons:[ { text:'Open in Instantly', onClick:{ openLink:{ url: rec.uniboxUrl||'https://app.instantly.ai' } } } ] } } ] },\n  ] } }] };\nreturn [{ json: { httpCode:200, responseBody: JSON.stringify(priv(card)) } }];\n"
+      },
+      "name": "Build Review Card (refresh)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.responseBody }}",
+        "options": {
+          "responseCode": "={{ $json.httpCode || 200 }}"
+        }
+      },
+      "name": "Respond Review (refresh)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        200,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Handle Message').item.json.draftUrl }}",
+        "options": {
+          "timeout": 8000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ body: $json.body, author: $json.author, reason: 'reply' }) }}"
+      },
+      "name": "Create Draft",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -200,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Build the private review card with the EXACT outgoing body + Send/Edit/Cancel.\nconst d = $input.first().json || {};       // Create Draft response\nconst hm = $('Handle Message').item.json;\nconst p = $('Parse & Authorize').first().json;\nconst CID = hm.contextId;\n// fetch context routing for from/to/subject via the draft response is not enough;\n// we already have context fields from Resolve Context (thread) node output:\nconst rc = $('Resolve Context (thread)').item.json;\nconst ctx = (rc && rc.context) || {};\nconst priv = (o) => { if (p.user_name) o.privateMessageViewer = { name: p.user_name }; return o; };\nif (!d || d.ok !== true || !d.reviewToken) {\n  return [{ json: { httpCode:200, responseBody: JSON.stringify(priv({ text: 'Could not create the draft ('\n    + ((d && d.reason) || 'error') + ').' })) } }];\n}\nconst TOK = d.reviewToken;\nconst body = (ctx.activeDraft && ctx.activeDraft.body) || hm.body || '';\nconst params = [{ key:'cid', value: CID }, { key:'tok', value: TOK }];\nconst card = { cardsV2: [{ cardId: 'review-' + CID, card: {\n  header: { title: '✍️ Review reply — revision ' + (d.revision||1),\n            subtitle: 'To: ' + (ctx.prospectEmail||'') },\n  sections: [\n    { widgets: [\n      { decoratedText: { topLabel: 'From (sender)', text: (ctx.senderName ? ctx.senderName + ' ' : '') + '<' + (ctx.eaccount || '') + '>' } },\n      { decoratedText: { topLabel: 'To (prospect)', text: (ctx.prospectName ? ctx.prospectName + ' ' : '') + '<' + (ctx.prospectEmail || '') + '>' } },\n      { decoratedText: { topLabel: 'Subject', text: ctx.subject || '(no subject)' } },\n    ]},\n    { header: 'Exact reply body', widgets: [ { textParagraph: { text: (body||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;').replace(/\\n/g,'<br>') } } ] },\n    { widgets: [ { buttonList: { buttons: [\n      { text: 'Send', onClick: { action: { function: 'send', parameters: params } } },\n      { text: 'Edit', onClick: { action: { function: 'edit', interaction: 'OPEN_DIALOG', parameters: params } } },\n      { text: 'Cancel', onClick: { action: { function: 'cancel', parameters: params } } },\n    ] } } ] },\n    { widgets: [ { buttonList: { buttons: [\n      { text: 'Open in Instantly', onClick: { openLink: { url: ctx.uniboxUrl || 'https://app.instantly.ai' } } } ] } } ] },\n  ] } }] };\nreturn [{ json: { httpCode:200, responseBody: JSON.stringify(priv(card)) } }];\n"
+      },
+      "name": "Build Review Card",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.responseBody }}",
+        "options": {
+          "responseCode": "={{ $json.httpCode || 200 }}"
+        }
+      },
+      "name": "Respond Review",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.responseBody }}",
+        "options": {
+          "responseCode": "={{ $json.httpCode || 200 }}"
+        }
+      },
+      "name": "Respond Deny (msg)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        -200,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.lookupUrl }}",
+        "options": {
+          "timeout": 8000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "Resolve Context (id)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -800,
+        700
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Card action router. Card params carry only opaque cid + one-use token.\nconst p = $('Parse & Authorize').first().json;\nconst res = $input.first().json || {};\nconst ctx = res.ok && res.context ? res.context : null;\nconst method = p.method || '';\nconst base = { user_name: p.user_name, user_email: p.user_email, contextId: p.contextId,\n  cardToken: p.cardToken, editedBody: p.editedBody, method, ctx };\nif (!ctx) { base.action = 'blocked'; base.reason = 'context_not_found'; return [{ json: base }]; }\nif (['send','edit','cancel','dialog_submit','check_status'].includes(method)) { base.action = method; }\nelse { base.action = 'blocked'; base.reason = 'unknown_action'; }\nreturn [{ json: base }];\n"
+      },
+      "name": "Card Router",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -600,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "outputKey": "send",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "send",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "edit",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "edit",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "cancel",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "cancel",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "dialog_submit",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "dialog_submit",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "check_status",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "check_status",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "outputKey": "blocked",
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "blocked",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        }
+      },
+      "name": "Card Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -400,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'http://hmz-reply-console:5691/v1/context/' + $json.contextId + '/reconcile' }}",
+        "options": {
+          "timeout": 8000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ '{}' }}"
+      },
+      "name": "Reconcile (sidecar)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        50,
+        1360
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst s = $input.first().json || {};\nconst p = $('Parse & Authorize').first().json;\nconst priv = (o) => { if (p.user_name) o.privateMessageViewer = { name: p.user_name }; return o; };\nconst done = (text) => [{ json: { httpCode:200, responseBody: JSON.stringify(priv({ text })) } }];\nif (s.state === 'SENT_RECONCILED_READBACK' || s.state === 'SENT_RECONCILED_WEBHOOK' || s.state === 'SENT_API_CONFIRMED') return done('✅ Sent — confirmed in Instantly.');\nif (s.state === 'MANUAL_RECONCILIATION_REQUIRED') {\n  const c = ($('Card Router').item.json.ctx) || {};\n  const nl = (nm, addr) => (nm ? nm + ' ' : '') + '<' + (addr || '') + '>';\n  return done(['⚠️ Delivery could not be confirmed automatically.','',\n    '*Prospect:* ' + nl(c.prospectName, c.prospectEmail),\n    '*Sender:* ' + nl(c.senderName, c.eaccount),'',\n    'No second email has been attempted. Open the Instantly thread to verify before taking any further action.'].join('\\n'));\n}\nif (s.state === 'RETRYABLE' || s.state === 'FAILED_DEFINITIVE') return done('⛔ Not sent. You can reply again to draft a fresh version.');\nreturn done('🟡 Still checking delivery with Instantly. Please check again shortly. Do not click Send again.');\n"
+      },
+      "name": "Build Check Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        250,
+        1360
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.responseBody }}",
+        "options": {
+          "responseCode": "={{ $json.httpCode || 200 }}"
+        }
+      },
+      "name": "Respond Check Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        450,
+        1360
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'http://hmz-reply-console:5691/v1/context/' + $json.contextId + '/send' }}",
+        "options": {
+          "timeout": 25000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ reviewToken: $json.cardToken, bodyHash: ($json.ctx.activeDraft && $json.ctx.activeDraft.bodyHash) }) }}"
+      },
+      "name": "Send (sidecar)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        0,
+        560
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Render the send result from the sidecar's atomic performSend response.\nconst s = $input.first().json || {};\nconst p = $('Parse & Authorize').first().json;\nconst cid = $('Card Router').item.json.contextId;\nconst priv = (o) => { if (p.user_name) o.privateMessageViewer = { name: p.user_name }; return o; };\nconst done = (text) => [{ json: { httpCode:200, responseBody: JSON.stringify(priv({ text })) } }];\n// A card with a Check-status button (no second Send).\nconst ctx = ($('Card Router').item.json.ctx) || {};\nconst nameLine = (nm, addr) => (nm ? nm + ' ' : '') + '<' + (addr || '') + '>';\nconst statusCard = (title, exceptional) => {\n  const params = [{ key:'cid', value: cid }];\n  const body = exceptional\n    ? ('*Prospect:* ' + nameLine(ctx.prospectName, ctx.prospectEmail) + '\\n*Sender:* ' + nameLine(ctx.senderName, ctx.eaccount)\n       + '\\n\\nNo second email has been attempted. Open the Instantly thread to verify before taking any further action.')\n    : 'The email may already be delivered. Do not click Send again.';\n  return [{ json: { httpCode:200, responseBody: JSON.stringify(priv({ cardsV2:[{ cardId:'recon-'+cid, card:{\n    header:{ title }, sections:[ { widgets:[\n      { textParagraph:{ text: body } },\n      { buttonList:{ buttons:[\n        { text:'Check status', onClick:{ action:{ function:'check_status', parameters: params } } },\n        { text:'Open in Instantly', onClick:{ openLink:{ url: s.uniboxUrl || (ctx.uniboxUrl) || 'https://app.instantly.ai' } } } ] } } ] } ] } }] })) } }];\n};\nconst nowLon = new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' });\nconst nowUtc = new Date().toISOString();\nconst receipt = (headline, confirm) => done([headline, '',\n  '*Prospect:* ' + nameLine(ctx.prospectName, ctx.prospectEmail),\n  '*Sender:* ' + nameLine(ctx.senderName, ctx.eaccount),\n  '*Subject:* ' + (ctx.subject || '(no subject)'),\n  '*Confirmation:* ' + confirm,\n  '*Time:* ' + nowLon + ' (London) / ' + nowUtc + ' (UTC)'].join('\\n'));\nif (s.outcome === 'SENT_API_CONFIRMED') return receipt('✅ Sent', 'Sent — API confirmed');\nif (s.state === 'SENT_RECONCILED_READBACK' || s.state === 'SENT_RECONCILED_WEBHOOK' || s.reconciled) return receipt('✅ Sent', 'Sent — confirmed by Instantly reconciliation');\nif (s.outcome === 'FAILED_DEFINITIVE') return done('⛔ Blocked — Instantly rejected the send (http ' + (s.httpStatus||'?') + '). No email was sent; you can reply again to draft a fresh version.');\nif (s.state === 'MANUAL_RECONCILIATION_REQUIRED') return statusCard('⚠️ Delivery could not be confirmed automatically', true);\nif (s.state === 'RECONCILING' || s.outcome === 'RECONCILING') return statusCard('🟡 Confirming delivery with Instantly', false);\n// Stale/outdated card recovery: surface the LATEST review card with a fresh\n// one-use token so the owner is never trapped. Never sent the newer revision.\nif (s.staleRecovery && s.staleRecovery.ok !== false && s.staleRecovery.revision) {\n  const rec = s.staleRecovery;\n  const CID = $('Card Router').item.json.contextId;\n  const TOK = rec.reviewToken;\n  const params = [{ key:'cid', value: CID }, { key:'tok', value: TOK }];\n  const nl = (nm, addr) => (nm ? nm + ' ' : '') + '<' + (addr || '') + '>';\n  const esc = (t) => (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;').replace(/\\n/g,'<br>');\n  const card = { cardsV2:[{ cardId:'review-'+CID, card:{\n    header:{ title:'🔄 This card was outdated — showing the latest saved draft (revision '+rec.revision+')', subtitle:'To: '+(rec.prospectEmail||'') },\n    sections:[\n      { widgets:[\n        { decoratedText:{ topLabel:'From (sender)', text: nl(rec.senderName, rec.eaccount) } },\n        { decoratedText:{ topLabel:'To (prospect)', text: nl(rec.prospectName, rec.prospectEmail) } },\n        { decoratedText:{ topLabel:'Subject', text: rec.subject || '(no subject)' } } ] },\n      { header:'Exact reply body (revision '+rec.revision+')', widgets:[ { textParagraph:{ text: esc(rec.body) } } ] },\n      { widgets:[ { buttonList:{ buttons:[\n        { text:'Send', onClick:{ action:{ function:'send', parameters: params } } },\n        { text:'Edit', onClick:{ action:{ function:'edit', interaction:'OPEN_DIALOG', parameters: params } } },\n        { text:'Cancel', onClick:{ action:{ function:'cancel', parameters: params } } } ] } } ] },\n      { widgets:[ { buttonList:{ buttons:[ { text:'Open in Instantly', onClick:{ openLink:{ url: rec.uniboxUrl||'https://app.instantly.ai' } } } ] } } ] },\n    ] } }] };\n  return [{ json: { httpCode:200, responseBody: JSON.stringify(priv(card)) } }];\n}\nconst reason = s.reason || 'blocked';\nconst map = { SEND_DISABLED_NOT_GO_LIVE:'Sending is not yet enabled (go-live pending explicit owner approval). Review, Edit and Cancel work; no email was sent.',\n  SEND_DISABLED_WRONG_CONTEXT:'Sending is armed for a different context. No email was sent.',\n  SEND_DISABLED_WRONG_REVISION:'Sending is armed for a different revision; re-review the latest draft. No email was sent.',\n  ALREADY_SENT:'This reply was already sent.', SEND_IN_PROGRESS:'A send is already in progress.', RECONCILING_IN_PROGRESS:'Delivery is being confirmed; do not resend.',\n  LOCK_ALREADY_HELD:'A send is already in progress (duplicate click ignored).', TOKEN_USED:'This approval was already used.',\n  TOKEN_EXPIRED:'This approval expired — reply again to draft a fresh version.', TOKEN_MISMATCH:'Approval token invalid (superseded by an edit).',\n  BODY_TAMPERED:'The reviewed body no longer matches — send blocked.',\n  NO_API_KEY_CONFIGURED:'Send key not configured. No email was sent.', context_not_found:'Context not found or expired.' };\nreturn done('⛔ ' + (map[reason] || ('Send blocked (' + reason + ').')) + ' No second email was sent.');\n"
+      },
+      "name": "Build Result Card",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        250,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.responseBody }}",
+        "options": {
+          "responseCode": "={{ $json.httpCode || 200 }}"
+        }
+      },
+      "name": "Respond Send Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        450,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst a = $input.first().json || {};\nconst p = $('Parse & Authorize').first().json;\nconst priv = (o) => { if (p.user_name) o.privateMessageViewer = { name: p.user_name }; return o; };\nconst reason = a.reason || 'blocked';\nconst map = { SEND_DISABLED_NOT_GO_LIVE:'Sending is not yet enabled (go-live pending explicit owner approval). Review, Edit and Cancel work; no email was sent.',\n  SEND_DISABLED_WRONG_CONTEXT:'Sending is armed for a different context. No email was sent.',\n  SEND_DISABLED_WRONG_REVISION:'Sending is armed for a different revision; re-review the latest draft. No email was sent.',\n  ALREADY_SENT:'This reply was already sent.', SEND_IN_PROGRESS:'A send is already in progress.',\n  LOCK_ALREADY_HELD:'A send is already in progress (duplicate click ignored).', TOKEN_USED:'This approval was already used.',\n  TOKEN_EXPIRED:'This approval expired — reply again to draft a fresh version.', TOKEN_MISMATCH:'Approval token invalid.',\n  BODY_TAMPERED:'The reviewed body no longer matches — send blocked.', SEND_UNCERTAIN:'Previous send is uncertain; reconcile in Instantly first.',\n  context_not_found:'Context not found or expired.' };\nreturn [{ json: { httpCode:200, responseBody: JSON.stringify(priv({ text: '⛔ ' + (map[reason] || ('Send blocked (' + reason + ').')) + ' No second email was sent.' })) } }];\n"
+      },
+      "name": "Build Blocked Card",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        250,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.responseBody }}",
+        "options": {
+          "responseCode": "={{ $json.httpCode || 200 }}"
+        }
+      },
+      "name": "Respond Blocked",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        450,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst j = $input.first().json;\nconst ctx = j.ctx || {};\nconst body = (ctx.activeDraft && ctx.activeDraft.body) || '';\nconst params = [{ key:'cid', value: j.contextId }, { key:'tok', value: j.cardToken }];\nconst dialog = { actionResponse: { type: 'DIALOG', dialogAction: { dialog: { body: { sections: [ { widgets: [\n  { textInput: { name: 'reply_body', label: 'Reply body', type: 'MULTIPLE_LINE', value: body } },\n  { buttonList: { buttons: [\n    { text: 'Save & Review', onClick: { action: { function: 'dialog_submit', parameters: params } } } ] } },\n] } ] } } } } };\nreturn [{ json: { httpCode:200, responseBody: JSON.stringify(dialog) } }];\n"
+      },
+      "name": "Build Edit Dialog",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        50,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.responseBody }}",
+        "options": {
+          "responseCode": "={{ $json.httpCode || 200 }}"
+        }
+      },
+      "name": "Respond Edit Dialog",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        250,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'http://hmz-reply-console:5691/v1/context/' + $json.contextId + '/cancel' }}",
+        "options": {
+          "timeout": 8000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ '{}' }}"
+      },
+      "name": "Cancel Context",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        50,
+        1040
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst p = $('Parse & Authorize').first().json;\nconst priv = (o) => { if (p.user_name) o.privateMessageViewer = { name: p.user_name }; return o; };\nreturn [{ json: { httpCode:200, responseBody: JSON.stringify(priv({ text: '🚫 Cancelled. No email was sent.' })) } }];\n"
+      },
+      "name": "Build Cancel Card",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        250,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.responseBody }}",
+        "options": {
+          "responseCode": "={{ $json.httpCode || 200 }}"
+        }
+      },
+      "name": "Respond Cancel",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        450,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Dialog submit: create a new draft revision from the edited body.\nconst j = $input.first().json;\nconst body = String(j.editedBody || '').replace(/\\r\\n/g,'\\n').replace(/\\r/g,'\\n').replace(/^\\s+/,'').replace(/\\s+$/,'');\nif (!body) return [{ json: { httpCode:200, responseBody: JSON.stringify({ actionResponse: { type:'DIALOG',\n  dialogAction: { actionStatus: { statusCode:'INVALID_ARGUMENT', userFacingMessage:'Reply cannot be empty.' } } } }) } }];\nreturn [{ json: { contextId: j.contextId, body, author: j.user_email, user_name: j.user_name,\n  ctx: j.ctx, draftUrl: 'http://hmz-reply-console:5691/v1/context/' + j.contextId + '/draft' } }];\n"
+      },
+      "name": "Prep Edit Draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        50,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.draftUrl }}",
+        "options": {
+          "timeout": 8000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ body: $json.body, author: $json.author, reason: 'edit' }) }}"
+      },
+      "name": "Create Draft (edit)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        250,
+        1200
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Rebuild the review card after an edit; close dialog by returning a message.\nconst d = $input.first().json || {};\nconst prep = $('Prep Edit Draft').item.json;\nconst p = $('Parse & Authorize').first().json;\nconst priv = (o) => { if (p.user_name) o.privateMessageViewer = { name: p.user_name }; return o; };\nif (!d || d.ok !== true || !d.reviewToken) {\n  return [{ json: { httpCode:200, responseBody: JSON.stringify({ actionResponse:{ type:'DIALOG',\n    dialogAction:{ actionStatus:{ statusCode:'INTERNAL', userFacingMessage:'Could not save edit.' } } } }) } }];\n}\nconst CID = prep.contextId, TOK = d.reviewToken, ctx = prep.ctx || {};\nconst body = prep.body;\nconst params = [{ key:'cid', value: CID }, { key:'tok', value: TOK }];\nconst card = { cardsV2: [{ cardId: 'review-' + CID, card: {\n  header: { title: '✍️ Review reply — revision ' + (d.revision||2), subtitle: 'To: ' + (ctx.prospectEmail||'') },\n  sections: [\n    { widgets: [\n      { decoratedText: { topLabel:'From (sender)', text: (ctx.senderName ? ctx.senderName + ' ' : '') + '<' + (ctx.eaccount||'') + '>' } },\n      { decoratedText: { topLabel:'To (prospect)', text: (ctx.prospectName ? ctx.prospectName + ' ' : '') + '<' + (ctx.prospectEmail||'') + '>' } },\n      { decoratedText: { topLabel:'Subject', text: ctx.subject||'(no subject)' } } ] },\n    { header:'Exact reply body', widgets:[ { textParagraph: { text: (body||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;').replace(/\\n/g,'<br>') } } ] },\n    { widgets:[ { buttonList: { buttons: [\n      { text:'Send', onClick:{ action:{ function:'send', parameters: params } } },\n      { text:'Edit', onClick:{ action:{ function:'edit', interaction:'OPEN_DIALOG', parameters: params } } },\n      { text:'Cancel', onClick:{ action:{ function:'cancel', parameters: params } } } ] } } ] },\n    { widgets:[ { buttonList:{ buttons:[ { text:'Open in Instantly', onClick:{ openLink:{ url: ctx.uniboxUrl||'https://app.instantly.ai' } } } ] } } ] },\n  ] } }] };\n// SUBMIT_DIALOG response MUST carry an actionResponse envelope. UPDATE_MESSAGE\n// closes the dialog and replaces the card that opened it with the new revision.\nconst resp = priv({ actionResponse: { type: 'UPDATE_MESSAGE' }, cardsV2: card.cardsV2 });\nreturn [{ json: { httpCode:200, responseBody: JSON.stringify(resp) } }];\n"
+      },
+      "name": "Build Review Card (edit)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        450,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.responseBody }}",
+        "options": {
+          "responseCode": "={{ $json.httpCode || 200 }}"
+        }
+      },
+      "name": "Respond Review (edit)",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        650,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## HMZ — Google Chat Supervised Reply Console\nHuman-written, human-approved sending ONLY. Never auto-generates or auto-sends.\nGoogle bearer token verified via hmz-reply-console sidecar (OIDC). Owner-only. One-use tokens + atomic send-lock. SEND_UNCERTAIN is never auto-retried.",
+        "height": 220,
+        "width": 460
+      },
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1600,
+        640
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook - Google Chat": {
+      "main": [
+        [
+          {
+            "node": "Verify Google Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Google Token": {
+      "main": [
+        [
+          {
+            "node": "Parse & Authorize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Authorize": {
+      "main": [
+        [
+          {
+            "node": "Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route": {
+      "main": [
+        [
+          {
+            "node": "Respond Immediate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resolve Context (thread)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resolve Context (id)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Context (thread)": {
+      "main": [
+        [
+          {
+            "node": "Handle Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Handle Message": {
+      "main": [
+        [
+          {
+            "node": "Message Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message Route": {
+      "main": [
+        [
+          {
+            "node": "Create Draft",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Refresh Card",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Deny (msg)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Refresh Card": {
+      "main": [
+        [
+          {
+            "node": "Build Review Card (refresh)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Review Card (refresh)": {
+      "main": [
+        [
+          {
+            "node": "Respond Review (refresh)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Draft": {
+      "main": [
+        [
+          {
+            "node": "Build Review Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Review Card": {
+      "main": [
+        [
+          {
+            "node": "Respond Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Context (id)": {
+      "main": [
+        [
+          {
+            "node": "Card Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Card Router": {
+      "main": [
+        [
+          {
+            "node": "Card Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Card Action": {
+      "main": [
+        [
+          {
+            "node": "Send (sidecar)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Edit Dialog",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cancel Context",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prep Edit Draft",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reconcile (sidecar)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Blocked Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reconcile (sidecar)": {
+      "main": [
+        [
+          {
+            "node": "Build Check Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Check Status": {
+      "main": [
+        [
+          {
+            "node": "Respond Check Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send (sidecar)": {
+      "main": [
+        [
+          {
+            "node": "Build Result Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Result Card": {
+      "main": [
+        [
+          {
+            "node": "Respond Send Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Blocked Card": {
+      "main": [
+        [
+          {
+            "node": "Respond Blocked",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Edit Dialog": {
+      "main": [
+        [
+          {
+            "node": "Respond Edit Dialog",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancel Context": {
+      "main": [
+        [
+          {
+            "node": "Build Cancel Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Cancel Card": {
+      "main": [
+        [
+          {
+            "node": "Respond Cancel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prep Edit Draft": {
+      "main": [
+        [
+          {
+            "node": "Create Draft (edit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Draft (edit)": {
+      "main": [
+        [
+          {
+            "node": "Build Review Card (edit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Review Card (edit)": {
+      "main": [
+        [
+          {
+            "node": "Respond Review (edit)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

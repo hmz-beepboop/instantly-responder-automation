@@ -1,0 +1,117 @@
+{
+  "name": "HMZ — Inbound Completeness Auditor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 5 }]
+        }
+      },
+      "id": "9844d781-751b-4ef8-a65f-b88501cf2bc0",
+      "name": "Every 5 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-260, -160]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://hmz-reply-console:5691/v2/audit/short",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ '{}' }}",
+        "options": { "timeout": 120000 }
+      },
+      "id": "bb5bc1ed-428f-4344-abd9-96e5fcf79d55",
+      "name": "Audit last 2 hours",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [20, -160]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 1, "triggerAtMinute": 20 }]
+        }
+      },
+      "id": "ad5fd1f2-c3c7-4fea-a298-8b13c431eea1",
+      "name": "Every hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-260, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://hmz-reply-console:5691/v2/audit/deep",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ '{}' }}",
+        "options": { "timeout": 180000 }
+      },
+      "id": "5c2c6148-1cda-46e0-b1ec-052ca0e86007",
+      "name": "Audit last 24 hours",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [20, 0]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "days", "daysInterval": 1, "triggerAtHour": 5, "triggerAtMinute": 25 }]
+        }
+      },
+      "id": "044b4cde-bd80-4f97-909c-3e51acfb6ca7",
+      "name": "Every day",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-260, 160]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://hmz-reply-console:5691/v2/audit/daily",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ '{}' }}",
+        "options": { "timeout": 300000 }
+      },
+      "id": "55055bb7-d5f1-43a4-9d8a-6309c99148a7",
+      "name": "Audit last 7 days",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [20, 160]
+    },
+    {
+      "parameters": {
+        "content": "## Independent completeness auditor\nUses its own leases and rolling windows; it never reads or advances the recovery-poll cursor. Each schedule queries every Instantly received-email page, compares direct inventory with inbound identities/outbox/definite Chat acknowledgements, repairs and requeues gaps, and persists discrepancies plus its heartbeat. Historical records before the console epoch remain on the explicit owner hold. No prospect-send path.",
+        "height": 260,
+        "width": 620
+      },
+      "id": "6a919337-0de5-45c5-87ed-d18efc62983f",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-260, -500]
+    }
+  ],
+  "connections": {
+    "Every 5 minutes": { "main": [[{ "node": "Audit last 2 hours", "type": "main", "index": 0 }]] },
+    "Every hour": { "main": [[{ "node": "Audit last 24 hours", "type": "main", "index": 0 }]] },
+    "Every day": { "main": [[{ "node": "Audit last 7 days", "type": "main", "index": 0 }]] }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true,
+    "timezone": "Europe/London"
+  },
+  "active": false,
+  "tags": []
+}

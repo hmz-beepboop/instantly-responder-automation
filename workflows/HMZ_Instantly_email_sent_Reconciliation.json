@@ -1,0 +1,198 @@
+{
+  "name": "HMZ — Instantly email_sent Reconciliation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hmz-instantly-email-sent-reconcile-v1",
+        "responseMode": "responseNode",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "name": "Webhook - email_sent (Auth)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Pd9mWMv29ZhLJZdE",
+          "name": "HMZ Instantly GChat Inbound Secret"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Accept only email_sent events; extract the minimal reconciliation fields.\n// No send, no Google Chat notification. Ordinary campaign email_sent events for\n// which no open RECONCILING attempt exists are cheaply ignored by the sidecar.\nconst item = $input.first();\nconst body = (item && item.json && item.json.body && typeof item.json.body === 'object') ? item.json.body : {};\nconst str = (v) => (v === undefined || v === null) ? '' : String(v);\nif (str(body.event_type) !== 'email_sent') {\n  return [{ json: { do_reconcile: false, response_code: 200, response_message: 'ignored: not email_sent' } }];\n}\nconst evt = {\n  eaccount: str(body.eaccount || body.email_account || ''),\n  thread_id: str(body.thread_id || ''),\n  email_id: str(body.email_id || body.id || ''),\n  message_id: str(body.message_id || ''),\n  subject: str(body.reply_subject || body.subject || ''),\n  lead_email: str(body.lead_email || body.email || ''),\n  timestamp: str(body.timestamp || body.timestamp_created || ''),\n  email_text: str(body.email_text || ''),\n  email_html: str(body.email_html || ''),\n};\n// cheap guard: require an account + thread to bother the sidecar\nconst ok = Boolean(evt.eaccount && evt.thread_id);\nreturn [{ json: { do_reconcile: ok, evt, response_code: 200, response_message: ok ? 'reconcile' : 'ignored: insufficient fields' } }];\n"
+      },
+      "name": "Validate email_sent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.do_reconcile }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Reconcile?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://hmz-reply-console:5691/v1/email-sent",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ event: $json.evt }) }}",
+        "options": {
+          "timeout": 6000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "Reconcile (sidecar)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        -80
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'reconciled', matched: ($json.matched === true) }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "name": "Respond Reconciled",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: $json.response_message }) }}",
+        "options": {
+          "responseCode": "={{ $json.response_code }}"
+        }
+      },
+      "name": "Respond Ignored",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        660,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## HMZ — Instantly email_sent Reconciliation\nNotification-only. NO send, NO Google Chat post. Forwards email_sent to the reply-console sidecar which reconciles ONLY open RECONCILING supervised-send attempts (thread+account+recipient+subject+body-hash+timestamp). Unrelated campaign email_sent events are ignored cheaply.",
+        "height": 200,
+        "width": 420
+      },
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        180
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook - email_sent (Auth)": {
+      "main": [
+        [
+          {
+            "node": "Validate email_sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate email_sent": {
+      "main": [
+        [
+          {
+            "node": "Reconcile?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reconcile?": {
+      "main": [
+        [
+          {
+            "node": "Reconcile (sidecar)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Ignored",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reconcile (sidecar)": {
+      "main": [
+        [
+          {
+            "node": "Respond Reconciled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

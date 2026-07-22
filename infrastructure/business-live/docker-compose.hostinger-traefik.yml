@@ -1,0 +1,102 @@
+name: hmz-instantly-responder
+
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.25.7
+    container_name: hmz-n8n-business-live
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Europe/London}
+      - TZ=${GENERIC_TIMEZONE:-Europe/London}
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=${N8N_BLOCK_ENV_ACCESS_IN_NODE:-false}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - N8N_HOST=${N8N_HOST}
+      - N8N_PROTOCOL=https
+      - N8N_PORT=5678
+      - N8N_PROXY_HOPS=1
+      - N8N_EDITOR_BASE_URL=https://${N8N_HOST}/
+      - WEBHOOK_URL=https://${N8N_HOST}/
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - GOOGLE_CHAT_WEBHOOK_URL=${GOOGLE_CHAT_WEBHOOK_URL:-}
+      - HMZ_GCHAT_REPLY_NOTIFY_URL=${HMZ_GCHAT_REPLY_NOTIFY_URL:-}
+    volumes:
+      - hmz_n8n_business_live_data:/home/node/.n8n
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5678/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      hmz-send-state:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.hmz-n8n.rule=Host(`${N8N_HOST}`)"
+      - "traefik.http.routers.hmz-n8n.entrypoints=websecure"
+      - "traefik.http.routers.hmz-n8n.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.hmz-n8n.service=hmz-n8n"
+      - "traefik.http.services.hmz-n8n.loadbalancer.server.port=5678"
+      - "traefik.http.services.hmz-n8n.loadbalancer.server.scheme=http"
+
+  hmz-send-state:
+    build:
+      context: ../send-state
+    container_name: hmz-send-state-business-live
+    restart: unless-stopped
+    environment:
+      - STATE_DIR=/data
+    volumes:
+      - hmz_send_state_business_live_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5681/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Isolated Google Chat supervised reply console sidecar. Internal only
+  # (no host port, not exposed through Traefik). Reached by n8n as
+  # http://hmz-reply-console:5691 on the compose network. Verifies Google
+  # Chat bearer tokens (google-auth-library) and holds the durable
+  # context/draft/one-use-token/send-state store plus the isolated inbound
+  # mirror/outbox. Its fixed production API/Chat credentials are injected only
+  # from the root-owned environment and are never exposed by an endpoint.
+  hmz-reply-console:
+    image: hmz-reply-console:codex-inbound-closure-20260721-r7
+    build:
+      context: ../reply-console
+    container_name: hmz-reply-console-business-live
+    restart: unless-stopped
+    environment:
+      - STATE_DIR=/data
+      - PORT=5691
+      - CHAT_AUDIENCE=${HMZ_CHAT_INTERACTION_AUDIENCE:-}
+      - CHAT_PROJECT_NUMBER=${HMZ_CHAT_PROJECT_NUMBER:-}
+      - CHAT_VERIFY_DEBUG=${HMZ_CHAT_VERIFY_DEBUG:-0}
+      - OWNER_ALLOWED_EMAIL=${HMZ_GOOGLE_CHAT_ALLOWED_EMAIL:-}
+      - INSTANTLY_API_KEY=${HMZ_INSTANTLY_API_KEY:-}
+      - INSTANTLY_API_BASE=${HMZ_INSTANTLY_API_BASE:-https://api.instantly.ai/api/v2}
+      - GCHAT_NOTIFY_URL=${HMZ_GCHAT_REPLY_NOTIFY_URL:-}
+      # Earlier inbound history is durably audited but remains on the owner's
+      # explicit no-flood hold unless separately authorised.
+      - INBOUND_NOTIFICATION_EPOCH=${HMZ_INBOUND_NOTIFICATION_EPOCH:-2026-07-18T18:33:00Z}
+    volumes:
+      - hmz_reply_console_business_live_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5691/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  hmz_n8n_business_live_data:
+    name: hmz_n8n_business_live_data
+  hmz_send_state_business_live_data:
+    name: hmz_send_state_business_live_data
+  hmz_reply_console_business_live_data:
+    name: hmz_reply_console_business_live_data

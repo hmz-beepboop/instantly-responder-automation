@@ -1,0 +1,96 @@
+{
+  "name": "HMZ — Instantly Reply → Google Chat Notification v2 (Durable)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hmz-instantly-reply-google-chat-v2",
+        "responseMode": "responseNode",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "5f87b83b-224b-441f-b0e5-62f258ba32a4",
+      "name": "Webhook - Instantly Reply (Auth)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-240, 0],
+      "webhookId": "hmz-instantly-reply-google-chat-v2",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Pd9mWMv29ZhLJZdE",
+          "name": "HMZ Instantly GChat Inbound Secret"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://hmz-reply-console:5691/v2/inbound",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body || $json) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "263684fb-4d46-402f-83de-fdb2aa416c34",
+      "name": "Persist + Queue + Attempt Chat",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [20, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'registered', notification_required: true, identity_kind: $json.identityKind, classification: $json.classification, notification_state: $json.notificationState }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "552ee5cb-c25a-4d16-990d-5296e5f310ca",
+      "name": "Respond Registered",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [280, 0]
+    },
+    {
+      "parameters": {
+        "content": "## HMZ — Canonical inbound registration\nAuthenticated Instantly reply_received events are forwarded without category filtering to the private sidecar. The sidecar atomically persists one inbound identity plus one leased outbox item before any Google Chat call. Malformed, automatic, OOO, unsubscribe, bounce and mail-system records all notify. Classification only changes the label and whether Send is available. No prospect-send path exists here.",
+        "height": 220,
+        "width": 600
+      },
+      "id": "6862e214-3f0a-4144-9bed-33ea73ba0cf7",
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-240, -300]
+    }
+  ],
+  "connections": {
+    "Webhook - Instantly Reply (Auth)": {
+      "main": [[{
+        "node": "Persist + Queue + Attempt Chat",
+        "type": "main",
+        "index": 0
+      }]]
+    },
+    "Persist + Queue + Attempt Chat": {
+      "main": [[{
+        "node": "Respond Registered",
+        "type": "main",
+        "index": 0
+      }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true
+  },
+  "active": false,
+  "tags": []
+}

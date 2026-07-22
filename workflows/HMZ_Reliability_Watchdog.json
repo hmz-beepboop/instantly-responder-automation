@@ -1,0 +1,179 @@
+{
+  "name": "HMZ — Reliability Watchdog",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "name": "Every 5 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://hmz-reply-console:5691/v2/watchdog",
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "Watchdog (sidecar)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Build a sanitised operational alert from the watchdog result. No prospect\n// bodies, no credentials, no raw IDs. Posts only when there is an alert.\nconst w = $input.first().json || {};\nif (!w.alertCount) return [{ json: { post: false } }];\nconst lines = ['⚠️ *HMZ Reply Console — operational alert*',''];\nfor (const a of (w.alerts||[])) {\n  lines.push('• [' + (a.severity||'?').toUpperCase() + '] ' + (a.kind||'issue')\n    + (a.count!=null ? (' ×' + a.count) : '') + (a.component ? (' — ' + a.component) : '')\n    + (a.action ? ('\\n   action: ' + a.action) : ''));\n}\nlines.push('', 'instantly_api_status: ' + (w.instantlyApiStatus==null?'n/a':w.instantlyApiStatus));\nreturn [{ json: { post: true, text: lines.join('\\n') } }];\n"
+      },
+      "name": "Build Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.post }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Alert?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        700,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.HMZ_GCHAT_REPLY_NOTIFY_URL }}&messageReplyOption=REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.text, thread: { threadKey: 'hmz-ops-watchdog' } }) }}",
+        "options": {
+          "timeout": 10000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "Post Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        940,
+        -60
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "## HMZ — Reliability Watchdog\nEvery 5 min, asks the sidecar for aggregate alerts (unresolved notifications, stalled poll, Instantly API 401/429/5xx). Posts a sanitised alert to an ops thread via the incoming webhook. LIMITATION: the alert path reuses the same incoming-webhook transport as notifications; alerts are ALSO persisted and queryable at sidecar /v1/watchdog. No sends, no prospect bodies.",
+        "height": 200,
+        "width": 460
+      },
+      "name": "About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        160
+      ]
+    }
+  ],
+  "connections": {
+    "Every 5 minutes": {
+      "main": [
+        [
+          {
+            "node": "Watchdog (sidecar)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Watchdog (sidecar)": {
+      "main": [
+        [
+          {
+            "node": "Build Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Alert": {
+      "main": [
+        [
+          {
+            "node": "Alert?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert?": {
+      "main": [
+        [
+          {
+            "node": "Post Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  }
+}
