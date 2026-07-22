@@ -4,6 +4,52 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ---
 
+## Checkpoint — 2026-07-22 — REMOTE BACKUP VERIFIED; PROJECT CLOSED AT SUPERVISED GOOGLE CHAT BASELINE
+
+**Closure decision:** the owner elected to close this project at the supervised Google Chat
+reply-console baseline. **SYSTEM COMPLETION PASS** remains authoritative. The accepted system is
+human-written, human-approved and supervised; autonomous sending is neither claimed nor authorised.
+
+**Project checkpoint:** GitHub repository `hmz-beepboop/instantly-responder-automation`, branch
+`checkpoint/instantly-r11-system-complete-20260722`; implementation commit
+`0c9320dad153503de06af2c69edcd4782c57d4c1`, documentation commit
+`bd837e6baf71bebcf20d726e698d0d1e9b7954bc`, and prior checkpoint handoff commit
+`910837f62b48de8d4a6a3475082c6c1ec6b9b691`. Remote-match verification passed for that checkpoint
+branch, `safety/instantly-responder-supervised-complete-r11-20260722`, and annotated tag
+`instantly-responder-supervised-complete-r11-20260722`, all resolving/peeling to `910837f62b48de8d4a6a3475082c6c1ec6b9b691`.
+Final closure references created at this closure commit are branch
+`checkpoint/instantly-responder-project-closed-r11-20260722`, safety branch
+`safety/instantly-responder-project-closed-r11-20260722`, and annotated tag
+`instantly-responder-project-closed-r11-20260722`.
+
+**Obsidian:** canonical note `02_PROJECTS/INSTANTLY_RESPONDER.md` in `hmz-business-brain` contains
+"Google Chat Supervised Reply Console — Final Closure" at commit
+`07420773b0f3ce7779bf3987adbadd65f8c66dc5`; `origin/main` was fetched and verified at that exact
+commit before final project closure.
+
+**Scope and safety:** Draft Memory V2, Draft Learning experiments/candidates, blocked RFC work, B6
+proxy/historical repair packages, SL-PHASE-5Q backups, historical exports, rollback payloads,
+live-incident evidence, temporary files and all unrelated dirty-tree work were intentionally excluded.
+The broad primary dirty tree remains untouched; only this handoff file was staged in an isolated clean
+worktree. Targeted secret/PII checks found no committed secret. No production, n8n, Instantly, VPS,
+Gmail, Google Chat, credential, workflow, campaign, lead, database, send, deployment or other outbound
+action occurred during closure. No force push occurred.
+
+**Permanent stop-work rule:** supervised production may continue to run and be monitored, but future
+engineering requires a reproduced production defect, failed monitored invariant, security finding or
+explicit new business requirement. Project closure means no further engineering; it does not disable
+the accepted running supervised service.
+
+**Regression Safety Check:** latest baseline `910837f62b48de8d4a6a3475082c6c1ec6b9b691`; latest
+pre-existing handoff entry "GITHUB + OBSIDIAN FINAL CHECKPOINT COMPLETE" (2026-07-22 02:05 UTC).
+Checked the two accepted commit file lists and `ed94d57..bd837e6` diff, r11 runtime hashes, all six
+console workflows, 186/186 isolated tests, accepted/final Git refs, this staged handoff diff and the
+canonical Obsidian note delta. No broad rewrite or deletion, excluded work staging, stale-template
+overwrite, r7/r8 regression, historical release/drain reactivation, autonomous path, global-send
+mutation or risk of reverting current production was introduced; the primary dirty tree was preserved.
+
+---
+
 ## Checkpoint — 2026-07-22 02:05 UTC — GITHUB + OBSIDIAN FINAL CHECKPOINT COMPLETE
 
 **Project state:** SYSTEM COMPLETION PASS remains authoritative. No production, workflow, campaign,
