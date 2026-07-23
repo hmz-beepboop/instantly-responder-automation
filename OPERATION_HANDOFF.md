@@ -4,6 +4,241 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ---
 
+## Checkpoint — 2026-07-23 00:45 UTC — ✅ r13 PATCH PASS: AUTOMATIC/OOO REPLIES USE THE ORDINARY SUPERVISED PATH
+
+**Trigger:** owner scope correction (2026-07-23) superseding the reply-eligibility parts of the r12
+prompt. r12 had already deployed, so it was preserved and this correction shipped as the next sequential
+release r13. **SYSTEM COMPLETION PASS is authoritative again now that this functional correction
+passes.** The permanent stop-work rule is restored.
+
+**Owner requirement.** Automatic and out-of-office Instantly inbound emails must support the same
+supervised Google Chat reply workflow as ordinary inbound emails — notification thread → reply →
+mention @Instantly → Review card → review recipient/mailbox/thread/body → one Send click. **Nothing
+auto-sends.** Classification must select the visible label only; it must not by itself make a record
+non-replyable.
+
+**Exact root cause of "No pending prospect reply is linked to this thread."** One expression, one
+consequence chain — proven by code trace plus production readback:
+
+1. `inbound-contract.mjs` computed
+   `sendAllowed = authoritativeRoutingComplete && ![AUTOMATIC, OOO, UNSUBSCRIBE, BOUNCE, SYSTEM,
+   MALFORMED, UNKNOWN].includes(classification)` → automatic/OOO were `sendAllowed = false`.
+2. `inbound-service.mjs enrichAndCreateLegacyContext` returns early on `!record.sendAllowed`
+   **before `createContext`** → no durable reply context, and `inbound_records.legacy_context_id`
+   stayed `NULL`.
+3. `inbound-service.mjs drainOutbox` attaches the Chat acknowledgement only under
+   `if (transport.acknowledged && item.record.legacyContextId)` → with a null context id,
+   **`attachChatPost` was skipped**, so the Google Chat *thread resource name*
+   (`spaces/…/threads/…`) was never written to `/data/thread-index`.
+4. The @Instantly mention handler calls `GET /v1/context/by-thread?threadKey=<chat thread resource>`
+   → `resolveByThreadKey` found nothing → HTTP 404 `NO_CONTEXT_FOR_THREAD`, which the interaction
+   workflow renders as "No pending prospect reply is linked to this thread (it may have expired or
+   already been answered)."
+
+So the failure was at **reply-context creation**, and it propagated into Chat-thread linking. It was
+never a card-copy problem — the footer was a faithful symptom. The Chat notification itself was always
+correct: automatic/OOO records were durably registered, posted and acknowledged normally.
+
+**Classification policy narrowed (the only policy change).** `REPLY_INELIGIBLE_CLASSIFICATIONS` is now
+`[UNSUBSCRIBE, BOUNCE, SYSTEM, MALFORMED, UNKNOWN]` — `AUTOMATIC` and `OOO` removed. Classification
+detection and precedence are untouched; an unsubscribe containing auto-reply wording still classifies
+as unsubscribe and stays non-replyable (tested).
+
+**Ordinary vs automatic/OOO paths are now identical.** One shared mechanism throughout: same
+`registerInbound`, same `createContext`, same `attachChatPost` thread association, same
+`resolveByThreadKey` lookup, same `createDraft`/`validateReview`/`acquireSend`/`performSend`. No
+parallel automatic-reply workflow was created. `store.mjs` and `inbound-store.mjs` were not modified.
+
+**Files changed (6).**
+| File | SHA-256 |
+|---|---|
+| `inbound-contract.mjs` (reply-eligibility list; `(null)` mailbox fix) | `909257737115d7ca2b1a55255b2e0c7e919d104a678e5846a98870bfa6b7d826` |
+| `inbound-service.mjs` (link stored Chat ack to a newly created context) | `ee91583bc3c7055da1cb8f02ae78ce8dad77711d703639f08298945644356aed` |
+| `package.json` (test wiring) | `057ab5c2f62904f939665fcc9cf42436d7eaa3774f5a89b32e4b190a4eb3a8db` |
+| `test-auto-ooo-replyable.mjs` (**new**, 15 tests) | `a48869f2eb5b270f51457d7b1c4e1a1b7b13fab369d93e5964fe28135d4223cb` |
+| `test-card-presentation.mjs` (r13 eligibility + `(null)` regression) | `2fa2d2a83b2d896c76e4ca7018971b9dddc9f59271e03da59ffa4254bb85c591` |
+| `test-inbound-v2.mjs` (26-category matrix: automatic/OOO now reply-eligible) | `a03a304bb0af5c28831cadbcad561fd0beaab34ae09513706f54ac4e4d40eea3` |
+
+**Unchanged, byte-identical in the running r13 container:** `store.mjs`
+`c55490cb5a7a7d3f72504602f0d70b9e57555a306221a53a2a2307e8d88c571b`, `inbound-store.mjs`
+`82ba0caed9fbe90d477213a5a7e73812c23dfd756a8cfcf9dc34235ef54b2868`, `enrich.mjs`
+`001b425ca220b5d05cf72d8c3fc97fab371c0eac912f62883f8e371476c98fb7` (r12).
+
+**Existing cards heal without being reposted.** When a context is created for a record that was already
+acknowledged, the stored `ack_message_name`/`ack_thread_name` are linked through the same
+`attachChatPost` path. No Chat message is rewritten, reposted or mutated; the old card keeps its
+original footer, but its thread now resolves for @Instantly.
+
+**Additional fix found while generating the required routing-incomplete preview:** the r10 sender line
+rendered `Sender mailbox: Hamza Moheen (null)` when `eaccount` was missing. It now renders
+`Sender mailbox: unavailable`, with the routing warning naming the missing field. Same function, same
+release, regression-tested.
+
+**Tests.** New focused suite **15/15** (ordinary regression; automatic; OOO; recovered; pre-policy card
+healed without repost; no-pending-context; exact authoritative routing; routing incomplete; optional
+enrichment; historical guard ×2; unsubscribe/bounce/system regression; unsubscribe precedence;
+token/stale/duplicate; Chat-parameter override attempt). Full suite inside the exact r13 image
+**222/222**. `npm audit` 0 vulnerabilities; `node --check` clean; JSON clean; `git diff --check` clean;
+secret scan clean (only a synthetic `key=k&token=t` placeholder in the new test). 100k workload not
+rerun — the normaliser, outbox, cursor and acknowledgement architecture are unchanged.
+
+**Deployment.** Rollback backup `/root/backups/pre-r13-20260723T003935Z`, validated (`quick_check ok`,
+0 FK violations, 997 inbound, 305 holds; `inbound-v2.sqlite`
+`c2c8c37ff40a48a5d4fe6833a06e795a65d72dce2a8481b8fa133e6493ba0afc`), plus `go-live.json`,
+`owner-binding.json`, compose and the r12 image id. Image
+**`hmz-reply-console:r13-autoooo-replyable-20260723`**, id
+`sha256:b2c022bf2a901b5e4d02c824e3bd98d65fba1202f45995f78d71ac1e265660cf`. Exactly one compose line
+changed; only `hmz-reply-console` recreated (`--no-deps --no-build --wait`); volume and configuration
+preserved; healthy.
+
+**Global-send record: byte-identical before and after** —
+`611f5d6e14b5f860432ae4a4d913e680898bbfef565dcaefe051bf2582754522`, `enabled: true`, unarmed. The patch
+required no gate change.
+
+**Production verification after deploy.** Health `ok`; `quick_check ok`; FK violations 0; missing/orphan
+outbox 0; alerts 0; queued/posting/retrying/ambiguous **0/0/0/0**; 997 inbound / 997 outbox / 692
+`CHAT_NOTIFIED`; **305 `HISTORICAL_OWNER_HOLD` unchanged**; `historical_backfill_released` 0 (no drain);
+poll heartbeat fresh; auditors fresh; workflows and subscriptions untouched. **Zero prospect reply
+POSTs. Zero Google Chat posts caused by this patch.**
+
+**Live read-only verification (no draft, no send).** 16 post-epoch automatic/OOO records, all with
+complete authoritative routing. 3 have already been re-observed since deployment and healed: for every
+one of them the Chat thread index resolves to its context, and the context's `instantlyEmailId`,
+`replyToUuid`, `authoritativeThreadId`, `prospectEmail`, `eaccount` and `campaignId` match the durable
+inbound record exactly, with `chatMessageName`/`chatThreadName` linked, state `PENDING`, **0 drafts and
+0 send attempts**. The remaining 13 heal automatically the next time a poll or auditor window covers
+them (the daily auditor spans 7 days); none is at risk, and no card is reposted.
+
+**Remaining owner action:** optional — reply in a *new* automatic/OOO notification thread mentioning
+@Instantly to see the Review card. No controlled live send is required for this patch. GitHub/Obsidian
+commits deliberately not made; they belong to the separate audited checkpoint.
+
+---
+
+## Checkpoint — 2026-07-23 00:12 UTC — ✅ r12 PATCH PASS: NOTIFICATION-CARD PRESENTATION REPAIR
+
+**Trigger:** explicit owner-approved business requirement (a narrow, authorised exception to the
+permanent stop-work rule). **SYSTEM COMPLETION PASS remains authoritative** — this was a surgical
+UI/enrichment patch, not a completeness, routing or send change. The stop-work rule is restored.
+
+**Owner-reported presentation defects (all four fixed):** automatic cards showed no prospect name;
+automatic titles carried a visible `(recovered)` suffix; cards showed the campaign UUID instead of the
+display name; cards carried a "Campaign details unavailable (campaign context not registered: <UUID>).
+Reply routing is unaffected." paragraph.
+
+**Root causes (confirmed against production data, read-only).**
+1. **Prospect name.** `enrichAndCreateLegacyContext` returned early on `!record.sendAllowed`, so the
+   authoritative prospect-name lookup never ran for automatic/OOO/unsubscribe records. Their cards fell
+   back to `record.prospectName`, which is `null` for anything not discovered by the webhook.
+2. **`(recovered)`.** `notificationTitle` appended `' (recovered)'` whenever `outbox.recovered=1`. The
+   poll and both auditors register with `recovered: true`, so every automatic/OOO card carried it.
+3. **Campaign UUID.** `campaignName` was only ever populated from a raw `campaign_name` payload field.
+   **No campaign resolver existed anywhere.** The `GET /emails` readback used by the poll/auditors does
+   not return `campaign_name`, so those records had only the UUID.
+4. **Warning paragraph.** `buildNotificationText` emitted it whenever routing was complete but
+   `campaignName` was falsy — i.e. on every poll/audit-discovered card.
+
+**Why ordinary and automatic differed.** Instantly's `reply_received` webhook fires for genuine human
+replies but not for auto-responders; automatic/OOO replies only reach the console via the recovery poll
+or the completeness auditors. Production readback proved it: post-epoch `CHAT_NOTIFIED` ordinary records
+with `first_discovery_source=DISCOVERED_WEBHOOK` carry both `campaign_name` and `prospect_name`, while
+**every** automatic/OOO record (`NORMAL_POLL` / `COMPLETENESS_AUDIT` / `DISCOVERED_READBACK`) has
+neither. Same campaign `35c31fe3…`: named on webhook rows, `NULL` on readback rows.
+
+**Files changed (6; core store/send/routing modules byte-identical to r11).**
+| File | SHA-256 |
+|---|---|
+| `infrastructure/reply-console/enrich.mjs` (+durable campaign cache) | `001b425ca220b5d05cf72d8c3fc97fab371c0eac912f62883f8e371476c98fb7` |
+| `infrastructure/reply-console/inbound-contract.mjs` (title/campaign line/warning) | `b32880a90b36e5cd2fad89ef6778ca684d57c509e35b5468b6fcb2f57a258811` |
+| `infrastructure/reply-console/inbound-service.mjs` (enrichment ordering + cached campaign name) | `e1cd162614baaa6227882e606e3078b578960c8bc6017c09122fa4ae2da393e9` |
+| `infrastructure/reply-console/package.json` (test wiring) | `dac140690a36281776afbc94a55c3e5b7c74e373f87d349d8c43f61f4c0ff484` |
+| `infrastructure/reply-console/test-card-presentation.mjs` (**new**, 20 tests) | `61fff04b93c7c02be0d936dc1e60afd7ba986dcc173dd9cb5dc54bb79a584492` |
+| `infrastructure/reply-console/test-card-state.mjs` (one r11 assertion → r12 contract) | `cfe9d08e56b79a25558e5d70bba55b2a3b4be083e35875dff741786fe7098eda` |
+
+**Unchanged, verified byte-identical to r11 inside the running r12 container** (send, persistence and
+routing cores were not touched):
+
+| Module | SHA-256 (r11 = r12) |
+|---|---|
+| `store.mjs` | `c55490cb5a7a7d3f72504602f0d70b9e57555a306221a53a2a2307e8d88c571b` |
+| `inbound-store.mjs` | `82ba0caed9fbe90d477213a5a7e73812c23dfd756a8cfcf9dc34235ef54b2868` |
+| `server.mjs` | `e69debfd12cc0522c71a3be81d95272719baf229463afeca1b12bad021cc557c` |
+| `recovery.mjs` | `2f8e18066dff17c813dfe3243e237f14097f37b30581e81ad4df04a5a8cd416a` |
+
+**Behaviour now.** Prospect: `<name> (<full email>)` when an authoritative name exists, otherwise
+`<full email>` — never invented, resolved through the existing `resolveProspectNameByLookup`
+(exact-email lead lookup, refuses ambiguous matches) and persisted via the existing
+`updateInboundEnrichment`. Campaign: authoritative display name for ordinary, automatic and OOO cards,
+resolved once per campaign per 24h into a new durable `/data/campaign-directory` cache that mirrors the
+existing account-directory cache (negative results cached too, so an unresolvable campaign cannot storm
+the API); the Chat drain reads the cache and never performs network I/O. Fallback is the concise
+`Campaign: Unknown` or `Campaign: <UUID>` — no separate paragraph. Titles are `🤖 Automatic Reply` /
+`🤖 Out-of-Office Reply` with no `(recovered)`; discovery/recovery source stays in
+`first/last_discovery_source`, `discovery_sources_json` and telemetry. Genuine safety signals kept:
+routing-incomplete title + warning, and the probable-duplicate prefix.
+
+**Presentation enrichment now runs for every registered record, including non-sendable ones — it grants
+no capability.** The `!record.sendAllowed` gate is unchanged and still refuses to create a reply
+context; `enrichment_state` still records `BLOCKED_ROUTING`.
+
+**Tests.** New focused suite **20/20**. Full reply-console suite inside the exact r12 image
+**206/206** (store 49, historical-guard 13, ooo-and-card 7, card-state 8, **card-presentation 20**,
+enrich 15, formatting 13, dialog-contract 4, acceptance-F 7, backfill 5, recovery 8, inbound-structural
+13, inbound-v2 23, historical-backfill 1, http 20). `npm audit` 0 vulnerabilities; `node --check` clean
+on all modules; JSON parse clean; `git diff --check` clean on the changed paths; targeted secret scan
+clean. The 100k workload was deliberately not rerun — no completeness or send logic changed.
+
+**Deployment.** Fresh rollback backup `/root/backups/pre-r12-20260723T000153Z` (consistency-safe
+`VACUUM INTO`; validated: `quick_check ok`, 0 FK violations, 995 inbound / 995 outbox / 305 holds;
+`inbound-v2.sqlite` `621269b775e34d90aa2bf68b47c60fceaeb1acf526c0a0aec382158370a6e4a9`; plus
+`go-live.json`, `owner-binding.json`, compose and the r11 image id). Image
+**`hmz-reply-console:r12-cardpresentation-20260723`**, id
+`sha256:b5281c6f91ed27fc4ae3634614aa693426c9cd83f2a25ae388c451cc805d0fa8`. **Exactly one compose line
+changed** (the image reference); recreated only `hmz-reply-console` with `--no-deps --no-build --wait`;
+durable volume and configuration preserved; container healthy.
+
+**Global-send record: byte-identical before and after** —
+`611f5d6e14b5f860432ae4a4d913e680898bbfef565dcaefe051bf2582754522`, `enabled: true`, unarmed. Never
+toggled or rewritten.
+
+**Production verification after deploy.** Health `status: ok`, `inboundStoreIntegrity: true`;
+`quick_check ok`; foreign-key violations 0; missing/orphan outbox 0; alerts 0; queued/posting/retrying/
+ambiguous **0/0/0/0**; 995 inbound / 995 outbox; 690 `CHAT_NOTIFIED`; **305 `HISTORICAL_OWNER_HOLD`
+unchanged**; `historical_backfill_released` 0 and `historical_backfill_notified` 0 (no drain); poll
+heartbeat fresh (00:11:35Z); auditors fresh. **Zero prospect reply POSTs. Zero Google Chat posts. Zero
+notification attempts and zero new reply contexts since deployment.** No campaign, lead, account,
+mailbox, workflow, subscription, Shadow, Gate 2 or autonomous change.
+
+**One count movement investigated and cleared.** `ooo` moved 28 → 27 (`ordinary` 901 → 902) across the
+restart. Cause: the **pre-existing startup legacy-acknowledgement import** ("legacy ack imported 49")
+re-observes stored legacy contexts as `DISCOVERED_READBACK`; `registerOneInTransaction` recomputes
+`classification` from the re-observed payload, and one record's legacy preview text no longer matched
+the OOO pattern. This lives in `inbound-store.mjs`, which is **byte-identical to r11**, and the r11→r12
+diff proves `classifyInboundLabel` and `normalizeInstantlyReceived` were not touched — the patch only
+changed `notificationTitle` and `buildNotificationText`. It would occur on any restart of r11. Impact
+is nil: that record has been `CHAT_NOTIFIED` since 2026-07-20, its context predates this work
+(created 2026-07-20T13:07:35Z), and 0 contexts, 0 outbox writes and 0 notification attempts occurred
+after deployment. **Logged as a pre-existing LOW observation, not repaired** (out of scope): a record's
+classification and `send_allowed` can be recomputed on re-observation when a readback payload's preview
+differs from the original. Related pre-existing LOW observation: the re-observation UPDATE does not
+refresh `updated_at` (only `last_seen_at`/`observed_at`), so `updated_at` understates recency.
+
+**Card previews (sanitised, generated read-only; no real card was reposted).**
+Ordinary and automatic/OOO now render identically apart from the classification label and the
+Send affordance, e.g.
+`🤖 Automatic Reply` / `Prospect: Noah Cole (noah@example.com)` /
+`Sender mailbox: Hamza Moheen (hamzah@hmzautomation.com)` /
+`Campaign: Test Batch Run - Cold Email Outbound` — no `(recovered)`, no unavailable paragraph.
+
+**Note on the campaign cache.** `/data/campaign-directory` is created on the first registration after
+deployment. Enrichment always precedes the outbox drain in every ingestion path (webhook, poll,
+auditor), so the cache is warm before the first card is posted.
+
+**Remaining owner action:** none for this patch. GitHub/Obsidian commits are deliberately **not** made
+here — they belong to a separate audited checkpoint after PATCH PASS.
+
+---
+
 ## Checkpoint — 2026-07-22 — REMOTE BACKUP VERIFIED; PROJECT CLOSED AT SUPERVISED GOOGLE CHAT BASELINE
 
 **Closure decision:** the owner elected to close this project at the supervised Google Chat

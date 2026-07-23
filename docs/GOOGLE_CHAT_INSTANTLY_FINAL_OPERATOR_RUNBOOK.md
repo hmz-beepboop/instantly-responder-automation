@@ -1,7 +1,7 @@
 # Google Chat ↔ Instantly Final Operator Runbook
 
-> ## FINAL STATUS — 2026-07-22: SYSTEM COMPLETION PASS
-> Production image **r11 = `hmz-reply-console:codex-cardstate-20260722-r11`** (healthy). Production
+> ## FINAL STATUS — 2026-07-23: SYSTEM COMPLETION PASS
+> Production image **r13 = `hmz-reply-console:r13-autoooo-replyable-20260723`** (healthy). Production
 > notification epoch **`2026-07-18T18:33:00Z`**. Every post-epoch Instantly-visible identity is
 > `CHAT_NOTIFIED` (0 missing). Two controlled outbound sends passed (one POST each, distinct
 > recipient/eaccount/thread, 0 duplicate). Global-send record unchanged
@@ -9,11 +9,27 @@
 > permanently held. Remaining owner action: **NONE — continue supervised production operation and
 > monitor.**
 >
+> ### Release history after r11
+> - **r12 (`r12-cardpresentation-20260723`)** — notification-card presentation: prospect name + full
+>   email on automatic/OOO cards; `(recovered)` removed from titles; authoritative Instantly campaign
+>   display name resolved through a durable per-campaign cache; obsolete "Campaign details
+>   unavailable…" paragraph removed (concise `Campaign: Unknown` / UUID fallback instead).
+> - **r13 (`r13-autoooo-replyable-20260723`)** — automatic and out-of-office replies use the ORDINARY
+>   supervised reply path. Classification now selects the card label only; it no longer blocks reply
+>   eligibility. Their Chat threads map to durable reply contexts, so @Instantly drafting works.
+>   Unsubscribe, bounce, mail-system, malformed, routing-incomplete and historical records keep every
+>   existing restriction, and nothing auto-sends.
+>
 > ### Operator workflow to reply from Google Chat (there is NO "Draft" button)
 > Open the notification thread → reply in that thread and **mention @Instantly** with your draft text
 > → review the private Review card (recipient, sender mailbox, Instantly thread, revision, exact body)
 > → click **Send**. To edit: click **Edit** on the Review card, save a new revision (the old one goes
-> stale), then Send from the newest card only.
+> stale), then Send from the newest card only. This works for ordinary, automatic and out-of-office
+> notifications alike.
+>
+> **Automatic/OOO cards posted before r13** keep their original footer text ("Reply through this Chat
+> notification is unavailable for this record type") because old Chat messages are never rewritten or
+> reposted. Their threads still become replyable once a poll or auditor pass re-observes the record.
 >
 > ### PERMANENT STOP-WORK RULE
 > **No additional engineering, fixture testing or deployment is authorised without either a reproduced
