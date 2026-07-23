@@ -4,6 +4,67 @@ Timestamped log of agent sessions. Most-recent entry first. This file is the aut
 
 ---
 
+## Checkpoint — 2026-07-23 01:20 UTC — PROJECT CLOSED AND REMOTE BACKUPS VERIFIED
+
+**Final verdict:** SYSTEM COMPLETION PASS remains authoritative. The latest notification-card and
+automatic/OOO replyability patch is accepted and deployed as `r13-autoooo-replyable-20260723`
+(image `sha256:b2c022bf2a901b5e4d02c824e3bd98d65fba1202f45995f78d71ac1e265660cf`). The owner completed
+live testing of the surgical fixes and reports them working correctly.
+
+**Final behaviour:** prospect names/emails and campaign names render correctly; "(recovered)" and the
+obsolete campaign-unavailable paragraph are removed; automatic/OOO notifications support the normal
+@Instantly → Review → Edit → supervised Send workflow. Core inbound completeness,
+server-authoritative routing, duplicate-send protection and historical safety remain intact.
+
+**Read-only production verification at closure (2026-07-23 01:11 UTC):** image
+`hmz-reply-console:r13-autoooo-replyable-20260723`, healthy; local source hashes match the deployed
+runtime exactly (`inbound-contract 90925773…`, `inbound-service ee91583b…`, `enrich 001b425c…`,
+`store c55490cb…`, `inbound-store 82ba0cae…`, `server e69debfd…`, `recovery 2f8e1806…`); health `ok`;
+SQLite `quick_check ok`; foreign-key violations 0; missing/orphan outbox 0; alerts 0;
+queued/posting/retrying/ambiguous 0/0/0/0; 998 durable inbound / 998 outbox / 693 `CHAT_NOTIFIED`;
+305 `HISTORICAL_OWNER_HOLD`; `historical_backfill_released` 0 and `historical_backfill_notified` 0
+(no drain); recovery poll fresh (01:11:35Z); `audit_short` 01:10:56Z, `audit_deep` 00:20:37Z,
+`audit_daily` 2026-07-22T04:25Z — all reporting 0 missing inbound and 0 missing outbox.
+
+**GitHub:** accepted dependency-closed state committed and pushed on
+`checkpoint/instantly-responder-project-closed-r13-20260723`, which descends from the r11 closure
+commit `51ad9ae2211f4a5f3cb0b08b6ad9a6553cc164a3` so every earlier entry and revoked verdict is
+preserved. Commits: `fec09c0ba5a691967d930e8fb8f580ecb3cce017` (fix: implementation + tests) and
+`e6ba3b598b5f650f6446a9e6794b2bac309a7d9c` (docs: patch entries + operator runbook). Remote
+verification passed. No force push; no earlier ref was moved.
+
+**Obsidian:** canonical note `02_PROJECTS/INSTANTLY_RESPONDER.md` in `hmz-business-brain` updated with
+an "Instantly Responder — Final Project Closure" section, committed and pushed at
+`0ffe18264f1bc286617ff979f2f55c7f9e0e29f5` (from `d100adbaf3077c48dc0d77bbf472b4c768dfa4fd`). No raw
+production evidence or secrets were copied into the vault.
+
+**Safety:** global supervised-send record remained enabled and unchanged at canonical SHA-256
+`611f5d6e14b5f860432ae4a4d913e680898bbfef565dcaefe051bf2582754522`. No production action occurred
+during this checkpoint — read-only verification only. Secret and PII scans clean over every committed
+path. Historical guard, quarantine, the 305 holds and the 628 incident acknowledgements are preserved.
+Autonomous sending, Shadow and Gate 2 remain disabled.
+
+**Tests at closure:** full reply-console suite **222/222**; `npm audit` 0 vulnerabilities; `node
+--check` clean on all modules; JSON parse clean; `git diff --check` clean on every committed path.
+
+**Intentionally left uncommitted (unchanged on disk):** the pre-existing broad dirty tree from prior
+subsystems — Draft Memory V2, Draft Learning, reason-for-contact RFC work, B6 proxy, SL-PHASE-5Q
+backups, stale n8n workflow exports, `NUL`, `.docx` sources and `HandOffs/` — plus
+`reports/LIVE_MISSED_NOTIFICATION_INCIDENT_2026-07-20.md` and
+`reports/live-missed-notification-incident-evidence.json`, which carry a real production Outlook
+identifier. Nothing was staged with `git add .`/`-A`; no reset, clean, stash, rebase, amend or force
+push was used.
+
+**Final references:** safety branch `safety/instantly-responder-project-closed-r13-20260723` and
+annotated tag `instantly-responder-project-closed-r13-20260723` point to this final checkpoint commit
+and are verified remotely. The r11 refs (`…-supervised-complete-r11-20260722`,
+`…-project-closed-r11-20260722`) remain untouched.
+
+**Operating instruction:** continue supervised production and monitoring. Reopen engineering only for
+a reproduced defect, failed monitored invariant, security finding or explicit new requirement.
+
+---
+
 ## Checkpoint — 2026-07-23 00:45 UTC — ✅ r13 PATCH PASS: AUTOMATIC/OOO REPLIES USE THE ORDINARY SUPERVISED PATH
 
 **Trigger:** owner scope correction (2026-07-23) superseding the reply-eligibility parts of the r12
