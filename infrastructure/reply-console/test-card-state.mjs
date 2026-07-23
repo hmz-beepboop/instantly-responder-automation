@@ -27,7 +27,8 @@ t('A: routing complete + campaign unknown → no routing warning, Send permitted
   assert.doesNotMatch(text, /Metadata Incomplete/);
   assert.doesNotMatch(text, /Routing Incomplete/);
   assert.doesNotMatch(text, /sending is unavailable until authoritative routing/i);
-  assert.match(text, /Campaign details unavailable/);          // narrow note allowed
+  assert.match(text, /^Campaign: Unknown$/m);                  // r12: concise inline fallback
+  assert.doesNotMatch(text, /Campaign details unavailable/);   // r12: no warning paragraph
   assert.match(text, /mention @Instantly/);                    // Send offered
   assert.doesNotMatch(notificationTitle(r), /Incomplete/);     // no warning header
 });

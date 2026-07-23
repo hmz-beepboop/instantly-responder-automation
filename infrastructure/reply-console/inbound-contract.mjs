@@ -27,6 +27,21 @@ export const LABELS = Object.freeze({
   UNKNOWN: 'unknown',
 });
 
+// Reply eligibility (the field is historically named `sendAllowed`): may the
+// owner open the ORDINARY supervised reply path for this record? It never
+// auto-sends anything — a reply still requires an @Instantly mention in the
+// notification thread, a Review card, one human Send click, the global send
+// gate, and the store-level historical / token / revision / duplicate gates.
+//
+// Automatic and out-of-office replies are ordinary conversations for this
+// purpose (owner requirement, 2026-07-23): the classification selects the card
+// label only. These classifications stay ineligible because replying to them is
+// either unsafe (unsubscribe) or meaningless (mail-system senders, records with
+// no usable content).
+const REPLY_INELIGIBLE_CLASSIFICATIONS = Object.freeze([
+  LABELS.UNSUBSCRIBE, LABELS.BOUNCE, LABELS.SYSTEM, LABELS.MALFORMED, LABELS.UNKNOWN,
+]);
+
 const MAX = Object.freeze({
   id: 512,
   email: 320,
@@ -283,7 +298,7 @@ export function normalizeInstantlyReceived(rawInput, {
   // sendAllowed derives ONLY from authoritative routing + classification, never
   // from optional campaign enrichment.
   const sendAllowed = authoritativeRoutingComplete
-    && ![LABELS.AUTOMATIC, LABELS.OOO, LABELS.UNSUBSCRIBE, LABELS.BOUNCE, LABELS.SYSTEM, LABELS.MALFORMED, LABELS.UNKNOWN].includes(classified.classification);
+    && !REPLY_INELIGIBLE_CLASSIFICATIONS.includes(classified.classification);
 
   return {
     ok: true,
@@ -322,7 +337,11 @@ export function missingRoutingFields(record) {
   return m;
 }
 
-export function notificationTitle(record, { recovered = false, probableDuplicate = false } = {}) {
+// The discovery/recovery source is durable state and telemetry, not card copy:
+// the owner sees the same title whether an email arrived by webhook, recovery
+// poll or completeness audit. Only genuine safety signals (routing incomplete,
+// probable duplicate post) may alter the title.
+export function notificationTitle(record, { probableDuplicate = false } = {}) {
   let title;
   switch (record.classification) {
     case LABELS.AUTOMATIC: title = '🤖 Automatic Reply'; break;
@@ -339,7 +358,6 @@ export function notificationTitle(record, { recovered = false, probableDuplicate
   if (!isAuthoritativeRoutingComplete(record)) {
     title = '⚠️ Instantly Inbound Email — Routing Incomplete';
   }
-  if (recovered) title += ' (recovered)';
   if (probableDuplicate) title = `⚠️ Probable Duplicate Recovery — ${title}`;
   return title;
 }
@@ -369,8 +387,13 @@ export function buildNotificationText(record, options = {}) {
     notificationTitle(record, options), '',
     `Type: ${available(record.classification, LABELS.UNKNOWN)}`,
     `Prospect: ${available(record.prospectName ? `${record.prospectName} (${record.prospectEmail || 'email unavailable'})` : record.prospectEmail)}`,
-    `Sender mailbox: ${available(options.senderName ? `${options.senderName} (${record.eaccount})` : record.eaccount)}`,
-    `Campaign: ${available(record.campaignName || record.campaignId)}`,
+    // Never interpolate a missing mailbox: a routing-incomplete card must say
+    // "unavailable", not "Hamza Moheen (null)". The routing warning below names
+    // the missing field.
+    `Sender mailbox: ${available(record.eaccount && options.senderName ? `${options.senderName} (${record.eaccount})` : record.eaccount)}`,
+    // options.campaignName is the resolved authoritative display name (durable
+    // cache); the payload value and the raw UUID are honest fallbacks.
+    `Campaign: ${available(options.campaignName || record.campaignName || record.campaignId, 'Unknown')}`,
     `Subject: ${available(record.subject, '(no subject)')}`,
     `Received: ${available(record.receivedAt)}`, '',
     'Reply preview:', available(record.preview, record.hasAttachment ? '(attachment only)' : '(no text supplied)'), '',
@@ -382,11 +405,9 @@ export function buildNotificationText(record, options = {}) {
     lines.push('', `⚠️ Routing incomplete — unavailable: ${missing}. This email was still registered and notified.`,
       'Reply sending is unavailable until authoritative routing is recovered.');
   } else {
-    // Routing complete. Optional-enrichment gaps get a narrow, non-blocking note
-    // only where useful, and never suppress Send.
-    if (!record.campaignName) {
-      lines.push('', `Campaign details unavailable${record.campaignId ? ` (campaign context not registered: ${available(record.campaignId)})` : ''}. Reply routing is unaffected.`);
-    }
+    // Routing complete. Optional-enrichment gaps are shown inline on the
+    // Campaign line itself ("Unknown" / the UUID) and never get their own
+    // warning paragraph — they cannot affect routing or Send eligibility.
     if (record.sendAllowed) {
       lines.push('', 'To reply from Google Chat, reply in this thread and mention @Instantly followed by your response.');
     } else {

@@ -7,7 +7,7 @@
   "main": "server.mjs",
   "scripts": {
     "start": "node server.mjs",
-    "test": "node test-store.mjs && node test-historical-guard.mjs && node test-ooo-and-card.mjs && node test-card-state.mjs && node test-enrich.mjs && node test-formatting.mjs && node test-dialog-contract.mjs && node test-acceptance-F.mjs && node test-backfill.mjs && node test-recovery.mjs && node test-inbound-structural.mjs && node test-inbound-v2.mjs && node test-historical-backfill.mjs && node test-http.mjs",
+    "test": "node test-store.mjs && node test-historical-guard.mjs && node test-ooo-and-card.mjs && node test-card-state.mjs && node test-card-presentation.mjs && node test-auto-ooo-replyable.mjs && node test-enrich.mjs && node test-formatting.mjs && node test-dialog-contract.mjs && node test-acceptance-F.mjs && node test-backfill.mjs && node test-recovery.mjs && node test-inbound-structural.mjs && node test-inbound-v2.mjs && node test-historical-backfill.mjs && node test-http.mjs",
     "test:inbound": "node test-backfill.mjs && node test-recovery.mjs && node test-inbound-structural.mjs && node test-inbound-v2.mjs && node test-historical-backfill.mjs",
     "scale:100k": "node --expose-gc scale-inbound-100k.mjs"
   },

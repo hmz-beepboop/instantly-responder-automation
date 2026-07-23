@@ -55,8 +55,9 @@ const matrix = [
   ['neutral', { content_preview: 'Thanks for the note.' }, LABELS.ORDINARY, true],
   ['question', { content_preview: 'How does this work?' }, LABELS.ORDINARY, true],
   ['unsubscribe', { content_preview: 'Please unsubscribe me.' }, LABELS.UNSUBSCRIBE, false],
-  ['automatic', { subject: 'Automatic reply: received', is_auto_reply: 1 }, LABELS.AUTOMATIC, false],
-  ['out of office', { subject: 'Out of office', content_preview: 'I am away from the office.' }, LABELS.OOO, false],
+  // r13: automatic/OOO use the ordinary supervised reply path (label only).
+  ['automatic', { subject: 'Automatic reply: received', is_auto_reply: 1 }, LABELS.AUTOMATIC, true],
+  ['out of office', { subject: 'Out of office', content_preview: 'I am away from the office.' }, LABELS.OOO, true],
   ['bounce', { subject: 'Delivery failed: mailbox unavailable' }, LABELS.BOUNCE, false],
   ['mailer daemon', { from_address_email: 'mailer-daemon@example.test', subject: 'Returned mail' }, LABELS.SYSTEM, false],
   ['postmaster', { from_address_email: 'postmaster@example.test', subject: 'Notice' }, LABELS.SYSTEM, false],

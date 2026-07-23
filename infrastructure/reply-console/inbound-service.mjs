@@ -22,7 +22,10 @@ import {
 import {
   createContext, findByInstantlyEmailId, attachChatPost, readContext,
 } from './store.mjs';
-import { resolveSenderName, resolveProspectNameByLookup, getCachedAccount, normalizeName } from './enrich.mjs';
+import {
+  resolveSenderName, resolveProspectNameByLookup, getCachedAccount, normalizeName,
+  resolveCampaignName, getCachedCampaignName,
+} from './enrich.mjs';
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -177,6 +180,30 @@ export function createInboundService({
     return 'QUEUE';
   }
 
+  // Resolves the three presentation fields a notification card needs, using the
+  // authoritative Instantly sources and the durable caches. Never throws.
+  async function resolvePresentationEnrichment(record) {
+    let prospectName = record.prospectName;
+    let prospectNameSource = prospectName ? 'WEBHOOK_OR_API' : 'UNAVAILABLE';
+    let sender = { name: '', source: 'UNRESOLVED', eligible: false };
+    let error = null;
+    try {
+      if (!prospectName && record.prospectEmail) {
+        const prospect = await resolveProspectNameByLookup(record.prospectEmail, record.campaignId,
+          { apiKey, apiBase, fetchImpl });
+        prospectName = prospect.name || '';
+        prospectNameSource = prospect.source || 'UNAVAILABLE';
+      }
+      sender = await resolveSenderName(stateDir, record.eaccount, { apiKey, apiBase, fetchImpl });
+      // Warm the durable campaign cache here so the leased Chat drain stays
+      // network-free and never issues a request per card.
+      await resolveCampaignName(stateDir, record.campaignId, { apiKey, apiBase, fetchImpl });
+    } catch (err) {
+      error = redactError(err);
+    }
+    return { prospectName, prospectNameSource, sender, error };
+  }
+
   async function enrichAndCreateLegacyContext(record) {
     const existing = record.instantlyEmailId ? findByInstantlyEmailId(stateDir, record.instantlyEmailId) : null;
     if (existing) {
@@ -189,27 +216,24 @@ export function createInboundService({
       setLegacyContextId(stateDir, record.identity, existing.notificationId);
       return { ok: true, existing: true, acknowledgementImported: false, contextId: existing.notificationId };
     }
+    // Presentation-only enrichment. Persistence has already committed before
+    // these optional API lookups. This runs for EVERY registered record,
+    // including classifications that can never be replied to (automatic,
+    // out-of-office, unsubscribe) — those cards still have to show the prospect
+    // name and campaign display name. It grants no capability: the sendAllowed
+    // gate below is unchanged and still refuses to create a reply context.
+    const enriched = await resolvePresentationEnrichment(record);
     if (!record.sendAllowed) {
-      updateInboundEnrichment(stateDir, record.identity, { ok: false, blocked: true, error: 'ROUTING_OR_CLASSIFICATION_BLOCKED' });
+      updateInboundEnrichment(stateDir, record.identity, {
+        ok: false, blocked: true, prospectName: enriched.prospectName,
+        error: 'ROUTING_OR_CLASSIFICATION_BLOCKED',
+      });
       return { ok: false, blocked: true, reason: 'SEND_NOT_SAFE' };
     }
-
-    // Persistence has already committed before these optional API lookups.
-    let prospectName = record.prospectName;
-    let prospectNameSource = prospectName ? 'WEBHOOK_OR_API' : 'UNAVAILABLE';
-    let sender = { name: '', source: 'UNRESOLVED', eligible: false };
-    try {
-      if (!prospectName && record.prospectEmail) {
-        const prospect = await resolveProspectNameByLookup(record.prospectEmail, record.campaignId,
-          { apiKey, apiBase, fetchImpl });
-        prospectName = prospect.name || '';
-        prospectNameSource = prospect.source || 'UNAVAILABLE';
-      }
-      sender = await resolveSenderName(stateDir, record.eaccount, { apiKey, apiBase, fetchImpl });
-      updateInboundEnrichment(stateDir, record.identity, { ok: true, prospectName });
-    } catch (error) {
-      updateInboundEnrichment(stateDir, record.identity, { ok: false, prospectName, error: redactError(error) });
-    }
+    const { prospectName, prospectNameSource, sender } = enriched;
+    updateInboundEnrichment(stateDir, record.identity, enriched.error
+      ? { ok: false, prospectName, error: enriched.error }
+      : { ok: true, prospectName });
     const created = createContext(stateDir, {
       replyToUuid: record.instantlyEmailId,
       instantlyEmailId: record.instantlyEmailId,
@@ -232,6 +256,19 @@ export function createInboundService({
     });
     if (created.ok) {
       setLegacyContextId(stateDir, record.identity, created.context.notificationId);
+      // A record that was already notified before it became reply-eligible
+      // (automatic/OOO cards posted under the pre-r13 policy) keeps its original
+      // Chat message. Link the stored acknowledgement to the context through the
+      // same attachChatPost path the drain uses, so the existing thread resolves
+      // for @Instantly. No repost, no card mutation, no new notification.
+      const outbox = getNotification(stateDir, record.identity);
+      if (outbox && outbox.ackMessageName) {
+        attachChatPost(stateDir, created.context.notificationId, {
+          chatMessageName: outbox.ackMessageName,
+          chatThreadName: outbox.ackThreadName,
+          chatStatus: outbox.ackHttpStatus || 200,
+        });
+      }
       return { ok: true, created: created.created, contextId: created.context.notificationId };
     }
     updateInboundEnrichment(stateDir, record.identity, { ok: false, prospectName, error: `CONTEXT_${created.reason || 'FAILED'}` });
@@ -277,6 +314,8 @@ export function createInboundService({
     // network) so the live notification card shows it, not only the draft card.
     const acct = getCachedAccount(stateDir, item.record.eaccount);
     const senderName = acct && acct.found !== false ? normalizeName(acct.firstName, acct.lastName) : '';
+    // Same contract for the campaign display name: durable cache, no network.
+    const campaignName = getCachedCampaignName(stateDir, item.record.campaignId);
 
     let response;
     try {
@@ -288,6 +327,7 @@ export function createInboundService({
             probableDuplicate,
             historicalBackfill: item.outbox.historicalBackfill,
             senderName,
+            campaignName,
           }),
           thread: { threadKey: item.record.threadKey },
         }),

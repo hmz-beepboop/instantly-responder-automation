@@ -137,6 +137,68 @@ function snap(rec, source) {
   };
 }
 
+// ---- durable campaign-directory cache (campaign id -> display name) -------
+// The reply_received webhook carries `campaign_name`, but the GET /emails
+// readback used by the recovery poll and the completeness auditors does not.
+// Poll/audit-discovered records therefore only know the campaign UUID. This
+// cache resolves the authoritative display name once per campaign per TTL, so
+// notification cards never trigger a per-card Instantly request.
+const CAMPAIGN_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+function campaignPath(base, id) {
+  const safe = String(id || '').toLowerCase().replace(/[^a-z0-9._-]/g, '_');
+  return path.join(base, 'campaign-directory', `${safe}.json`);
+}
+
+// Cache-only read for the Chat drain (never performs network I/O).
+export function getCachedCampaignName(base, campaignId) {
+  const id = String(campaignId || '').trim();
+  if (!id) return '';
+  const rec = readJson(campaignPath(base, id));
+  return rec && rec.found ? String(rec.name || '') : '';
+}
+
+// Resolve + cache the campaign display name. Presentation only: the result
+// never affects send eligibility, routing or classification.
+export async function resolveCampaignName(base, campaignId, { apiKey, apiBase, fetchImpl, forceRefresh = false } = {}) {
+  const id = String(campaignId || '').trim();
+  if (!id) return { name: '', found: false, source: 'NO_CAMPAIGN_ID' };
+  const cached = readJson(campaignPath(base, id));
+  const fresh = cached && (Date.now() - Date.parse(cached.cachedAt || 0)) < CAMPAIGN_CACHE_TTL_MS;
+  // Negative results are cached too, so an unresolvable campaign cannot cause
+  // one Instantly request per notification.
+  if (cached && fresh && !forceRefresh) {
+    return { name: cached.found ? String(cached.name || '') : '', found: Boolean(cached.found), source: 'CACHE' };
+  }
+  const stale = () => (cached && cached.found
+    ? { name: String(cached.name || ''), found: true, source: 'CACHE_STALE' }
+    : null);
+  if (!apiKey) return stale() || { name: '', found: false, source: 'NO_KEY' };
+  const doFetch = fetchImpl || fetch;
+  const base2 = (apiBase || 'https://api.instantly.ai/api/v2').replace(/\/$/, '');
+  try {
+    const r = await doFetch(`${base2}/campaigns/${encodeURIComponent(id)}`, {
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (r.status === 200) {
+      const campaign = JSON.parse(await r.text());
+      const name = String(campaign?.name ?? campaign?.campaign_name ?? '').trim();
+      atomicWrite(campaignPath(base, id), {
+        campaignId: id, name, found: name.length > 0, cachedAt: new Date().toISOString(),
+      });
+      return name ? { name, found: true, source: 'API' } : { name: '', found: false, source: 'API_NO_NAME' };
+    }
+    if (r.status === 404) {
+      atomicWrite(campaignPath(base, id), { campaignId: id, name: '', found: false, cachedAt: new Date().toISOString() });
+      return { name: '', found: false, source: 'API_404', status: 404 };
+    }
+    return stale() || { name: '', found: false, source: `API_${r.status}`, status: r.status };
+  } catch {
+    return stale() || { name: '', found: false, source: 'API_ERROR' };
+  }
+}
+
 // Optional prospect lead lookup (fallback when the payload lacked names). Uses
 // exact lead email + campaign; refuses on multiple matches (no arbitrary pick).
 // Returns { name, source } with source ∈ LEAD_ID_LOOKUP | EMAIL_CAMPAIGN_LOOKUP
